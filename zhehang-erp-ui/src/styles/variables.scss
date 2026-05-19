@@ -1,0 +1,111 @@
+// 布局尺寸
+$sidebar-width: 220px;
+$sidebar-collapsed-width: 64px;
+$header-height: 56px;
+$content-padding: 24px;
+$card-radius: 12px;
+
+// CSS 变量（一键配置）
+:root {
+  /* 金色系 */
+  --gold-primary: #D4AF37;
+  --gold-champagne: #C5A55A;
+  --gold-rose: #B76E79;
+  --gold-dark: #8B7355;
+
+  /* 背景系 */
+  --bg-darkest: #0A0A0F;
+  --bg-card: #12121A;
+  --bg-elevated: #1A1A24;
+  --bg-divider: #0D0D14;
+
+  /* 功能色 */
+  --success: #06D6A0;
+  --warning: #FFD166;
+  --danger: #EF4444;
+  --info: #7C8DB5;
+
+  /* 文字色 */
+  --text-primary: #F0E6D3;
+  --text-body: #A09B8C;
+  --text-muted: #5E5A52;
+
+  /* 边框 */
+  --border-gold: rgba(212, 175, 55, 0.2);
+  --border-gold-hover: rgba(212, 175, 55, 0.4);
+
+  /* 阴影 */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-gold: 0 4px 24px rgba(212, 175, 55, 0.15);
+  --shadow-gold-hover: 0 8px 32px rgba(212, 175, 55, 0.25);
+
+  /* 渐变 */
+  --gradient-gold: linear-gradient(135deg, #D4AF37 0%, #C5A55A 100%);
+  --gradient-dark: linear-gradient(180deg, #1A1A24 0%, #12121A 100%);
+
+  /* Element Plus 变量覆盖 */
+  --el-color-primary: #D4AF37;
+  --el-color-primary-light-1: #dbc05e;
+  --el-color-primary-light-2: #e0c96f;
+  --el-color-primary-light-3: #C5A55A;
+  --el-color-primary-light-4: rgba(212, 175, 55, 0.5);
+  --el-color-primary-light-5: rgba(212, 175, 55, 0.3);
+  --el-color-primary-light-6: rgba(212, 175, 55, 0.2);
+  --el-color-primary-light-7: rgba(212, 175, 55, 0.15);
+  --el-color-primary-light-8: rgba(212, 175, 55, 0.1);
+  --el-color-primary-light-9: rgba(212, 175, 55, 0.05);
+  --el-color-primary-dark-2: #8B7355;
+
+  --el-color-success: #06D6A0;
+  --el-color-success-light-3: #38e0b5;
+  --el-color-success-light-5: rgba(6, 214, 160, 0.3);
+  --el-color-success-light-7: rgba(6, 214, 160, 0.15);
+  --el-color-success-light-8: rgba(6, 214, 160, 0.1);
+  --el-color-success-light-9: rgba(6, 214, 160, 0.05);
+
+  --el-color-warning: #FFD166;
+  --el-color-warning-light-3: #ffdc85;
+  --el-color-warning-light-5: rgba(255, 209, 102, 0.3);
+  --el-color-warning-light-7: rgba(255, 209, 102, 0.15);
+  --el-color-warning-light-8: rgba(255, 209, 102, 0.1);
+  --el-color-warning-light-9: rgba(255, 209, 102, 0.05);
+
+  --el-color-danger: #EF4444;
+  --el-color-danger-light-3: #f37272;
+  --el-color-danger-light-5: rgba(239, 68, 68, 0.3);
+  --el-color-danger-light-7: rgba(239, 68, 68, 0.15);
+  --el-color-danger-light-8: rgba(239, 68, 68, 0.1);
+  --el-color-danger-light-9: rgba(239, 68, 68, 0.05);
+
+  --el-color-info: #7C8DB5;
+  --el-color-info-light-3: #99a7c4;
+  --el-color-info-light-5: rgba(124, 141, 181, 0.3);
+  --el-color-info-light-7: rgba(124, 141, 181, 0.15);
+  --el-color-info-light-8: rgba(124, 141, 181, 0.1);
+  --el-color-info-light-9: rgba(124, 141, 181, 0.05);
+
+  --el-bg-color: #12121A;
+  --el-bg-color-page: #0A0A0F;
+  --el-bg-color-overlay: rgba(26, 26, 36, 0.95);
+  --el-text-color-primary: #F0E6D3;
+  --el-text-color-regular: #A09B8C;
+  --el-text-color-secondary: #5E5A52;
+  --el-text-color-placeholder: #5E5A52;
+  --el-border-color: rgba(212, 175, 55, 0.15);
+  --el-border-color-light: rgba(212, 175, 55, 0.12);
+  --el-border-color-lighter: rgba(212, 175, 55, 0.1);
+  --el-border-color-extra-light: rgba(212, 175, 55, 0.06);
+  --el-fill-color: rgba(212, 175, 55, 0.05);
+  --el-fill-color-light: rgba(212, 175, 55, 0.03);
+  --el-fill-color-lighter: rgba(212, 175, 55, 0.02);
+  --el-fill-color-blank: #12121A;
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 20px;
+  --el-box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --el-box-shadow-light: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --el-box-shadow-lighter: 0 1px 6px rgba(0, 0, 0, 0.2);
+  --el-box-shadow-dark: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --el-mask-color: rgba(10, 10, 15, 0.8);
+  --el-mask-color-extra-light: rgba(10, 10, 15, 0.3);
+}

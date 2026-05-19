@@ -1,0 +1,327 @@
+<template>
+  <div class="page-container">
+    <el-card shadow="never" class="search-card">
+      <el-form :model="queryParams" :inline="true">
+        <el-form-item :label="$t('system.role.roleName')" prop="roleName">
+          <el-input v-model="queryParams.roleName" :placeholder="$t('common.inputPlaceholder')" clearable @keyup.enter="handleQuery" />
+        </el-form-item>
+        <el-form-item :label="$t('system.role.roleKey')" prop="roleKey">
+          <el-input v-model="queryParams.roleKey" :placeholder="$t('common.inputPlaceholder')" clearable @keyup.enter="handleQuery" />
+        </el-form-item>
+        <el-form-item :label="$t('system.role.status')" prop="status">
+          <el-select v-model="queryParams.status" :placeholder="$t('common.selectPlaceholder')" clearable>
+            <el-option :label="$t('common.enabled')" :value="0" />
+            <el-option :label="$t('common.disabled')" :value="1" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleQuery"><el-icon><Search /></el-icon>{{ $t('common.search') }}</el-button>
+          <el-button @click="resetQuery"><el-icon><Refresh /></el-icon>{{ $t('common.reset') }}</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <el-card shadow="never" class="table-card">
+      <template #header>
+        <div class="card-header">
+          <span>{{ $t('system.role.title') }}</span>
+          <div class="toolbar-btns">
+            <el-button type="primary" v-hasPermi="['system:role:add']" @click="handleAdd"><el-icon><Plus /></el-icon>{{ $t('common.add') }}</el-button>
+          </div>
+        </div>
+      </template>
+
+      <el-table v-loading="loading" :data="roleList" border stripe>
+        <el-table-column :label="$t('system.role.roleName')" prop="roleName" min-width="150" />
+        <el-table-column label="权限分配" min-width="180">
+          <template #default="{ row }">
+            <el-tag type="warning" size="small">
+              {{ dataScopeLabels[row.dataScope] || '自定义' }}
+            </el-tag>
+            <el-tag v-if="row.menuIds && row.menuIds.length" size="small" style="margin-left: 4px">
+              {{ row.menuIds.length }}项菜单
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('system.role.sort')" prop="roleSort" width="100" align="center" />
+        <el-table-column :label="$t('system.role.status')" prop="status" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 0 ? 'success' : 'danger'">{{ row.status === 0 ? $t('common.enabled') : $t('common.disabled') }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('system.role.createTime')" prop="createTime" width="180" align="center" />
+        <el-table-column :label="$t('common.operation')" width="250" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" v-hasPermi="['system:role:edit']" @click="handleEdit(row)"><el-icon><Edit /></el-icon>{{ $t('common.edit') }}</el-button>
+            <el-button link type="primary" v-hasPermi="['system:role:edit']" @click="handleDataScope(row)"><el-icon><CircleCheck /></el-icon>{{ $t('system.role.dataScope') }}</el-button>
+            <el-button link type="danger" v-hasPermi="['system:role:remove']" @click="handleDelete(row)"><el-icon><Delete /></el-icon>{{ $t('common.delete') }}</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination class="pagination" v-model:current-page="queryParams.pageNum" v-model:page-size="queryParams.pageSize" :page-sizes="[10, 20, 50, 100]" :total="total" layout="total, sizes, prev, pager, next, jumper" @size-change="getList" @current-change="getList" />
+    </el-card>
+
+    <!-- Add/Edit Dialog -->
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form-item :label="$t('system.role.roleName')" prop="roleName">
+          <el-input v-model="form.roleName" :placeholder="$t('common.inputPlaceholder')" />
+        </el-form-item>
+        <el-form-item label="数据查看权限" prop="dataScope">
+          <el-select v-model="form.dataScope" placeholder="请选择数据权限范围" style="width: 100%">
+            <el-option label="全部数据权限" :value="1" />
+            <el-option label="自定义数据权限" :value="2" />
+            <el-option label="本部门数据权限" :value="3" />
+            <el-option label="本部门及以下" :value="4" />
+            <el-option label="仅本人数据" :value="5" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('system.role.sort')" prop="roleSort">
+          <el-input-number v-model="form.roleSort" :min="0" />
+        </el-form-item>
+        <el-form-item :label="$t('system.role.status')" prop="status">
+          <el-radio-group v-model="form.status">
+            <el-radio :value="0">{{ $t('common.enabled') }}</el-radio>
+            <el-radio :value="1">{{ $t('common.disabled') }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="$t('system.role.menuPerms')" prop="menuIds">
+          <el-tree ref="menuTreeRef" :data="menuTree" show-checkbox node-key="id" :props="{ label: 'label', children: 'children' }" default-expand-all />
+        </el-form-item>
+        <el-form-item :label="$t('system.role.remark')" prop="remark">
+          <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="$t('common.inputPlaceholder')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="submitForm" :loading="submitLoading">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Data Scope Dialog -->
+    <el-dialog v-model="dataScopeVisible" :title="$t('system.role.dataScope')" width="500px">
+      <el-form :model="dataScopeForm" label-width="100px">
+        <el-form-item :label="$t('system.role.roleName')">
+          <el-input v-model="dataScopeForm.roleName" disabled />
+        </el-form-item>
+        <el-form-item :label="$t('system.role.dataScopeType')">
+          <el-select v-model="dataScopeForm.dataScope" style="width: 100%">
+            <el-option :label="$t('system.role.scopeAll')" :value="1" />
+            <el-option :label="$t('system.role.scopeCustom')" :value="2" />
+            <el-option :label="$t('system.role.scopeDept')" :value="3" />
+            <el-option :label="$t('system.role.scopeDeptBelow')" :value="4" />
+            <el-option :label="$t('system.role.scopeSelf')" :value="5" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dataScopeVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="submitDataScope">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
+import { roleApi, menuApi } from '@/api/system'
+
+const { t } = useI18n()
+
+const dataScopeLabels: Record<number, string> = {
+  1: '全部数据',
+  2: '自定义权限',
+  3: '本部门',
+  4: '本部门及以下',
+  5: '仅本人'
+}
+
+const queryParams = reactive({
+  pageNum: 1,
+  pageSize: 20,
+  roleName: '',
+  roleKey: '',
+  status: undefined as number | undefined
+})
+const loading = ref(false)
+const total = ref(0)
+const roleList = ref<any[]>([])
+
+const dialogVisible = ref(false)
+const dialogTitle = ref('')
+const formRef = ref<FormInstance>()
+const menuTreeRef = ref<any>()
+const submitLoading = ref(false)
+const form = reactive<any>({
+  id: undefined,
+  roleName: '',
+  roleKey: '',
+  roleSort: 0,
+  status: 0,
+  dataScope: 1,
+  menuIds: [],
+  remark: ''
+})
+
+const rules = reactive<FormRules>({
+  roleName: [{ required: true, message: () => t('system.role.roleNameRequired'), trigger: 'blur' }],
+  dataScope: [{ required: true, message: '请选择数据权限范围', trigger: 'change' }]
+})
+
+const menuTree = ref<any[]>([])
+
+const dataScopeVisible = ref(false)
+const dataScopeForm = reactive<any>({
+  roleId: undefined,
+  roleName: '',
+  dataScope: 1
+})
+
+onMounted(() => {
+  getList()
+  loadMenuTree()
+})
+
+async function getList() {
+  loading.value = true
+  try {
+    const res: any = await roleApi.list(queryParams)
+    roleList.value = res.data?.records || res.data?.list || []
+    total.value = res.data?.total || 0
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadMenuTree() {
+  try {
+    const res: any = await menuApi.treeselect()
+    menuTree.value = res.data || []
+  } catch (_e) {
+    menuTree.value = []
+  }
+}
+
+function handleQuery() {
+  queryParams.pageNum = 1
+  getList()
+}
+
+function resetQuery() {
+  queryParams.roleName = ''
+  queryParams.roleKey = ''
+  queryParams.status = undefined
+  handleQuery()
+}
+
+function handleAdd() {
+  resetForm()
+  dialogTitle.value = t('common.add')
+  dialogVisible.value = true
+}
+
+async function handleEdit(row: any) {
+  resetForm()
+  dialogTitle.value = t('common.edit')
+  try {
+    const res: any = await roleApi.detail(row.id)
+    Object.assign(form, res.data)
+    // Load role menu tree to check nodes
+    const menuRes: any = await menuApi.roleMenuTreeselect(row.id)
+    const checkedKeys = menuRes.data?.map((m: any) => m.id) || []
+    setTimeout(() => {
+      menuTreeRef.value?.setCheckedKeys(checkedKeys)
+    }, 100)
+  } catch (_e) { /* */ }
+  dialogVisible.value = true
+}
+
+function handleDelete(row: any) {
+  ElMessageBox.confirm(t('system.role.deleteConfirm'), t('common.warning'), {
+    confirmButtonText: t('common.confirm'),
+    cancelButtonText: t('common.cancel'),
+    type: 'warning'
+  }).then(async () => {
+    await roleApi.remove(row.id)
+    ElMessage.success(t('common.success'))
+    getList()
+  }).catch(() => {})
+}
+
+function handleDataScope(row: any) {
+  dataScopeForm.roleId = row.id
+  dataScopeForm.roleName = row.roleName
+  dataScopeForm.dataScope = row.dataScope || 1
+  dataScopeVisible.value = true
+}
+
+async function submitDataScope() {
+  await roleApi.dataScope(dataScopeForm)
+  ElMessage.success(t('common.success'))
+  dataScopeVisible.value = false
+  getList()
+}
+
+async function submitForm() {
+  if (!formRef.value) return
+  await formRef.value.validate()
+  submitLoading.value = true
+  try {
+    const menuIds = menuTreeRef.value?.getCheckedKeys() || []
+    const data = { ...form, menuIds }
+    if (form.id) {
+      await roleApi.update(data)
+    } else {
+      await roleApi.create(data)
+    }
+    ElMessage.success(t('common.success'))
+    dialogVisible.value = false
+    getList()
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+function resetForm() {
+  form.id = undefined
+  form.roleName = ''
+  form.roleKey = ''
+  form.roleSort = 0
+  form.status = 0
+  form.dataScope = 1
+  form.menuIds = []
+  form.remark = ''
+  setTimeout(() => {
+    menuTreeRef.value?.setCheckedKeys([])
+  }, 100)
+}
+</script>
+
+<style lang="scss" scoped>
+.page-container {
+  padding: 16px;
+}
+.search-card {
+  margin-bottom: 16px;
+}
+.table-card {
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .toolbar-btns {
+    display: flex;
+    gap: 8px;
+  }
+}
+.pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+</style>

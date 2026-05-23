@@ -109,7 +109,9 @@ const loginRules: FormRules = {
 }
 
 function refreshCaptcha() {
-  captchaUrl.value = `${import.meta.env.VITE_API_BASE_URL}/auth/captcha?t=${Date.now()}`
+  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+  const captchaPath = apiBase ? `${apiBase}/auth/captcha` : '/api/auth/captcha'
+  captchaUrl.value = `${captchaPath}?t=${Date.now()}`
 }
 
 async function handleLogin() {

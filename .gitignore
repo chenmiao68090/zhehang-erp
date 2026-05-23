@@ -1,0 +1,28 @@
+﻿node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.local
+
+# MySQL/Redis/ES data volumes
+data/
+*.sock
+*.pid
+
+# Java build outputs
+target/
+*.class
+*.jar
+
+# Misc
+*.tmp
+*.swp
+
+# npm download and local cache
+npm-download.tgz
+.npm-local/

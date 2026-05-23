@@ -1,0 +1,105 @@
+{
+  "id": "call-center",
+  "name": "呼叫中心",
+  "description": "通话量、接通率、坐席KPI、时段分布运营全景",
+  "category": "call-center",
+  "widgets": [
+    {
+      "type": "number-card",
+      "title": "今日通话",
+      "subtitle": "今日总通话数",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "call_id", "aggregation": "count" }],
+      "layout": { "x": 0, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "通", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "接通率",
+      "subtitle": "成功接通比例",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "answer_rate", "aggregation": "avg" }],
+      "layout": { "x": 6, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "%", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "平均时长",
+      "subtitle": "单通通话时长",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "duration", "aggregation": "avg" }],
+      "layout": { "x": 12, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "秒", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "满意度",
+      "subtitle": "客户评价均分",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "satisfaction_score", "aggregation": "avg" }],
+      "layout": { "x": 18, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "分", "showTrend": true }
+    },
+    {
+      "type": "heat-map",
+      "title": "通话量时段分布",
+      "subtitle": "周×小时热力图",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["weekday", "hour"],
+      "metrics": [{ "field": "call_id", "aggregation": "count" }],
+      "layout": { "x": 0, "y": 3, "w": 14, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "showLabel": false }
+    },
+    {
+      "type": "leaderboard",
+      "title": "坐席排名",
+      "subtitle": "TOP 坐席通话量",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["agent_name"],
+      "metrics": [{ "field": "call_id", "aggregation": "count" }],
+      "layout": { "x": 14, "y": 3, "w": 10, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "limit": 10, "showRank": true }
+    },
+    {
+      "type": "line-chart",
+      "title": "每日通话量趋势",
+      "subtitle": "近30天通话走势",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["date"],
+      "metrics": [{ "field": "call_id", "aggregation": "count" }],
+      "layout": { "x": 0, "y": 10, "w": 12, "h": 6 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "smooth": true, "showArea": true }
+    },
+    {
+      "type": "progress-bar",
+      "title": "KPI 完成度",
+      "subtitle": "各项指标达成情况",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["kpi_name"],
+      "metrics": [{ "field": "kpi_progress", "aggregation": "avg" }],
+      "layout": { "x": 12, "y": 10, "w": 12, "h": 6 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "showPercent": true, "max": 100 }
+    }
+  ],
+  "theme": "dark"
+}

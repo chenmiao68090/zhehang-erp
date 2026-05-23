@@ -1,0 +1,81 @@
+{
+  "id": "team-pk",
+  "name": "团队PK",
+  "description": "小组业绩对比、个人英雄榜、目标完成度全景",
+  "category": "sales",
+  "widgets": [
+    {
+      "type": "number-card",
+      "title": "团队总目标",
+      "subtitle": "本月目标",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "target_amount", "aggregation": "sum" }],
+      "layout": { "x": 0, "y": 0, "w": 8, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元" }
+    },
+    {
+      "type": "number-card",
+      "title": "已完成",
+      "subtitle": "实际完成额",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "achieved_amount", "aggregation": "sum" }],
+      "layout": { "x": 8, "y": 0, "w": 8, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "完成率",
+      "subtitle": "整体目标达成",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "completion_rate", "aggregation": "avg" }],
+      "layout": { "x": 16, "y": 0, "w": 8, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "%", "showTrend": true }
+    },
+    {
+      "type": "bar-horizontal",
+      "title": "各团队业绩对比",
+      "subtitle": "横向 PK 战报",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["team_name"],
+      "metrics": [{ "field": "revenue", "aggregation": "sum" }],
+      "layout": { "x": 0, "y": 3, "w": 24, "h": 6 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "showValue": true, "sortDesc": true }
+    },
+    {
+      "type": "leaderboard",
+      "title": "个人英雄榜",
+      "subtitle": "TOP 销售个人排名",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["sales_name"],
+      "metrics": [{ "field": "revenue", "aggregation": "sum" }],
+      "layout": { "x": 0, "y": 9, "w": 12, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "limit": 10, "showRank": true, "showAvatar": true }
+    },
+    {
+      "type": "progress-bar",
+      "title": "团队目标完成进度",
+      "subtitle": "各团队完成度",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["team_name"],
+      "metrics": [{ "field": "completion_rate", "aggregation": "avg" }],
+      "layout": { "x": 12, "y": 9, "w": 12, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "showPercent": true, "max": 100 }
+    }
+  ],
+  "theme": "dark"
+}

@@ -1,0 +1,96 @@
+{
+  "id": "finance",
+  "name": "财务报表",
+  "description": "收入、支出、利润、回款率与账目明细财务全景",
+  "category": "finance",
+  "widgets": [
+    {
+      "type": "number-card",
+      "title": "总收入",
+      "subtitle": "本期累计",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "income", "aggregation": "sum" }],
+      "layout": { "x": 0, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "总支出",
+      "subtitle": "本期累计",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "expense", "aggregation": "sum" }],
+      "layout": { "x": 6, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "净利润",
+      "subtitle": "收入-支出",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "profit", "aggregation": "sum" }],
+      "layout": { "x": 12, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "回款率",
+      "subtitle": "本期回款比例",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "payback_rate", "aggregation": "avg" }],
+      "layout": { "x": 18, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "%", "showTrend": true }
+    },
+    {
+      "type": "bar-chart",
+      "title": "月度收支对比",
+      "subtitle": "收入/支出堆叠对比",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["month"],
+      "metrics": [
+        { "field": "income", "aggregation": "sum", "alias": "收入" },
+        { "field": "expense", "aggregation": "sum", "alias": "支出" }
+      ],
+      "layout": { "x": 0, "y": 3, "w": 14, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "stacked": true, "showLegend": true }
+    },
+    {
+      "type": "line-chart",
+      "title": "利润趋势",
+      "subtitle": "近12个月利润",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["month"],
+      "metrics": [{ "field": "profit", "aggregation": "sum" }],
+      "layout": { "x": 14, "y": 3, "w": 10, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "smooth": true, "showArea": true }
+    },
+    {
+      "type": "data-table",
+      "title": "账目明细",
+      "subtitle": "最近账目记录",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["voucher_no", "category", "amount", "direction", "voucher_date", "operator"],
+      "metrics": [],
+      "layout": { "x": 0, "y": 10, "w": 24, "h": 8 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "pageSize": 15, "showPagination": true, "showSummary": true }
+    }
+  ],
+  "theme": "dark"
+}

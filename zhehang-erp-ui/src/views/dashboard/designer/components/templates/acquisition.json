@@ -1,0 +1,105 @@
+{
+  "id": "acquisition",
+  "name": "获客分析",
+  "description": "线索量、转化漏斗、渠道分布、获客成本全链路分析",
+  "category": "acquisition",
+  "widgets": [
+    {
+      "type": "number-card",
+      "title": "新增线索",
+      "subtitle": "本月新增",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "lead_id", "aggregation": "count" }],
+      "layout": { "x": 0, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "条", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "有效线索",
+      "subtitle": "通过初筛",
+      "dataSourceId": "mock-source",
+      "filters": [{ "field": "lead_status", "operator": "eq", "value": "valid" }],
+      "dimensions": [],
+      "metrics": [{ "field": "lead_id", "aggregation": "count" }],
+      "layout": { "x": 6, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "条", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "转化率",
+      "subtitle": "线索→订单",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "conversion_rate", "aggregation": "avg" }],
+      "layout": { "x": 12, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "%", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "获客成本",
+      "subtitle": "单条线索成本",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "cost_per_lead", "aggregation": "avg" }],
+      "layout": { "x": 18, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元", "showTrend": true }
+    },
+    {
+      "type": "funnel-chart",
+      "title": "线索转化漏斗",
+      "subtitle": "全链路转化分析",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["funnel_stage"],
+      "metrics": [{ "field": "lead_id", "aggregation": "count" }],
+      "layout": { "x": 0, "y": 3, "w": 12, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "showLabel": true, "sortDesc": true }
+    },
+    {
+      "type": "line-chart",
+      "title": "每日线索趋势",
+      "subtitle": "近30天新增",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["date"],
+      "metrics": [{ "field": "lead_id", "aggregation": "count" }],
+      "layout": { "x": 12, "y": 3, "w": 12, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "smooth": true, "showArea": true }
+    },
+    {
+      "type": "pie-chart",
+      "title": "渠道来源分布",
+      "subtitle": "线索来源占比",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["source_channel"],
+      "metrics": [{ "field": "lead_id", "aggregation": "count" }],
+      "layout": { "x": 0, "y": 10, "w": 10, "h": 6 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "donut": true, "showLabel": true }
+    },
+    {
+      "type": "data-table",
+      "title": "线索明细",
+      "subtitle": "近期重点线索",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["lead_name", "source_channel", "owner", "lead_status", "created_at"],
+      "metrics": [],
+      "layout": { "x": 10, "y": 10, "w": 14, "h": 6 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "pageSize": 10, "showPagination": true }
+    }
+  ],
+  "theme": "dark"
+}

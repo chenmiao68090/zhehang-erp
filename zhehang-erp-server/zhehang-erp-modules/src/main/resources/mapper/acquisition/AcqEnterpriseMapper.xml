@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.acquisition.mapper.AcqEnterpriseMapper">
+
+    <resultMap id="EnterpriseCardMap" type="com.zhehang.erp.modules.acquisition.domain.dto.EnterpriseCardVO">
+        <id column="id" property="id"/>
+        <result column="company_name" property="companyName"/>
+        <result column="credit_code" property="creditCode"/>
+        <result column="register_region_city" property="registerRegionCity"/>
+        <result column="establishment_date" property="establishmentDate"/>
+        <result column="registered_capital" property="registeredCapital"/>
+        <result column="enterprise_type" property="enterpriseType"/>
+        <result column="industry_name" property="industryName"/>
+        <result column="staff_count_min" property="staffCountMin"/>
+        <result column="staff_count_max" property="staffCountMax"/>
+        <result column="annual_revenue" property="annualRevenue"/>
+        <result column="enterprise_status" property="enterpriseStatus"/>
+        <result column="tax_qualification" property="taxQualification"/>
+        <result column="tax_abnormal_status" property="taxAbnormalStatus"/>
+        <result column="is_in_abnormal_operation_list" property="isInAbnormalOperationList"/>
+        <result column="pending_abnormal_count" property="pendingAbnormalCount"/>
+        <result column="contact_count" property="contactCount"/>
+        <result column="has_contact" property="hasContact"/>
+        <result column="ai_potential_score" property="aiPotentialScore"/>
+        <result column="is_hot" property="isHot"/>
+        <result column="register_address" property="registerAddress"/>
+    </resultMap>
+
+    <sql id="enterpriseColumns">
+        e.id, e.company_name, e.credit_code, e.register_region_city,
+        DATE_FORMAT(e.establishment_date, '%Y-%m-%d') AS establishment_date,
+        e.registered_capital, e.enterprise_type, e.industry_name,
+        e.staff_count_min, e.staff_count_max, e.annual_revenue,
+        e.enterprise_status, e.tax_qualification, e.tax_abnormal_status,
+        e.is_in_abnormal_operation_list, e.pending_abnormal_count,
+        e.contact_count, e.has_contact, e.ai_potential_score,
+        e.is_hot, e.register_address
+    </sql>
+
+    <sql id="filterConditions">
+        e.deleted = 0
+        <if test="q.keyword != null and q.keyword != ''">
+            AND e.company_name LIKE CONCAT('%', #{q.keyword}, '%')
+        </if>
+        <if test="q.registerRegionProvince != null and q.registerRegionProvince != ''">
+            AND e.register_region_province = #{q.registerRegionProvince}
+        </if>
+        <if test="q.registerRegionCity != null and q.registerRegionCity != ''">
+            AND e.register_region_city = #{q.registerRegionCity}
+        </if>
+        <if test="q.establishmentDateFrom != null and q.establishmentDateFrom != ''">
+            AND e.establishment_date &gt;= #{q.establishmentDateFrom}
+        </if>
+        <if test="q.establishmentDateTo != null and q.establishmentDateTo != ''">
+            AND e.establishment_date &lt;= #{q.establishmentDateTo}
+        </if>
+        <if test="q.registeredCapitalMin != null">
+            AND e.registered_capital &gt;= #{q.registeredCapitalMin}
+        </if>
+        <if test="q.registeredCapitalMax != null">
+            AND e.registered_capital &lt;= #{q.registeredCapitalMax}
+        </if>
+        <if test="q.enterpriseType != null and q.enterpriseType.size() &gt; 0">
+            AND e.enterprise_type IN
+            <foreach collection="q.enterpriseType" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="q.taxQualification != null and q.taxQualification.size() &gt; 0">
+            AND e.tax_qualification IN
+            <foreach collection="q.taxQualification" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="q.enterpriseStatus != null and q.enterpriseStatus != ''">
+            AND e.enterprise_status = #{q.enterpriseStatus}
+        </if>
+        <if test="q.hasContact != null">
+            AND e.has_contact = <choose><when test="q.hasContact">1</when><otherwise>0</otherwise></choose>
+        </if>
+        <if test="q.isInAbnormalOperationList != null">
+            AND e.is_in_abnormal_operation_list = <choose><when test="q.isInAbnormalOperationList">1</when><otherwise>0</otherwise></choose>
+        </if>
+        <if test="q.taxAbnormalStatus != null and q.taxAbnormalStatus != ''">
+            AND e.tax_abnormal_status = #{q.taxAbnormalStatus}
+        </if>
+        <if test="q.tabCode != null and q.tabCode != ''">
+            <choose>
+                <when test="q.tabCode == 'tax_abnormal'">AND e.tax_abnormal_status != 'normal'</when>
+                <when test="q.tabCode == 'tax_arrears'">AND e.has_tax_arrears = 1</when>
+                <when test="q.tabCode == 'major_violation'">AND e.has_major_tax_violation = 1</when>
+                <when test="q.tabCode == 'tax_penalty'">AND e.has_tax_penalty = 1</when>
+                <when test="q.tabCode == 'operation_abnormal'">AND e.is_in_abnormal_operation_list = 1</when>
+            </choose>
+        </if>
+    </sql>
+
+    <select id="selectEnterprisePage" resultMap="EnterpriseCardMap">
+        SELECT
+        <include refid="enterpriseColumns"/>
+        FROM acq_enterprise e
+        <where>
+            <include refid="filterConditions"/>
+        </where>
+        <choose>
+            <when test="q.sortBy == 'establishment_date_desc'">ORDER BY e.establishment_date DESC</when>
+            <when test="q.sortBy == 'establishment_date_asc'">ORDER BY e.establishment_date ASC</when>
+            <when test="q.sortBy == 'registered_capital_desc'">ORDER BY e.registered_capital DESC</when>
+            <when test="q.sortBy == 'registered_capital_asc'">ORDER BY e.registered_capital ASC</when>
+            <otherwise>ORDER BY e.ai_potential_score DESC, e.id DESC</otherwise>
+        </choose>
+    </select>
+
+    <select id="selectStats" resultType="com.zhehang.erp.modules.acquisition.domain.dto.EnterpriseStatsVO">
+        SELECT
+            COUNT(*) AS totalCount,
+            SUM(CASE WHEN e.tax_abnormal_status != 'normal' THEN 1 ELSE 0 END) AS taxAbnormalCount,
+            SUM(CASE WHEN e.has_tax_arrears = 1 THEN 1 ELSE 0 END) AS taxArrearsCount,
+            SUM(CASE WHEN e.has_major_tax_violation = 1 THEN 1 ELSE 0 END) AS majorViolationCount,
+            SUM(CASE WHEN e.has_tax_penalty = 1 THEN 1 ELSE 0 END) AS taxPenaltyCount,
+            SUM(CASE WHEN e.is_in_abnormal_operation_list = 1 THEN 1 ELSE 0 END) AS operationAbnormalCount
+        FROM acq_enterprise e
+        <where>
+            <include refid="filterConditions"/>
+        </where>
+    </select>
+
+</mapper>

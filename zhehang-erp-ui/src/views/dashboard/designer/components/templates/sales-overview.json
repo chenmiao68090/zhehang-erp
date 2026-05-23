@@ -1,0 +1,105 @@
+{
+  "id": "sales-overview",
+  "name": "销售总览",
+  "description": "营收、新客、成交、回款、渠道、排名一站式总览",
+  "category": "sales",
+  "widgets": [
+    {
+      "type": "number-card",
+      "title": "总营收",
+      "subtitle": "本月累计",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "revenue", "aggregation": "sum" }],
+      "layout": { "x": 0, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "新增客户",
+      "subtitle": "本月新增",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "customer_id", "aggregation": "distinct_count" }],
+      "layout": { "x": 6, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "个", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "成交量",
+      "subtitle": "已签约订单",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "deal_count", "aggregation": "sum" }],
+      "layout": { "x": 12, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "单", "showTrend": true }
+    },
+    {
+      "type": "number-card",
+      "title": "回款额",
+      "subtitle": "本月已回款",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": [],
+      "metrics": [{ "field": "payment_amount", "aggregation": "sum" }],
+      "layout": { "x": 18, "y": 0, "w": 6, "h": 3 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "unit": "元", "showTrend": true }
+    },
+    {
+      "type": "line-chart",
+      "title": "月度营收趋势",
+      "subtitle": "近12个月营收走势",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["month"],
+      "metrics": [{ "field": "revenue", "aggregation": "sum" }],
+      "layout": { "x": 0, "y": 3, "w": 14, "h": 6 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "smooth": true, "showArea": true }
+    },
+    {
+      "type": "pie-chart",
+      "title": "销售渠道占比",
+      "subtitle": "各渠道营收分布",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["channel"],
+      "metrics": [{ "field": "revenue", "aggregation": "sum" }],
+      "layout": { "x": 14, "y": 3, "w": 10, "h": 6 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "donut": true, "showLabel": true }
+    },
+    {
+      "type": "leaderboard",
+      "title": "销售排名",
+      "subtitle": "TOP 10 销售员",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["sales_name"],
+      "metrics": [{ "field": "revenue", "aggregation": "sum" }],
+      "layout": { "x": 0, "y": 9, "w": 12, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "limit": 10, "showRank": true }
+    },
+    {
+      "type": "bar-chart",
+      "title": "区域业绩对比",
+      "subtitle": "各区域销售额",
+      "dataSourceId": "mock-source",
+      "filters": [],
+      "dimensions": ["region"],
+      "metrics": [{ "field": "revenue", "aggregation": "sum" }],
+      "layout": { "x": 12, "y": 9, "w": 12, "h": 7 },
+      "style": { "showTitle": true, "showBorder": true },
+      "options": { "showValue": true }
+    }
+  ],
+  "theme": "dark"
+}

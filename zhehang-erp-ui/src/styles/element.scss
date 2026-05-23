@@ -1,0 +1,306 @@
+// Element Plus 榛戦噾涓婚娣卞害瑕嗗啓
+
+// 鎸夐挳
+.el-button--primary {
+  background: var(--gradient-gold);
+  border: none;
+  color: #0A0A0F;
+  font-weight: 600;
+
+  &:hover,
+  &:focus {
+    background: linear-gradient(135deg, #C5A55A, #D4AF37);
+    box-shadow: 0 4px 16px rgba(212, 175, 55, 0.3);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.el-button--default {
+  background: transparent;
+  border: 1px solid var(--border-gold);
+  color: var(--gold-primary);
+
+  &:hover,
+  &:focus {
+    background: rgba(212, 175, 55, 0.08);
+    border-color: var(--border-gold-hover);
+    color: var(--gold-primary);
+  }
+}
+
+// 鑿滃崟
+.el-menu {
+  border-right: none !important;
+  background-color: transparent !important;
+}
+
+.el-menu-item,
+.el-sub-menu__title {
+  color: var(--text-body) !important;
+
+  &:hover {
+    background-color: rgba(212, 175, 55, 0.05) !important;
+    color: var(--text-primary) !important;
+  }
+}
+
+.el-menu-item.is-active {
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.1), transparent) !important;
+  color: var(--gold-primary) !important;
+  border-left: 3px solid var(--gold-primary);
+}
+
+// 鍗＄墖
+.el-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-gold);
+  border-radius: var(--el-border-radius-base);
+  box-shadow: var(--shadow-card);
+  color: var(--text-body);
+
+  .el-card__header {
+    border-bottom: 1px solid var(--border-gold);
+    color: var(--text-primary);
+  }
+}
+
+// 琛ㄦ牸
+.el-table {
+  --el-table-bg-color: var(--bg-card);
+  --el-table-tr-bg-color: var(--bg-card);
+  --el-table-header-bg-color: rgba(212, 175, 55, 0.05);
+  --el-table-row-hover-bg-color: rgba(212, 175, 55, 0.05);
+  --el-table-border-color: var(--border-gold);
+  --el-table-text-color: var(--text-body);
+  --el-table-header-text-color: var(--text-primary);
+  color: var(--text-body);
+
+  th.el-table__cell {
+    font-weight: 600;
+    color: var(--text-primary);
+    background-color: rgba(212, 175, 55, 0.05) !important;
+  }
+
+  .el-table__row:hover > td {
+    background-color: rgba(212, 175, 55, 0.05) !important;
+  }
+}
+
+// 琛ㄥ崟杈撳叆妗?
+.el-input__wrapper {
+  background-color: var(--bg-elevated) !important;
+  border: 1px solid var(--border-gold) !important;
+  box-shadow: none !important;
+  border-radius: 8px;
+
+  &:hover {
+    border-color: var(--border-gold-hover) !important;
+  }
+
+  &.is-focus {
+    border-color: var(--gold-primary) !important;
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1) !important;
+  }
+}
+
+.el-input__inner {
+  color: var(--text-primary);
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+.el-textarea__inner {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-gold);
+  color: var(--text-primary);
+  border-radius: 8px;
+
+  &:focus {
+    border-color: var(--gold-primary);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+  }
+}
+
+// Select 涓嬫媺
+.el-select-dropdown {
+  background-color: var(--bg-elevated) !important;
+  border: 1px solid var(--border-gold) !important;
+}
+
+.el-select-dropdown__item {
+  color: var(--text-body);
+
+  &.hover,
+  &:hover {
+    background-color: rgba(212, 175, 55, 0.08);
+    color: var(--text-primary);
+  }
+
+  &.selected {
+    color: var(--gold-primary);
+    font-weight: 600;
+  }
+}
+
+// 瀵硅瘽妗?
+.el-dialog {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-gold);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+
+  .el-dialog__header {
+    border-bottom: 1px solid var(--border-gold);
+    padding: 16px 24px;
+  }
+
+  .el-dialog__title {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .el-dialog__body {
+    color: var(--text-body);
+  }
+}
+
+// 鍒嗛〉
+.el-pagination {
+  justify-content: flex-end;
+  margin-top: 16px;
+
+  .el-pager li {
+    background-color: var(--bg-elevated);
+    color: var(--text-body);
+    border: 1px solid var(--border-gold);
+    border-radius: 6px;
+
+    &.is-active {
+      background: var(--gradient-gold);
+      color: #0A0A0F;
+      border-color: var(--gold-primary);
+      font-weight: 600;
+    }
+  }
+
+  button {
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-body) !important;
+  }
+}
+
+// 鏍囩椤?
+.el-tabs__item {
+  color: var(--text-body) !important;
+
+  &.is-active {
+    color: var(--gold-primary) !important;
+  }
+
+  &:hover {
+    color: var(--text-primary) !important;
+  }
+}
+
+.el-tabs__active-bar {
+  background-color: var(--gold-primary);
+}
+
+// 娑堟伅鎻愮ず妗?
+.el-message-box {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-gold);
+  
+  .el-message-box__title {
+    color: var(--text-primary);
+  }
+
+  .el-message-box__content {
+    color: var(--text-body);
+  }
+}
+
+// 涓嬫媺鑿滃崟
+.el-dropdown-menu {
+  background-color: var(--bg-elevated) !important;
+  border: 1px solid var(--border-gold) !important;
+
+  .el-dropdown-menu__item {
+    color: var(--text-body);
+
+    &:hover {
+      background-color: rgba(212, 175, 55, 0.08);
+      color: var(--gold-primary);
+    }
+  }
+}
+
+// 闈㈠寘灞?
+.el-breadcrumb__inner {
+  color: var(--text-muted) !important;
+
+  &.is-link:hover {
+    color: var(--gold-primary) !important;
+  }
+}
+
+.el-breadcrumb__item:last-child .el-breadcrumb__inner {
+  color: var(--gold-primary) !important;
+}
+
+// Checkbox / Radio
+.el-checkbox__inner {
+  background-color: var(--bg-elevated);
+  border-color: var(--border-gold);
+}
+
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  background-color: var(--gold-primary);
+  border-color: var(--gold-primary);
+}
+
+.el-checkbox__label {
+  color: var(--text-body);
+}
+
+// Switch
+.el-switch.is-checked .el-switch__core {
+  background-color: var(--gold-primary);
+  border-color: var(--gold-primary);
+}
+
+// Tag (Element Plus)
+.el-tag {
+  border-radius: 20px;
+}
+
+// Form Label
+.el-form-item__label {
+  color: var(--text-body);
+}
+
+// Scrollbar inside element components
+.el-scrollbar__thumb {
+  background-color: rgba(212, 175, 55, 0.3);
+}
+
+// Popover
+.el-popover {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-gold) !important;
+  color: var(--text-body);
+}
+
+// Loading
+.el-loading-mask {
+  background-color: rgba(10, 10, 15, 0.7);
+}
+
+.el-loading-spinner .circular .path {
+  stroke: var(--gold-primary);
+}

@@ -42,6 +42,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         loginUser.setUserId(user.getId());
         loginUser.setUsername(user.getUsername());
         loginUser.setPassword(user.getPassword());
+        loginUser.setTenantId(user.getTenantId());
         loginUser.setEnabled(true);
 
         List<String> perms = userMapper.selectPermsByUserId(user.getId());

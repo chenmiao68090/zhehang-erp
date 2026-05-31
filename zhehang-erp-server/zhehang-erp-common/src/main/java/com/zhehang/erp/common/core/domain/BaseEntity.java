@@ -27,5 +27,6 @@ public class BaseEntity implements Serializable {
     @TableLogic
     private Integer deleted;
 
+    @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
 }

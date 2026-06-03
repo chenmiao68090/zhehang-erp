@@ -358,8 +358,23 @@ export function readAllNotification() {
   return Promise.resolve({ data: null })
 }
 
+export function batchReadNotifications(ids: number[]) {
+  return batchUpdateNotifications(ids, (item) => ({ ...item, isRead: true }))
+}
+
+export function batchUnreadNotifications(ids: number[]) {
+  return batchUpdateNotifications(ids, (item) => ({ ...item, isRead: false }))
+}
+
 export function deleteNotification(id: number) {
   const list = readStore().filter((item) => item.id !== id)
+  writeStore(list)
+  return Promise.resolve({ data: null })
+}
+
+export function batchDeleteNotifications(ids: number[]) {
+  const idSet = normalizeIds(ids)
+  const list = readStore().filter((item) => !idSet.has(item.id))
   writeStore(list)
   return Promise.resolve({ data: null })
 }
@@ -368,8 +383,16 @@ export function archiveNotification(id: number) {
   return updateNotification(id, (item) => ({ ...item, isArchived: true, isRead: true }))
 }
 
+export function batchArchiveNotifications(ids: number[]) {
+  return batchUpdateNotifications(ids, (item) => ({ ...item, isArchived: true, isRead: true }))
+}
+
 export function restoreNotification(id: number) {
   return updateNotification(id, (item) => ({ ...item, isArchived: false }))
+}
+
+export function batchRestoreNotifications(ids: number[]) {
+  return batchUpdateNotifications(ids, (item) => ({ ...item, isArchived: false }))
 }
 
 export function toggleStarNotification(id: number) {
@@ -378,6 +401,14 @@ export function toggleStarNotification(id: number) {
 
 export function toggleLaterNotification(id: number) {
   return updateNotification(id, (item) => ({ ...item, isLater: !item.isLater }))
+}
+
+export function batchLaterNotifications(ids: number[]) {
+  return batchUpdateNotifications(ids, (item) => ({ ...item, isLater: true }))
+}
+
+export function batchCancelLaterNotifications(ids: number[]) {
+  return batchUpdateNotifications(ids, (item) => ({ ...item, isLater: false }))
 }
 
 export function resetNotificationDemoData() {
@@ -399,4 +430,16 @@ function updateNotification(id: number, updater: (item: NotificationItem) => Not
     writeStore(list)
   }
   return Promise.resolve({ data: null })
+}
+
+function batchUpdateNotifications(ids: number[], updater: (item: NotificationItem) => NotificationItem) {
+  const idSet = normalizeIds(ids)
+  if (idSet.size === 0) return Promise.resolve({ data: null })
+  const list = readStore().map((item) => idSet.has(item.id) ? updater(item) : item)
+  writeStore(list)
+  return Promise.resolve({ data: null })
+}
+
+function normalizeIds(ids: number[]) {
+  return new Set(ids.map((id) => Number(id)).filter((id) => Number.isFinite(id)))
 }

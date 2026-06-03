@@ -106,61 +106,99 @@
           <el-tag effect="plain" type="warning">后续可接实时推送</el-tag>
         </div>
 
+        <div class="batch-toolbar">
+          <el-checkbox
+            :model-value="isAllPageSelected"
+            :indeterminate="isIndeterminate"
+            :disabled="messages.length === 0"
+            @change="toggleSelectPage"
+          >
+            本页全选
+          </el-checkbox>
+          <div v-if="selectedIds.length" class="batch-actions">
+            <span>已选 {{ selectedIds.length }} 条</span>
+            <el-button size="small" @click="batchMarkRead">标为已读</el-button>
+            <el-button size="small" @click="batchMarkUnread">标为未读</el-button>
+            <el-button size="small" @click="batchLater">
+              {{ activeBox === 'later' ? '取消稍后' : '稍后处理' }}
+            </el-button>
+            <el-button size="small" @click="batchArchive">
+              {{ activeBox === 'archived' ? '恢复消息' : '归档' }}
+            </el-button>
+            <el-button size="small" type="danger" @click="batchDelete">删除</el-button>
+            <el-button size="small" text @click="clearSelection">取消选择</el-button>
+          </div>
+          <div v-else class="batch-hint">按时间分组扫消息,勾选后可批量处理。</div>
+        </div>
+
         <div class="message-list" v-loading="loading">
           <el-empty v-if="messages.length === 0" description="暂无消息" />
-          <article
-            v-for="item in messages"
-            v-else
-            :key="item.id"
-            class="business-message"
-            :class="{ unread: !item.isRead, archived: item.isArchived }"
-            @click="openDetail(item)"
-          >
-            <el-checkbox class="select-dot" :model-value="!item.isRead" disabled />
-
-            <div class="message-avatar" :class="item.type">
-              <el-icon :size="20"><component :is="typeIcon(item.type)" /></el-icon>
-            </div>
-
-            <div class="message-main">
-              <div class="message-title-row">
-                <h4>{{ item.title }}</h4>
-                <el-tag :type="priorityTag(item.priority)" effect="plain" size="small">
-                  {{ priorityText(item.priority) }}
-                </el-tag>
-                <el-tag v-if="item.isLater" type="warning" effect="plain" size="small">稍后</el-tag>
-                <el-tag v-if="item.isStarred" type="primary" effect="plain" size="small">星标</el-tag>
+          <template v-else>
+            <template v-for="group in groupedMessages" :key="group.key">
+              <div class="message-date-divider">
+                <span>{{ group.label }}</span>
+                <em>{{ group.items.length }} 条</em>
               </div>
-              <p class="message-content">{{ item.content }}</p>
-              <div class="message-tags">
-                <span>{{ item.module || '系统' }}</span>
-                <span v-if="item.scene">{{ item.scene }}</span>
-                <span v-if="item.entityName">{{ item.entityName }}</span>
-                <span v-for="tag in item.tags || []" :key="tag">#{{ tag }}</span>
-              </div>
-            </div>
+              <article
+                v-for="item in group.items"
+                :key="item.id"
+                class="business-message"
+                :class="{ unread: !item.isRead, archived: item.isArchived, selected: selectedIds.includes(item.id) }"
+                @click="openDetail(item)"
+              >
+                <div class="select-cell" @click.stop>
+                  <el-checkbox
+                    :model-value="selectedIds.includes(item.id)"
+                    @change="(checked) => toggleSelect(item.id, Boolean(checked))"
+                  />
+                  <span v-if="!item.isRead" class="read-dot" />
+                </div>
 
-            <div class="message-side">
-              <span>{{ formatTime(item.createTime) }}</span>
-              <strong>{{ item.sender || '系统' }}</strong>
-              <div class="message-actions" @click.stop>
-                <el-button v-if="item.link" type="primary" size="small" @click="goBusiness(item)">
-                  {{ item.actionText || '去处理' }}
-                </el-button>
-                <el-button size="small" @click="toggleRead(item)">
-                  {{ item.isRead ? '标未读' : '已读' }}
-                </el-button>
-              </div>
-            </div>
+                <div class="message-avatar" :class="item.type">
+                  <el-icon :size="20"><component :is="typeIcon(item.type)" /></el-icon>
+                </div>
 
-            <div class="more-actions" @click.stop>
-              <el-button link :icon="Star" :class="{ active: item.isStarred }" @click="toggleStar(item)" />
-              <el-button link :icon="Clock" :class="{ active: item.isLater }" @click="toggleLater(item)" />
-              <el-button v-if="activeBox !== 'archived'" link :icon="FolderOpened" @click="archiveItem(item)" />
-              <el-button v-else link :icon="Refresh" @click="restoreItem(item)" />
-              <el-button link type="danger" :icon="Delete" @click="deleteItem(item)" />
-            </div>
-          </article>
+                <div class="message-main">
+                  <div class="message-title-row">
+                    <h4>{{ item.title }}</h4>
+                    <el-tag :type="priorityTag(item.priority)" effect="plain" size="small">
+                      {{ priorityText(item.priority) }}
+                    </el-tag>
+                    <el-tag v-if="item.isLater" type="warning" effect="plain" size="small">稍后</el-tag>
+                    <el-tag v-if="item.isStarred" type="primary" effect="plain" size="small">星标</el-tag>
+                  </div>
+                  <p class="message-content">{{ item.content }}</p>
+                  <div class="message-tags">
+                    <span>{{ item.module || '系统' }}</span>
+                    <span v-if="item.scene">{{ item.scene }}</span>
+                    <span v-if="item.entityName">{{ item.entityName }}</span>
+                    <span v-for="tag in item.tags || []" :key="tag">#{{ tag }}</span>
+                  </div>
+                </div>
+
+                <div class="message-side">
+                  <span>{{ formatTime(item.createTime) }}</span>
+                  <strong>{{ item.sender || '系统' }}</strong>
+                  <div class="message-actions" @click.stop>
+                    <el-button v-if="item.link" type="primary" size="small" @click="goBusiness(item)">
+                      {{ item.actionText || '去处理' }}
+                    </el-button>
+                    <el-button size="small" @click="toggleRead(item)">
+                      {{ item.isRead ? '标未读' : '已读' }}
+                    </el-button>
+                  </div>
+                </div>
+
+                <div class="more-actions" @click.stop>
+                  <el-button link :icon="Star" :class="{ active: item.isStarred }" @click="toggleStar(item)" />
+                  <el-button link :icon="Clock" :class="{ active: item.isLater }" @click="toggleLater(item)" />
+                  <el-button v-if="activeBox !== 'archived'" link :icon="FolderOpened" @click="archiveItem(item)" />
+                  <el-button v-else link :icon="Refresh" @click="restoreItem(item)" />
+                  <el-button link type="danger" :icon="Delete" @click="deleteItem(item)" />
+                </div>
+              </article>
+            </template>
+          </template>
         </div>
 
         <el-pagination
@@ -246,6 +284,13 @@ import {
 } from '@element-plus/icons-vue'
 import {
   archiveNotification,
+  batchArchiveNotifications,
+  batchCancelLaterNotifications,
+  batchDeleteNotifications,
+  batchLaterNotifications,
+  batchReadNotifications,
+  batchRestoreNotifications,
+  batchUnreadNotifications,
   deleteNotification,
   getNotificationStats,
   listNotification,
@@ -268,6 +313,7 @@ const activeType = ref<NotificationType | ''>('')
 const loading = ref(false)
 const total = ref(0)
 const messages = ref<NotificationItem[]>([])
+const selectedIds = ref<number[]>([])
 const currentItem = ref<NotificationItem | null>(null)
 const detailVisible = ref(false)
 const stats = ref({ total: 0, unread: 0, urgent: 0, later: 0, starred: 0, archived: 0 })
@@ -304,6 +350,26 @@ const currentTitle = computed(() => {
   return folders.value.find((item) => item.key === activeBox.value)?.label || '全部消息'
 })
 
+const pageIds = computed(() => messages.value.map((item) => item.id))
+const isAllPageSelected = computed(() => pageIds.value.length > 0 && pageIds.value.every((id) => selectedIds.value.includes(id)))
+const isIndeterminate = computed(() => selectedIds.value.length > 0 && !isAllPageSelected.value)
+
+const groupedMessages = computed(() => {
+  const groups: Array<{ key: string; label: string; items: NotificationItem[] }> = []
+  const map = new Map<string, { key: string; label: string; items: NotificationItem[] }>()
+
+  messages.value.forEach((item) => {
+    const group = getTimeGroup(item.createTime)
+    if (!map.has(group.key)) {
+      map.set(group.key, { ...group, items: [] })
+      groups.push(map.get(group.key)!)
+    }
+    map.get(group.key)!.items.push(item)
+  })
+
+  return groups
+})
+
 onMounted(async () => {
   await handleRefresh()
 })
@@ -321,6 +387,7 @@ async function loadData() {
     })
     messages.value = res.data.records
     total.value = Number(res.data.total || messages.value.length)
+    pruneSelection()
   } finally {
     loading.value = false
   }
@@ -337,6 +404,7 @@ async function handleRefresh() {
 
 function handleQuery() {
   query.pageNum = 1
+  clearSelection()
   loadData()
 }
 
@@ -344,6 +412,7 @@ function selectBox(box: NotificationBox) {
   activeBox.value = box
   activeType.value = ''
   query.pageNum = 1
+  clearSelection()
   loadData()
 }
 
@@ -351,6 +420,7 @@ function selectType(type: NotificationType) {
   activeType.value = type
   activeBox.value = 'inbox'
   query.pageNum = 1
+  clearSelection()
   loadData()
 }
 
@@ -426,6 +496,90 @@ async function deleteItem(item: NotificationItem) {
   await handleRefresh()
 }
 
+function toggleSelect(id: number, checked: boolean) {
+  if (checked) {
+    if (!selectedIds.value.includes(id)) selectedIds.value.push(id)
+  } else {
+    selectedIds.value = selectedIds.value.filter((item) => item !== id)
+  }
+}
+
+function toggleSelectPage(checked: boolean | string | number) {
+  if (Boolean(checked)) {
+    selectedIds.value = Array.from(new Set([...selectedIds.value, ...pageIds.value]))
+  } else {
+    const pageIdSet = new Set(pageIds.value)
+    selectedIds.value = selectedIds.value.filter((id) => !pageIdSet.has(id))
+  }
+}
+
+function clearSelection() {
+  selectedIds.value = []
+}
+
+function pruneSelection() {
+  const pageIdSet = new Set(pageIds.value)
+  selectedIds.value = selectedIds.value.filter((id) => pageIdSet.has(id))
+}
+
+async function batchMarkRead() {
+  if (!selectedIds.value.length) return
+  await batchReadNotifications([...selectedIds.value])
+  ElMessage.success(`已将 ${selectedIds.value.length} 条消息标为已读`)
+  clearSelection()
+  await handleRefresh()
+}
+
+async function batchMarkUnread() {
+  if (!selectedIds.value.length) return
+  await batchUnreadNotifications([...selectedIds.value])
+  ElMessage.success(`已将 ${selectedIds.value.length} 条消息标为未读`)
+  clearSelection()
+  await handleRefresh()
+}
+
+async function batchLater() {
+  if (!selectedIds.value.length) return
+  const ids = [...selectedIds.value]
+  if (activeBox.value === 'later') {
+    await batchCancelLaterNotifications(ids)
+    ElMessage.success(`已取消 ${ids.length} 条稍后处理`)
+  } else {
+    await batchLaterNotifications(ids)
+    ElMessage.success(`已将 ${ids.length} 条消息加入稍后处理`)
+  }
+  clearSelection()
+  await handleRefresh()
+}
+
+async function batchArchive() {
+  if (!selectedIds.value.length) return
+  const ids = [...selectedIds.value]
+  if (activeBox.value === 'archived') {
+    await batchRestoreNotifications(ids)
+    ElMessage.success(`已恢复 ${ids.length} 条消息`)
+  } else {
+    await batchArchiveNotifications(ids)
+    ElMessage.success(`已归档 ${ids.length} 条消息`)
+  }
+  clearSelection()
+  await handleRefresh()
+}
+
+async function batchDelete() {
+  if (!selectedIds.value.length) return
+  const ids = [...selectedIds.value]
+  await ElMessageBox.confirm(`确认删除已选的 ${ids.length} 条消息？`, '提示', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消'
+  })
+  await batchDeleteNotifications(ids)
+  ElMessage.success(`已删除 ${ids.length} 条消息`)
+  clearSelection()
+  await handleRefresh()
+}
+
 async function goBusiness(item: NotificationItem) {
   if (!item.isRead) await readNotification(item.id)
   detailVisible.value = false
@@ -460,6 +614,18 @@ function priorityTag(priority?: NotificationPriority) {
     low: 'success'
   }
   return map[priority || 'normal']
+}
+
+function getTimeGroup(value: string) {
+  const time = new Date(value).getTime()
+  if (Number.isNaN(time)) return { key: 'unknown', label: '时间未知' }
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((startOfToday.getTime() - new Date(time).setHours(0, 0, 0, 0)) / (24 * 60 * 60 * 1000))
+  if (diffDays <= 0) return { key: 'today', label: '今天' }
+  if (diffDays === 1) return { key: 'yesterday', label: '昨天' }
+  if (diffDays < 7) return { key: 'week', label: '近 7 天' }
+  return { key: 'earlier', label: '更早' }
 }
 
 function formatTime(value: string) {
@@ -672,14 +838,73 @@ function formatTime(value: string) {
   margin: 12px 0;
 }
 
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #f7f8fa;
+}
+
+.batch-actions {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+
+  span {
+    margin-right: 4px;
+    color: var(--text-body);
+    font-size: 13px;
+    font-weight: 650;
+  }
+}
+
+.batch-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .message-list {
   min-height: 320px;
+}
+
+.message-date-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-soft);
+  }
+
+  span {
+    color: var(--text-body);
+    font-weight: 650;
+  }
+
+  em {
+    font-style: normal;
+  }
 }
 
 .business-message {
   position: relative;
   display: grid;
-  grid-template-columns: 22px 42px minmax(0, 1fr) 190px 120px;
+  grid-template-columns: 30px 42px minmax(0, 1fr) 190px 120px;
   gap: 12px;
   align-items: center;
   min-height: 112px;
@@ -704,13 +929,28 @@ function formatTime(value: string) {
     border-color: #bedaff;
   }
 
+  &.selected {
+    border-color: #7eb8ff;
+    box-shadow: 0 0 0 2px rgba(51, 112, 255, 0.08);
+  }
+
   &.archived {
     opacity: 0.76;
   }
 }
 
-.select-dot {
-  pointer-events: none;
+.select-cell {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+}
+
+.read-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12);
 }
 
 .message-avatar {

@@ -55,6 +55,14 @@
                 <span>{{ formatRelativeTime(item.createTime) }}</span>
                 <span v-if="item.isLater">稍后处理</span>
               </div>
+              <div class="msg-card-actions" @click.stop>
+                <el-button link :icon="Star" :class="{ active: item.isStarred }" title="星标" @click="toggleStar(item)" />
+                <el-button link :icon="Clock" :class="{ active: item.isLater }" title="稍后处理" @click="toggleLater(item)" />
+                <el-button v-if="!item.isRead" link :icon="Check" title="标为已读" @click="markRead(item)" />
+                <el-button v-if="item.link" link type="primary" @click="openItem(item)">
+                  {{ item.actionText || '处理' }}
+                </el-button>
+              </div>
             </div>
           </article>
         </div>
@@ -76,9 +84,11 @@ import {
   Bell,
   ChatDotRound,
   Check,
+  Clock,
   DocumentChecked,
   Notebook,
   OfficeBuilding,
+  Star,
   Stamp,
   Tickets,
   Van,
@@ -90,6 +100,8 @@ import {
   listNotification,
   readAllNotification,
   readNotification,
+  toggleLaterNotification,
+  toggleStarNotification,
   type NotificationBox,
   type NotificationItem,
   type NotificationPriority,
@@ -143,6 +155,21 @@ function switchTab(tab: NotificationBox) {
 
 async function markAllRead() {
   await readAllNotification()
+  await refresh()
+}
+
+async function markRead(item: NotificationItem) {
+  await readNotification(item.id)
+  await refresh()
+}
+
+async function toggleStar(item: NotificationItem) {
+  await toggleStarNotification(item.id)
+  await refresh()
+}
+
+async function toggleLater(item: NotificationItem) {
+  await toggleLaterNotification(item.id)
   await refresh()
 }
 
@@ -414,6 +441,24 @@ function formatRelativeTime(value: string) {
   gap: 8px;
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.msg-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  margin-top: 4px;
+
+  :deep(.el-button) {
+    min-height: 22px;
+    padding: 0 4px;
+  }
+
+  .active {
+    color: var(--brand-primary);
+  }
 }
 
 .msg-foot {

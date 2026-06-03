@@ -12,6 +12,19 @@ export type NotificationType =
 export type NotificationPriority = 'urgent' | 'high' | 'normal' | 'low'
 export type NotificationBox = 'inbox' | 'unread' | 'starred' | 'later' | 'archived'
 
+export interface NotificationPreferences {
+  enabled: boolean
+  desktopEnabled: boolean
+  soundEnabled: boolean
+  quietEnabled: boolean
+  quietStart: string
+  quietEnd: string
+  urgentBreaksQuiet: boolean
+  dailyDigest: boolean
+  digestTime: string
+  mutedTypes: NotificationType[]
+}
+
 /** 飞书式业务消息项。当前使用本地持久化,后续可平滑替换为后端消息表/实时推送。 */
 export interface NotificationItem {
   id: number
@@ -44,6 +57,20 @@ export interface NotificationQuery {
 }
 
 const STORAGE_KEY = 'zhehang_message_center_v1'
+const PREFERENCE_KEY = 'zhehang_message_preferences_v1'
+
+const defaultPreferences: NotificationPreferences = {
+  enabled: true,
+  desktopEnabled: true,
+  soundEnabled: false,
+  quietEnabled: true,
+  quietStart: '20:00',
+  quietEnd: '08:30',
+  urgentBreaksQuiet: true,
+  dailyDigest: true,
+  digestTime: '09:00',
+  mutedTypes: []
+}
 
 const seedNotifications: NotificationItem[] = [
   {
@@ -422,6 +449,22 @@ export function getUnreadCount() {
   return Promise.resolve({ data: unread })
 }
 
+export function getNotificationPreferences() {
+  return Promise.resolve({ data: readPreferences() })
+}
+
+export function updateNotificationPreferences(data: Partial<NotificationPreferences>) {
+  const next = normalizePreferences({ ...readPreferences(), ...data })
+  writePreferences(next)
+  return Promise.resolve({ data: next })
+}
+
+export function resetNotificationPreferences() {
+  const next = clonePreferences()
+  writePreferences(next)
+  return Promise.resolve({ data: next })
+}
+
 function updateNotification(id: number, updater: (item: NotificationItem) => NotificationItem) {
   const list = readStore()
   const index = list.findIndex((item) => item.id === id)
@@ -442,4 +485,52 @@ function batchUpdateNotifications(ids: number[], updater: (item: NotificationIte
 
 function normalizeIds(ids: number[]) {
   return new Set(ids.map((id) => Number(id)).filter((id) => Number.isFinite(id)))
+}
+
+function readPreferences(): NotificationPreferences {
+  try {
+    const raw = localStorage.getItem(PREFERENCE_KEY)
+    if (!raw) {
+      const defaults = clonePreferences()
+      writePreferences(defaults)
+      return defaults
+    }
+    return normalizePreferences(JSON.parse(raw))
+  } catch {
+    return clonePreferences()
+  }
+}
+
+function writePreferences(preferences: NotificationPreferences) {
+  try {
+    localStorage.setItem(PREFERENCE_KEY, JSON.stringify(preferences))
+    window.dispatchEvent(new CustomEvent('zhehang-message-preference-updated'))
+  } catch {
+    // 设置兜底失败不影响消息中心主流程。
+  }
+}
+
+function clonePreferences(): NotificationPreferences {
+  return { ...defaultPreferences, mutedTypes: [...defaultPreferences.mutedTypes] }
+}
+
+function normalizePreferences(value: any): NotificationPreferences {
+  const allowed: NotificationType[] = ['system', 'approval', 'task', 'message', 'finance', 'customer', 'order', 'channel', 'tax']
+  const mutedTypes = Array.isArray(value?.mutedTypes)
+    ? value.mutedTypes.filter((type: unknown): type is NotificationType => allowed.includes(type as NotificationType))
+    : []
+  return {
+    ...defaultPreferences,
+    ...value,
+    enabled: value?.enabled !== false,
+    desktopEnabled: value?.desktopEnabled !== false,
+    soundEnabled: value?.soundEnabled === true,
+    quietEnabled: value?.quietEnabled !== false,
+    urgentBreaksQuiet: value?.urgentBreaksQuiet !== false,
+    dailyDigest: value?.dailyDigest !== false,
+    quietStart: typeof value?.quietStart === 'string' ? value.quietStart : defaultPreferences.quietStart,
+    quietEnd: typeof value?.quietEnd === 'string' ? value.quietEnd : defaultPreferences.quietEnd,
+    digestTime: typeof value?.digestTime === 'string' ? value.digestTime : defaultPreferences.digestTime,
+    mutedTypes
+  }
 }

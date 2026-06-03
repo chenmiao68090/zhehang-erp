@@ -11,7 +11,7 @@
         <header class="msg-head">
           <div>
             <h3>消息中心</h3>
-            <p>{{ stats.unread }} 条未读 · {{ stats.urgent }} 条加急</p>
+            <p>{{ stats.unread }} 条未读 · {{ stats.urgent }} 条加急 · {{ preferenceLine }}</p>
           </div>
           <el-button link type="primary" :disabled="stats.unread === 0" @click="markAllRead">全部已读</el-button>
         </header>
@@ -68,7 +68,10 @@
         </div>
 
         <footer class="msg-foot">
-          <el-button text @click="refresh">刷新</el-button>
+          <div class="msg-foot-left">
+            <el-button text @click="refresh">刷新</el-button>
+            <el-button text @click="goNotificationPage">设置</el-button>
+          </div>
           <el-button type="primary" @click="goNotificationPage">查看全部</el-button>
         </footer>
       </section>
@@ -97,6 +100,7 @@ import {
 } from '@element-plus/icons-vue'
 import {
   getNotificationStats,
+  getNotificationPreferences,
   listNotification,
   readAllNotification,
   readNotification,
@@ -104,6 +108,7 @@ import {
   toggleStarNotification,
   type NotificationBox,
   type NotificationItem,
+  type NotificationPreferences,
   type NotificationPriority,
   type NotificationType
 } from '@/api/notification'
@@ -113,6 +118,18 @@ const visible = ref(false)
 const activeTab = ref<NotificationBox>('inbox')
 const messages = ref<NotificationItem[]>([])
 const stats = ref({ total: 0, unread: 0, urgent: 0, later: 0, starred: 0, archived: 0 })
+const preferences = ref<NotificationPreferences>({
+  enabled: true,
+  desktopEnabled: true,
+  soundEnabled: false,
+  quietEnabled: true,
+  quietStart: '20:00',
+  quietEnd: '08:30',
+  urgentBreaksQuiet: true,
+  dailyDigest: true,
+  digestTime: '09:00',
+  mutedTypes: []
+})
 
 const tabs = computed(() => [
   { key: 'inbox' as NotificationBox, label: '全部', count: stats.value.total },
@@ -121,22 +138,39 @@ const tabs = computed(() => [
   { key: 'starred' as NotificationBox, label: '星标', count: stats.value.starred }
 ])
 
+const preferenceLine = computed(() => {
+  if (!preferences.value.enabled) return '提醒关闭'
+  if (isQuietNow.value && preferences.value.urgentBreaksQuiet) return '免打扰中'
+  if (isQuietNow.value) return '勿扰中'
+  return '提醒开启'
+})
+
+const isQuietNow = computed(() => {
+  const pref = preferences.value
+  if (!pref.quietEnabled) return false
+  return isTimeWithinRange(currentTimeText(), pref.quietStart, pref.quietEnd)
+})
+
 onMounted(() => {
   refresh()
   window.addEventListener('zhehang-message-updated', refresh)
+  window.addEventListener('zhehang-message-preference-updated', refresh)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('zhehang-message-updated', refresh)
+  window.removeEventListener('zhehang-message-preference-updated', refresh)
 })
 
 async function refresh() {
-  const [statsRes, listRes] = await Promise.all([
+  const [statsRes, listRes, prefRes] = await Promise.all([
     getNotificationStats(),
-    listNotification({ box: activeTab.value, pageNum: 1, pageSize: 6 })
+    listNotification({ box: activeTab.value, pageNum: 1, pageSize: 6 }),
+    getNotificationPreferences()
   ])
   stats.value = statsRes.data
   messages.value = listRes.data.records
+  preferences.value = prefRes.data
 }
 
 function togglePanel() {
@@ -208,6 +242,25 @@ function typeIcon(type: NotificationType) {
 function priorityText(priority?: NotificationPriority) {
   const map = { urgent: '加急', high: '重要', normal: '普通', low: '低' }
   return map[priority || 'normal']
+}
+
+function currentTimeText() {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+function timeToMinutes(value: string) {
+  const [hour, minute] = value.split(':').map(Number)
+  return (hour || 0) * 60 + (minute || 0)
+}
+
+function isTimeWithinRange(current: string, start: string, end: string) {
+  const now = timeToMinutes(current)
+  const from = timeToMinutes(start)
+  const to = timeToMinutes(end)
+  if (from === to) return true
+  if (from < to) return now >= from && now < to
+  return now >= from || now < to
 }
 
 function formatRelativeTime(value: string) {
@@ -468,6 +521,12 @@ function formatRelativeTime(value: string) {
   padding: 10px 14px;
   border-top: 1px solid var(--border-soft);
   background: #fff;
+}
+
+.msg-foot-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .msg-dropdown-enter-active,

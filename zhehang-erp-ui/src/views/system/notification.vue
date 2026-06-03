@@ -7,6 +7,7 @@
       </div>
       <div class="header-actions">
         <el-button :icon="Refresh" @click="handleRefresh">刷新</el-button>
+        <el-button :icon="Setting" @click="openPreferenceDrawer">消息设置</el-button>
         <el-button :icon="Check" type="primary" :disabled="stats.unread === 0" @click="handleMarkAllRead">
           全部已读
         </el-button>
@@ -103,7 +104,11 @@
           <el-tag effect="plain">消息卡片</el-tag>
           <el-tag effect="plain" type="primary">点击跳转业务页</el-tag>
           <el-tag effect="plain" type="success">已读/未读同步</el-tag>
-          <el-tag effect="plain" type="warning">后续可接实时推送</el-tag>
+          <el-tag effect="plain" :type="preferences.enabled ? 'success' : 'info'">
+            {{ preferenceSummary }}
+          </el-tag>
+          <el-tag v-if="isQuietNow" effect="plain" type="warning">免打扰中</el-tag>
+          <el-tag v-if="mutedCount" effect="plain" type="info">{{ mutedCount }} 类业务已静音</el-tag>
         </div>
 
         <div class="batch-toolbar">
@@ -143,7 +148,7 @@
                 v-for="item in group.items"
                 :key="item.id"
                 class="business-message"
-                :class="{ unread: !item.isRead, archived: item.isArchived, selected: selectedIds.includes(item.id) }"
+                :class="{ unread: !item.isRead, archived: item.isArchived, selected: selectedIds.includes(item.id), muted: isTypeMuted(item.type) }"
                 @click="openDetail(item)"
               >
                 <div class="select-cell" @click.stop>
@@ -166,6 +171,7 @@
                     </el-tag>
                     <el-tag v-if="item.isLater" type="warning" effect="plain" size="small">稍后</el-tag>
                     <el-tag v-if="item.isStarred" type="primary" effect="plain" size="small">星标</el-tag>
+                    <el-tag v-if="isTypeMuted(item.type)" type="info" effect="plain" size="small">已静音</el-tag>
                   </div>
                   <p class="message-content">{{ item.content }}</p>
                   <div class="message-tags">
@@ -257,6 +263,110 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-drawer v-model="preferenceVisible" title="消息设置" size="520px">
+      <div class="preference-panel">
+        <section class="preference-section">
+          <div class="preference-title">
+            <h3>提醒方式</h3>
+            <p>控制消息中心、顶部铃铛和后续实时推送的提醒策略。</p>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>消息提醒总开关</strong>
+              <span>关闭后只保留消息记录,不主动提醒。</span>
+            </div>
+            <el-switch v-model="preferences.enabled" />
+          </div>
+          <div class="setting-grid">
+            <div class="setting-row compact">
+              <div>
+                <strong>桌面弹窗</strong>
+                <span>后续接实时推送时使用。</span>
+              </div>
+              <el-switch v-model="preferences.desktopEnabled" :disabled="!preferences.enabled" />
+            </div>
+            <div class="setting-row compact">
+              <div>
+                <strong>提示音</strong>
+                <span>默认关闭,避免打扰财务作业。</span>
+              </div>
+              <el-switch v-model="preferences.soundEnabled" :disabled="!preferences.enabled" />
+            </div>
+          </div>
+        </section>
+
+        <section class="preference-section">
+          <div class="preference-title">
+            <h3>免打扰与摘要</h3>
+            <p>非工作时段只让加急经营风险打断,普通消息进入收件箱。</p>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>启用免打扰时段</strong>
+              <span>{{ preferences.quietStart }} - {{ preferences.quietEnd }}</span>
+            </div>
+            <el-switch v-model="preferences.quietEnabled" />
+          </div>
+          <div class="quiet-row">
+            <el-select v-model="preferences.quietStart" placeholder="开始" :disabled="!preferences.quietEnabled">
+              <el-option v-for="time in timeOptions" :key="`start-${time}`" :label="time" :value="time" />
+            </el-select>
+            <span>至</span>
+            <el-select v-model="preferences.quietEnd" placeholder="结束" :disabled="!preferences.quietEnabled">
+              <el-option v-for="time in timeOptions" :key="`end-${time}`" :label="time" :value="time" />
+            </el-select>
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>加急消息可打断免打扰</strong>
+              <span>ROI 预警、账期超期、申报截止等仍会提醒。</span>
+            </div>
+            <el-switch v-model="preferences.urgentBreaksQuiet" :disabled="!preferences.quietEnabled" />
+          </div>
+          <div class="setting-row">
+            <div>
+              <strong>每日消息摘要</strong>
+              <span>每天 {{ preferences.digestTime }} 汇总未读和稍后处理。</span>
+            </div>
+            <el-switch v-model="preferences.dailyDigest" />
+          </div>
+          <div class="quiet-row">
+            <el-select v-model="preferences.digestTime" placeholder="摘要时间" :disabled="!preferences.dailyDigest">
+              <el-option v-for="time in digestOptions" :key="`digest-${time}`" :label="time" :value="time" />
+            </el-select>
+          </div>
+        </section>
+
+        <section class="preference-section">
+          <div class="preference-title">
+            <h3>业务订阅</h3>
+            <p>保留消息记录,但可让低价值业务类型不出现在主动提醒里。</p>
+          </div>
+          <div class="subscription-list">
+            <div v-for="type in typeFilters" :key="type.key" class="subscription-row">
+              <div class="message-avatar" :class="type.key">
+                <el-icon :size="18"><component :is="type.icon" /></el-icon>
+              </div>
+              <div>
+                <strong>{{ type.label }}</strong>
+                <span>{{ typeDescriptions[type.key] }}</span>
+              </div>
+              <el-switch
+                :model-value="!preferences.mutedTypes.includes(type.key)"
+                :disabled="!preferences.enabled"
+                @change="(checked) => toggleTypeSubscription(type.key, Boolean(checked))"
+              />
+            </div>
+          </div>
+        </section>
+
+        <div class="preference-actions">
+          <el-button @click="handleResetPreferences">恢复默认</el-button>
+          <el-button type="primary" @click="savePreferences">保存设置</el-button>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -276,6 +386,7 @@ import {
   OfficeBuilding,
   Refresh,
   Search,
+  Setting,
   Stamp,
   Star,
   Tickets,
@@ -292,17 +403,21 @@ import {
   batchRestoreNotifications,
   batchUnreadNotifications,
   deleteNotification,
+  getNotificationPreferences,
   getNotificationStats,
   listNotification,
   readAllNotification,
   readNotification,
+  resetNotificationPreferences,
   resetNotificationDemoData,
   restoreNotification,
   toggleLaterNotification,
   toggleStarNotification,
+  updateNotificationPreferences,
   unreadNotification,
   type NotificationBox,
   type NotificationItem,
+  type NotificationPreferences,
   type NotificationPriority,
   type NotificationType
 } from '@/api/notification'
@@ -316,7 +431,20 @@ const messages = ref<NotificationItem[]>([])
 const selectedIds = ref<number[]>([])
 const currentItem = ref<NotificationItem | null>(null)
 const detailVisible = ref(false)
+const preferenceVisible = ref(false)
 const stats = ref({ total: 0, unread: 0, urgent: 0, later: 0, starred: 0, archived: 0 })
+const preferences = reactive<NotificationPreferences>({
+  enabled: true,
+  desktopEnabled: true,
+  soundEnabled: false,
+  quietEnabled: true,
+  quietStart: '20:00',
+  quietEnd: '08:30',
+  urgentBreaksQuiet: true,
+  dailyDigest: true,
+  digestTime: '09:00',
+  mutedTypes: []
+})
 
 const query = reactive({
   keyword: '',
@@ -334,6 +462,7 @@ const folders = computed(() => [
 ])
 
 const typeFilters = [
+  { key: 'system' as NotificationType, label: '系统通知', icon: Bell },
   { key: 'finance' as NotificationType, label: '财务消息', icon: Wallet },
   { key: 'customer' as NotificationType, label: '客户消息', icon: OfficeBuilding },
   { key: 'order' as NotificationType, label: '订单合同', icon: Tickets },
@@ -344,6 +473,18 @@ const typeFilters = [
   { key: 'message' as NotificationType, label: '@我协作', icon: ChatDotRound }
 ]
 
+const typeDescriptions: Record<NotificationType, string> = {
+  system: '公海回收、规则引擎和系统运行提醒',
+  approval: '报销、费用、合同等审批待办',
+  task: '代理记账、申报、交付等周期任务',
+  message: '@我、评论和内部协作讨论',
+  finance: '日记账、收款、费用和投产预警',
+  customer: '撞单、续费、客户归属和工商档案',
+  order: '提单、合同、财务核对和交付放行',
+  channel: '渠道账期、同行客户和地址资源',
+  tax: '报税截止、异常解除和税务档案'
+}
+
 const currentTitle = computed(() => {
   const type = typeFilters.find((item) => item.key === activeType.value)
   if (type) return type.label
@@ -353,6 +494,29 @@ const currentTitle = computed(() => {
 const pageIds = computed(() => messages.value.map((item) => item.id))
 const isAllPageSelected = computed(() => pageIds.value.length > 0 && pageIds.value.every((id) => selectedIds.value.includes(id)))
 const isIndeterminate = computed(() => selectedIds.value.length > 0 && !isAllPageSelected.value)
+const mutedCount = computed(() => preferences.mutedTypes.length)
+const preferenceSummary = computed(() => {
+  if (!preferences.enabled) return '消息提醒已关闭'
+  if (isQuietNow.value && preferences.urgentBreaksQuiet) return '免打扰中 · 仅加急提醒'
+  if (isQuietNow.value) return '免打扰中 · 不主动提醒'
+  return '消息提醒已开启'
+})
+
+const isQuietNow = computed(() => {
+  if (!preferences.quietEnabled) return false
+  return isTimeWithinRange(currentTimeText(), preferences.quietStart, preferences.quietEnd)
+})
+
+const timeOptions = computed(() => {
+  const options: string[] = []
+  for (let hour = 0; hour < 24; hour += 1) {
+    options.push(`${String(hour).padStart(2, '0')}:00`)
+    options.push(`${String(hour).padStart(2, '0')}:30`)
+  }
+  return options
+})
+
+const digestOptions = computed(() => ['08:30', '09:00', '09:30', '10:00', '17:30', '18:00'])
 
 const groupedMessages = computed(() => {
   const groups: Array<{ key: string; label: string; items: NotificationItem[] }> = []
@@ -371,7 +535,7 @@ const groupedMessages = computed(() => {
 })
 
 onMounted(async () => {
-  await handleRefresh()
+  await Promise.all([loadPreferences(), handleRefresh()])
 })
 
 async function loadData() {
@@ -439,6 +603,29 @@ async function handleReset() {
   await resetNotificationDemoData()
   ElMessage.success('已重置消息数据')
   await handleRefresh()
+}
+
+async function loadPreferences() {
+  const res = await getNotificationPreferences()
+  Object.assign(preferences, res.data)
+}
+
+async function openPreferenceDrawer() {
+  await loadPreferences()
+  preferenceVisible.value = true
+}
+
+async function savePreferences() {
+  const res = await updateNotificationPreferences({ ...preferences, mutedTypes: [...preferences.mutedTypes] })
+  Object.assign(preferences, res.data)
+  ElMessage.success('消息设置已保存')
+  preferenceVisible.value = false
+}
+
+async function handleResetPreferences() {
+  const res = await resetNotificationPreferences()
+  Object.assign(preferences, res.data)
+  ElMessage.success('已恢复默认消息设置')
 }
 
 async function openDetail(item: NotificationItem) {
@@ -587,6 +774,20 @@ async function goBusiness(item: NotificationItem) {
   await handleRefresh()
 }
 
+function toggleTypeSubscription(type: NotificationType, enabled: boolean) {
+  const muted = new Set(preferences.mutedTypes)
+  if (enabled) {
+    muted.delete(type)
+  } else {
+    muted.add(type)
+  }
+  preferences.mutedTypes = Array.from(muted)
+}
+
+function isTypeMuted(type: NotificationType) {
+  return preferences.mutedTypes.includes(type)
+}
+
 function typeIcon(type: NotificationType) {
   const map = {
     system: Bell,
@@ -626,6 +827,25 @@ function getTimeGroup(value: string) {
   if (diffDays === 1) return { key: 'yesterday', label: '昨天' }
   if (diffDays < 7) return { key: 'week', label: '近 7 天' }
   return { key: 'earlier', label: '更早' }
+}
+
+function currentTimeText() {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+function timeToMinutes(value: string) {
+  const [hour, minute] = value.split(':').map(Number)
+  return (hour || 0) * 60 + (minute || 0)
+}
+
+function isTimeWithinRange(current: string, start: string, end: string) {
+  const now = timeToMinutes(current)
+  const from = timeToMinutes(start)
+  const to = timeToMinutes(end)
+  if (from === to) return true
+  if (from < to) return now >= from && now < to
+  return now >= from || now < to
 }
 
 function formatTime(value: string) {
@@ -934,6 +1154,15 @@ function formatTime(value: string) {
     box-shadow: 0 0 0 2px rgba(51, 112, 255, 0.08);
   }
 
+  &.muted {
+    background: #fafafa;
+
+    .message-avatar {
+      filter: grayscale(0.35);
+      opacity: 0.72;
+    }
+  }
+
   &.archived {
     opacity: 0.76;
   }
@@ -1113,6 +1342,124 @@ function formatTime(value: string) {
   gap: 8px;
 }
 
+.preference-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.preference-section {
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.preference-title {
+  margin-bottom: 12px;
+
+  h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 16px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.setting-row,
+.subscription-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 58px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft);
+
+  > div:not(.message-avatar) {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  strong {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 650;
+  }
+
+  span {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+}
+
+.setting-row:first-of-type,
+.subscription-row:first-child {
+  border-top: 0;
+}
+
+.setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  .setting-row {
+    align-items: flex-start;
+    min-height: 86px;
+    padding: 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    background: #f7f8fa;
+  }
+}
+
+.quiet-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 10px;
+
+  span {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  &:last-child {
+    grid-template-columns: 1fr;
+    max-width: 180px;
+  }
+}
+
+.subscription-list {
+  display: grid;
+}
+
+.subscription-row {
+  justify-content: initial;
+
+  > div:nth-child(2) {
+    flex: 1;
+  }
+}
+
+.preference-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 0 0;
+  background: #fff;
+}
+
 @media (max-width: 1180px) {
   .message-shell {
     grid-template-columns: 1fr;
@@ -1149,6 +1496,11 @@ function formatTime(value: string) {
   .message-search,
   .priority-select {
     width: 100%;
+  }
+
+  .setting-grid,
+  .quiet-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>

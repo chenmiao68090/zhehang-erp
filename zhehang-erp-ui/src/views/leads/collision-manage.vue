@@ -301,139 +301,111 @@
       </template>
     </el-dialog>
 
-    <!-- ========== Detail Drawer ========== -->
-    <el-drawer
+    <BusinessDetailDrawer
+      v-if="active"
       v-model="detailVisible"
-      direction="rtl"
-      size="58%"
-      class="collision-drawer"
-      :with-header="false"
+      :title="active.leadName"
+      :subtitle="`CASE · ${String(active.id).padStart(6, '0')} · 匹配字段 ${active.matchField}`"
+      eyebrow="撞单详情"
+      :avatar="active.leadName.slice(0, 2)"
+      :avatar-class="collisionAvatarClass(active)"
+      :status-text="active.status === 0 ? '待处理' : '已处理'"
+      :status-type="active.status === 0 ? 'danger' : 'success'"
+      size="760px"
     >
-      <div v-if="active" class="drawer-body">
-        <div class="drawer-head">
-          <div class="dh-meta">
-            <span class="meta-tag">CASE · {{ String(active.id).padStart(6, '0') }}</span>
-            <span class="meta-divider"></span>
-            <span class="meta-time">{{ active.createTime }}</span>
-          </div>
-          <h2 class="dh-title">{{ active.leadName }}</h2>
-          <p class="dh-sub">
-            <el-tag :type="conflictTagType(active.conflictType)" size="small" effect="dark">
-              {{ conflictLabel(active.conflictType) }}
-            </el-tag>
-            <span class="dh-field">匹配字段 · {{ active.matchField }}</span>
-            <span class="status-pill" :class="active.status === 0 ? 'pending' : 'resolved'">
-              <i class="pulse"></i>{{ active.status === 0 ? '待处理' : '已处理' }}
-            </span>
-          </p>
-          <button class="drawer-close" @click="detailVisible = false">
-            <el-icon><Close /></el-icon>
-          </button>
-        </div>
+      <template #actions>
+        <el-tag :type="conflictTagType(active.conflictType)" effect="plain">{{ conflictLabel(active.conflictType) }}</el-tag>
+        <span class="collision-level-pill" :class="{ danger: active.status === 0 }">{{ levelLabel(active.conflictType) }}</span>
+      </template>
 
-        <div class="drawer-section">
-          <div class="ds-title"><span class="bar"></span>冲突信息摘要</div>
-          <div class="summary-grid">
-            <div class="summary-item">
-              <span class="si-label">发生时间</span>
-              <span class="si-value mono">{{ active.createTime }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="si-label">冲突级别</span>
-              <span class="si-value level">{{ levelLabel(active.conflictType) }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="si-label">触发来源</span>
-              <span class="si-value">领取拦截 · 自动检测</span>
-            </div>
-            <div class="summary-item">
-              <span class="si-label">影响范围</span>
-              <span class="si-value">2 名销售 · 1 个商机</span>
-            </div>
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>发生时间</span><b>{{ active.createTime || '—' }}</b></div>
+          <div class="bd-kv"><span>匹配字段</span><b>{{ active.matchField || '—' }}</b></div>
+          <div class="bd-kv"><span>A 方跟进人</span><b>{{ active.userAName || '—' }}</b></div>
+          <div class="bd-kv"><span>B 方跟进人</span><b>{{ active.userBName || '—' }}</b></div>
+          <div class="bd-kv"><span>触发来源</span><b>领取拦截 · 自动检测</b></div>
+          <div class="bd-kv"><span>影响范围</span><b>2 名销售 · 1 个商机</b></div>
+          <div class="bd-kv"><span>处理结果</span><b>{{ active.resolution ? resolutionLabel(active.resolution) : '待仲裁' }}</b></div>
+          <div class="bd-kv"><span>处理时间</span><b>{{ active.resolvedTime || '—' }}</b></div>
+        </div>
+      </template>
+
+      <div class="bd-section-title">双方对比</div>
+      <div class="collision-compare-grid">
+        <div class="collision-party-card">
+          <div class="party-label">PARTY · A</div>
+          <h3>{{ active.userAName }}</h3>
+          <div class="party-meta-grid">
+            <span>所属团队</span><b>电销一组</b>
+            <span>跟进时长</span><b>{{ active.detailA.followDays }} 天</b>
+            <span>最近跟进</span><b>{{ active.detailA.lastFollow }}</b>
+            <span>关联商机</span><b>{{ active.detailA.opportunity }}</b>
+          </div>
+          <div class="party-follow-list">
+            <p v-for="(f, i) in active.detailA.follows.slice(0, 3)" :key="i">
+              <span>{{ f.time }}</span>{{ f.text }}
+            </p>
           </div>
         </div>
-
-        <div class="drawer-section">
-          <div class="ds-title"><span class="bar"></span>双方对比</div>
-          <div class="compare drawer-compare">
-            <div class="compare-col col-a">
-              <div class="col-tag">PARTY · A</div>
-              <div class="col-name">{{ active.userAName }}</div>
-              <ul class="col-meta">
-                <li><span>所属团队</span><b>电销一组</b></li>
-                <li><span>跟进时长</span><b>{{ active.detailA.followDays }} 天</b></li>
-                <li><span>最近跟进</span><b>{{ active.detailA.lastFollow }}</b></li>
-                <li><span>关联商机</span><b>{{ active.detailA.opportunity }}</b></li>
-                <li><span>客户分级</span><b>A 级</b></li>
-              </ul>
-              <div class="follow-stream">
-                <div class="fs-title">跟进记录</div>
-                <div v-for="(f, i) in active.detailA.follows" :key="i" class="fs-row">
-                  <span class="fs-time">{{ f.time }}</span>
-                  <span class="fs-text">{{ f.text }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="compare-vs">
-              <div class="vs-glyph">VS</div>
-              <div class="vs-line"></div>
-            </div>
-            <div class="compare-col col-b">
-              <div class="col-tag">PARTY · B</div>
-              <div class="col-name">{{ active.userBName }}</div>
-              <ul class="col-meta">
-                <li><span>所属团队</span><b>网销二组</b></li>
-                <li><span>跟进时长</span><b>{{ active.detailB.followDays }} 天</b></li>
-                <li><span>最近跟进</span><b>{{ active.detailB.lastFollow }}</b></li>
-                <li><span>关联商机</span><b>{{ active.detailB.opportunity }}</b></li>
-                <li><span>客户分级</span><b>B 级</b></li>
-              </ul>
-              <div class="follow-stream">
-                <div class="fs-title">跟进记录</div>
-                <div v-for="(f, i) in active.detailB.follows" :key="i" class="fs-row">
-                  <span class="fs-time">{{ f.time }}</span>
-                  <span class="fs-text">{{ f.text }}</span>
-                </div>
-              </div>
-            </div>
+        <div class="collision-party-card party-b">
+          <div class="party-label">PARTY · B</div>
+          <h3>{{ active.userBName }}</h3>
+          <div class="party-meta-grid">
+            <span>所属团队</span><b>网销二组</b>
+            <span>跟进时长</span><b>{{ active.detailB.followDays }} 天</b>
+            <span>最近跟进</span><b>{{ active.detailB.lastFollow }}</b>
+            <span>关联商机</span><b>{{ active.detailB.opportunity }}</b>
           </div>
-        </div>
-
-        <div class="drawer-section">
-          <div class="ds-title"><span class="bar"></span>处理时间线</div>
-          <ol class="timeline">
-            <li class="tl-item done">
-              <span class="tl-dot"></span>
-              <div class="tl-body">
-                <div class="tl-head"><b>检测发现</b><span class="mono">{{ active.createTime }}</span></div>
-                <p>系统在领取拦截环节自动识别到匹配字段「{{ active.matchField }}」存在重复，触发撞单流程。</p>
-              </div>
-            </li>
-            <li class="tl-item" :class="{ done: active.status === 1 }">
-              <span class="tl-dot"></span>
-              <div class="tl-body">
-                <div class="tl-head"><b>仲裁处理</b>
-                  <span class="mono">{{ active.resolvedTime || '—' }}</span>
-                </div>
-                <p v-if="active.resolution">
-                  处理人 {{ active.resolvedByName || '系统管理员' }} 选择「{{ resolutionLabel(active.resolution) }}」。
-                  {{ active.resolutionDetail }}
-                </p>
-                <p v-else class="muted">等待管理员介入处理…</p>
-              </div>
-            </li>
-            <li class="tl-item" :class="{ done: active.status === 1 }">
-              <span class="tl-dot"></span>
-              <div class="tl-body">
-                <div class="tl-head"><b>结果归档</b><span class="mono">{{ active.status === 1 ? active.resolvedTime : '待生成' }}</span></div>
-                <p v-if="active.status === 1">归属调整完成，相关方已收到通知，撞单档案归入流水库。</p>
-                <p v-else class="muted">仲裁完成后自动归档。</p>
-              </div>
-            </li>
-          </ol>
+          <div class="party-follow-list">
+            <p v-for="(f, i) in active.detailB.follows.slice(0, 3)" :key="i">
+              <span>{{ f.time }}</span>{{ f.text }}
+            </p>
+          </div>
         </div>
       </div>
-    </el-drawer>
+
+      <div v-if="active.resolutionDetail" class="collision-resolution-box">
+        <span>处理说明</span>
+        <p>{{ active.resolutionDetail }}</p>
+      </div>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>检测发现</strong>
+            <p>{{ active.createTime }} · 系统识别到「{{ active.matchField }}」重复，触发撞单流程。</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: active.status === 1 }" />
+          <div>
+            <strong>仲裁处理</strong>
+            <p v-if="active.resolution">
+              {{ active.resolvedByName || '系统管理员' }} 选择「{{ resolutionLabel(active.resolution) }}」· {{ active.resolvedTime || '—' }}
+            </p>
+            <p v-else>等待管理员介入处理，建议 24 小时内完成归属判断。</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: active.status === 1 }" />
+          <div>
+            <strong>结果归档</strong>
+            <p>{{ active.status === 1 ? '归属调整完成，相关方已收到通知。' : '仲裁完成后自动归档并同步消息通知。' }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="collision-footer-summary">
+          <span>冲突类型 <b>{{ conflictLabel(active.conflictType) }}</b></span>
+          <span>当前状态 <b :class="{ danger: active.status === 0 }">{{ active.status === 0 ? '待处理' : '已处理' }}</b></span>
+        </div>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button v-if="active.status === 0" type="primary" @click="openResolve(active)">立即处理</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -442,11 +414,12 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowLeftBold, Search, RefreshLeft, Check, Close,
+  ArrowLeftBold, Search, RefreshLeft, Check,
   WarningFilled, Loading, CircleCheck, DataLine,
   DArrowRight, Phone, Document, User, Connection
 } from '@element-plus/icons-vue'
 import { collisionApi, poolRulesMock } from '@/api/crm'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const router = useRouter()
 
@@ -535,7 +508,61 @@ function buildPartyDetail(idx: number): PartyDetail {
   }
 }
 
-const records = ref<RecordRow[]>([])
+function seedCollisionRecords(): RecordRow[] {
+  return [
+    {
+      id: 100101,
+      leadId: 8001,
+      leadName: '杭州启辰科技有限公司',
+      userAId: 1003,
+      userAName: '张小兰',
+      userBId: 1011,
+      userBName: '李明',
+      conflictType: 'duplicate',
+      matchField: '手机号',
+      status: 0,
+      createTime: '2026-06-04 09:28',
+      detailA: buildPartyDetail(1),
+      detailB: buildPartyDetail(4)
+    },
+    {
+      id: 100102,
+      leadId: 8002,
+      leadName: '宁波星禾贸易有限公司',
+      userAId: 1004,
+      userAName: '王倩',
+      userBId: 1012,
+      userBName: '赵晨',
+      conflictType: 'cross_channel',
+      matchField: '统一信用代码',
+      resolution: 'merge',
+      resolutionDetail: '保留原电销跟进人为主负责人,网销作为协作人继续补充线上沟通记录。',
+      resolvedByName: '当前管理员',
+      resolvedTime: '2026-06-04 11:10',
+      status: 1,
+      createTime: '2026-06-04 10:02',
+      detailA: buildPartyDetail(2),
+      detailB: buildPartyDetail(5)
+    },
+    {
+      id: 100103,
+      leadId: 8003,
+      leadName: '绍兴麦田咨询有限公司',
+      userAId: 1005,
+      userAName: '陈会计',
+      userBId: 1013,
+      userBName: '周销售',
+      conflictType: 'grab_conflict',
+      matchField: '客户名称',
+      status: 0,
+      createTime: '2026-06-03 16:45',
+      detailA: buildPartyDetail(3),
+      detailB: buildPartyDetail(6)
+    }
+  ]
+}
+
+const records = ref<RecordRow[]>(seedCollisionRecords())
 
 /* ---------- 从 poolRulesMock 合并真实撞单事件 ---------- */
 function syncCollisionEvents() {
@@ -634,6 +661,11 @@ function levelLabel(t: string) {
 }
 function resolutionLabel(r: string) {
   return ({ keep_a: 'A方归属 · B协作', keep_b: 'B方归属 · A协作', merge: '合并客户', cooperate: '双方协作' } as any)[r]
+}
+function collisionAvatarClass(row: RecordRow) {
+  if (row.status === 1) return 'success'
+  if (row.conflictType === 'duplicate' || row.conflictType === 'cross_channel') return 'danger'
+  return 'warning'
 }
 
 /* ---------- Resolve / Detail ---------- */
@@ -1313,6 +1345,127 @@ function back() { router.push('/leads/operation') }
   .muted { color: rgba(255, 255, 255, 0.3); font-style: italic; }
 }
 
+.collision-level-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 700;
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+    color: #dc2626;
+  }
+}
+
+.collision-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.collision-party-card {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+  &.party-b {
+    background: #f8fafc;
+  }
+  .party-label {
+    margin-bottom: 6px;
+    color: #2563eb;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+  h3 {
+    margin: 0 0 10px;
+    color: #0f172a;
+    font-size: 16px;
+  }
+}
+
+.party-meta-grid {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 7px 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #e2e8f0;
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+  b {
+    min-width: 0;
+    color: #0f172a;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+}
+
+.party-follow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  span {
+    display: block;
+    margin-bottom: 2px;
+    color: #2563eb;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+}
+
+.collision-resolution-box {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  span {
+    display: block;
+    margin-bottom: 5px;
+    color: #0f766e;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  p {
+    margin: 0;
+    color: #14532d;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.collision-footer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+  b {
+    color: #0f766e;
+    font-family: 'JetBrains Mono', monospace;
+    &.danger {
+      color: #dc2626;
+    }
+  }
+}
+
 /* ========== Animations ========== */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }
@@ -1332,6 +1485,7 @@ function back() { router.push('/leads/operation') }
 }
 @media (max-width: 900px) {
   .compare { grid-template-columns: 1fr; }
+  .collision-compare-grid { grid-template-columns: 1fr; }
   .compare-vs { padding: 10px 0; .vs-line { width: 40px; height: 1px; } }
   .compare-col.col-a { border-right: none; border-bottom: 1px dashed rgba(212, 175, 55, 0.1); }
 }

@@ -536,99 +536,112 @@
       </template>
     </el-dialog>
 
-    <!-- ============== 客户详情 Drawer ============== -->
-    <el-drawer v-model="drawer.visible" size="560px" :with-header="false">
-      <div v-if="drawer.target" class="cust-drawer">
-        <div class="drawer-head">
-          <div>
-            <div class="dh-cn">{{ drawer.target.name }}</div>
-            <div class="dh-meta">
-              <el-tag :color="levelColor(drawer.target.level)" effect="dark">{{ drawer.target.level }}级</el-tag>
-              <el-tag effect="plain">{{ drawer.target.status }}</el-tag>
-              <span class="dh-source">{{ drawer.target.source }}</span>
-            </div>
-          </div>
-          <el-button text @click="drawer.visible = false"><el-icon><Close /></el-icon></el-button>
+    <BusinessDetailDrawer
+      v-if="drawer.target"
+      v-model="drawer.visible"
+      :title="drawer.target.name"
+      :subtitle="`${drawer.target.source || '未知来源'} · ${drawer.target.region || '未填地区'} · ${drawer.target.industry || '未填行业'}`"
+      eyebrow="个人客户池"
+      :avatar="drawer.target.name.slice(0, 2)"
+      :avatar-class="customerAvatarClass(drawer.target)"
+      :status-text="drawer.target.status"
+      :status-type="customerStatusType(drawer.target)"
+      size="680px"
+    >
+      <template #actions>
+        <el-tag effect="plain" :style="{ color: levelColor(drawer.target.level), borderColor: levelColor(drawer.target.level) }">
+          {{ drawer.target.level }}级
+        </el-tag>
+        <span class="pool-protect-pill" :class="{ danger: drawer.target.protectDays < 3 }">
+          保护期 {{ drawer.target.protectDays }} 天
+        </span>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>客户类型</span><b>{{ drawer.target.type || '—' }}</b></div>
+          <div class="bd-kv"><span>当前阶段</span><b>{{ drawer.target.status || '—' }}</b></div>
+          <div class="bd-kv"><span>主联系人</span><b>{{ drawer.target.contact || '—' }}</b></div>
+          <div class="bd-kv"><span>联系电话</span><b>{{ drawer.target.phone || '—' }}</b></div>
+          <div class="bd-kv"><span>分配时间</span><b>{{ drawer.target.assignedAt || '—' }}</b></div>
+          <div class="bd-kv"><span>保护期至</span><b>{{ drawer.target.protectEnd || '—' }}</b></div>
+          <div class="bd-kv"><span>最近跟进</span><b>{{ drawer.target.lastFollow || '未跟进' }}</b></div>
+          <div class="bd-kv"><span>跟进次数</span><b>{{ drawer.target.followCount }} 次</b></div>
         </div>
+      </template>
 
-        <el-tabs v-model="drawer.tab" class="drawer-tabs">
-          <el-tab-pane label="基本信息" name="basic">
-            <ul class="info-list">
-              <li><span>客户名称</span><b>{{ drawer.target.name }}</b></li>
-              <li><span>客户类型</span><b>{{ drawer.target.type }}</b></li>
-              <li><span>客户等级</span><b>{{ drawer.target.level }}级</b></li>
-              <li><span>当前状态</span><b>{{ drawer.target.status }}</b></li>
-              <li><span>来源渠道</span><b>{{ drawer.target.source }}</b></li>
-              <li><span>主联系人</span><b>{{ drawer.target.contact }}</b></li>
-              <li><span>联系电话</span><b>{{ drawer.target.phone }}</b></li>
-              <li><span>所在地区</span><b>{{ drawer.target.region }}</b></li>
-              <li><span>所属行业</span><b>{{ drawer.target.industry }}</b></li>
-              <li><span>分配时间</span><b>{{ drawer.target.assignedAt }}</b></li>
-              <li><span>保护期至</span><b :class="{ danger: drawer.target.protectDays < 3 }">{{ drawer.target.protectEnd }} ({{ drawer.target.protectDays }}天)</b></li>
-              <li><span>跟进次数</span><b>{{ drawer.target.followCount }} 次</b></li>
-              <li><span>备注</span><b class="ellipsis">{{ drawer.target.remark || '暂无' }}</b></li>
-            </ul>
-          </el-tab-pane>
-
-          <el-tab-pane label="跟进记录" name="timeline">
-            <el-timeline class="follow-timeline">
-              <el-timeline-item
-                v-for="(t, i) in drawer.timeline"
-                :key="i"
-                :timestamp="t.time"
-                :color="t.color"
-                placement="top"
-              >
-                <div class="tl-card">
-                  <div class="tl-head">
-                    <el-tag size="small">{{ t.way }}</el-tag>
-                    <span class="tl-feedback" :class="t.feedback">{{ t.feedback }}</span>
-                  </div>
-                  <div class="tl-content">{{ t.content }}</div>
-                  <div class="tl-next" v-if="t.nextPlan">下次计划：{{ t.nextPlan }}</div>
-                </div>
-              </el-timeline-item>
-              <div v-if="drawer.timeline.length === 0" class="empty-tip">暂无跟进记录</div>
-            </el-timeline>
-          </el-tab-pane>
-
-          <el-tab-pane label="联系人" name="contacts">
-            <div class="contact-list">
-              <div v-for="(c, i) in drawer.contacts" :key="i" class="contact-row">
-                <div class="cr-avatar">{{ c.name.slice(0, 1) }}</div>
-                <div class="cr-info">
-                  <div class="cr-name">{{ c.name }} <span class="cr-role">{{ c.role }}</span></div>
-                  <div class="cr-meta">{{ c.phone }} · {{ c.email }}</div>
-                </div>
-                <el-tag v-if="c.primary" type="success" size="small">主联系人</el-tag>
-              </div>
-              <div v-if="drawer.contacts.length === 0" class="empty-tip">暂无联系人</div>
-            </div>
-          </el-tab-pane>
-
-          <el-tab-pane label="服务信息" name="service">
-            <div v-if="drawer.services.length > 0">
-              <div v-for="(s, i) in drawer.services" :key="i" class="service-row">
-                <div class="sr-head">
-                  <strong>{{ s.serviceType }}</strong>
-                  <el-tag size="small" :type="s.status === '生效中' ? 'success' : 'info'">{{ s.status }}</el-tag>
-                </div>
-                <div class="sr-meta">
-                  合同号：{{ s.contractNo }} · 周期 {{ s.startDate }} ~ {{ s.endDate }} · 金额 ¥{{ s.amount }}
-                </div>
-              </div>
-            </div>
-            <div v-else class="empty-tip">暂无服务订单</div>
-          </el-tab-pane>
-        </el-tabs>
-
-        <div class="drawer-foot">
-          <el-button type="primary" @click="quickFollow(drawer.target!)">写跟进</el-button>
-          <el-button @click="openTransfer(drawer.target!)">转移</el-button>
-          <el-button type="warning" plain @click="openReturn(drawer.target!)">退回公海</el-button>
+      <div class="bd-section-title">跟进健康度</div>
+      <div class="pool-health-grid">
+        <div>
+          <span>频率要求</span>
+          <b>{{ freqLimit(drawer.target.level) }} 天 / 次</b>
+        </div>
+        <div>
+          <span>跟进间隔</span>
+          <b>{{ drawer.target.lastFollow ? `${drawer.target.lastFollowDays} 天` : '从未跟进' }}</b>
+        </div>
+        <div>
+          <span>健康状态</span>
+          <b :class="healthStatus(drawer.target)">{{ healthLabel(drawer.target) }}</b>
         </div>
       </div>
-    </el-drawer>
+
+      <div class="bd-section-title section-gap">联系人</div>
+      <div class="pool-contact-list">
+        <div v-for="(c, i) in drawer.contacts" :key="i" class="pool-contact-row">
+          <div class="contact-avatar">{{ c.name.slice(0, 1) }}</div>
+          <div class="contact-info">
+            <strong>{{ c.name }} <span>{{ c.role }}</span></strong>
+            <p>{{ c.phone }} · {{ c.email }}</p>
+          </div>
+          <el-tag v-if="c.primary" type="success" size="small">主联系人</el-tag>
+        </div>
+        <div v-if="drawer.contacts.length === 0" class="detail-empty">暂无联系人</div>
+      </div>
+
+      <div class="bd-section-title section-gap">服务与备注</div>
+      <div class="pool-service-list">
+        <div v-for="(s, i) in drawer.services" :key="i" class="pool-service-row">
+          <div class="service-title">
+            <strong>{{ s.serviceType }}</strong>
+            <el-tag size="small" :type="s.status === '生效中' ? 'success' : 'info'">{{ s.status }}</el-tag>
+          </div>
+          <p>合同号：{{ s.contractNo }} · 周期 {{ s.startDate }} ~ {{ s.endDate }} · 金额 ¥{{ s.amount }}</p>
+        </div>
+        <div v-if="drawer.services.length === 0" class="pool-remark-box">
+          {{ drawer.target.remark || '客户暂未成交，服务订单将在签约后自动沉淀到这里。' }}
+        </div>
+      </div>
+
+      <template #timeline>
+        <div v-if="drawer.timeline.length === 0" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>暂无跟进记录</strong>
+            <p>建议尽快写入首次触达记录，避免客户进入回收预警。</p>
+          </div>
+        </div>
+        <div v-for="(t, i) in drawer.timeline" :key="i" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: t.feedback === '积极' }" />
+          <div>
+            <strong>{{ t.way }} · {{ t.feedback }}</strong>
+            <p>{{ t.time }} · {{ t.content }}</p>
+            <p v-if="t.nextPlan">下次计划：{{ t.nextPlan }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="pool-footer-summary">
+          <span>等级 <b>{{ drawer.target.level }}</b></span>
+          <span>保护期 <b :class="{ danger: drawer.target.protectDays < 3 }">{{ drawer.target.protectDays }} 天</b></span>
+        </div>
+        <el-button @click="drawer.visible = false">关闭</el-button>
+        <el-button type="primary" @click="quickFollow(drawer.target!)">写跟进</el-button>
+        <el-button @click="openTransfer(drawer.target!)">转移</el-button>
+        <el-button type="warning" plain @click="openReturn(drawer.target!)">退回公海</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -637,10 +650,11 @@ import { ref, reactive, computed, onMounted, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
-  ArrowLeftBold, Search, Close
+  ArrowLeftBold, Search
 } from '@element-plus/icons-vue'
 import { leadApi, holdingApi, ROLE_HOLDING_LIMITS, poolRulesMock } from '@/api/crm'
 import { useUserStore } from '@/stores/user'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 interface Customer {
   id: number
@@ -753,6 +767,77 @@ function generateMock() {
   return []
 }
 
+function seedPersonalCustomers(): Customer[] {
+  return [
+    {
+      id: 91001,
+      name: '杭州启辰科技有限公司',
+      contact: '张总',
+      phone: '18600001234',
+      level: 'A',
+      status: '需求确认',
+      type: '企业客户',
+      source: '官网注册',
+      region: '杭州',
+      industry: '科技互联网',
+      protectEnd: dateOffset(2),
+      protectDays: 2,
+      lastFollow: dateOffset(-1),
+      lastFollowDays: 1,
+      nextFollow: dateOffset(1),
+      warning: 'red',
+      followCount: 5,
+      assignedAt: dateOffset(-8),
+      remark: '客户关注代理记账、工商变更和税务合规,需要本周内二次报价。',
+      isNew: false
+    },
+    {
+      id: 91002,
+      name: '宁波星禾贸易有限公司',
+      contact: '李经理',
+      phone: '18500005678',
+      level: 'B',
+      status: '方案报价',
+      type: '企业客户',
+      source: '电话外呼',
+      region: '宁波',
+      industry: '电商零售',
+      protectEnd: dateOffset(6),
+      protectDays: 6,
+      lastFollow: dateOffset(-5),
+      lastFollowDays: 5,
+      nextFollow: dateOffset(2),
+      warning: 'yellow',
+      followCount: 3,
+      assignedAt: dateOffset(-12),
+      remark: '对注册地址和财税套餐价格敏感,需同步渠道地址资源。',
+      isNew: false
+    },
+    {
+      id: 91003,
+      name: '绍兴麦田咨询有限公司',
+      contact: '王女士',
+      phone: '18300009876',
+      level: 'C',
+      status: '首次触达',
+      type: '企业客户',
+      source: '市场活动',
+      region: '绍兴',
+      industry: '咨询服务',
+      protectEnd: dateOffset(12),
+      protectDays: 12,
+      lastFollow: dateOffset(-2),
+      lastFollowDays: 2,
+      nextFollow: dateOffset(5),
+      warning: 'green',
+      followCount: 1,
+      assignedAt: dateOffset(-3),
+      remark: '新分配客户,已完成首次电话触达。',
+      isNew: true
+    }
+  ]
+}
+
 // 后端状态(1新建/2跟进中/3已转化/4无效)→ 页面阶段标签
 const STATUS_INT_LABEL: Record<number, string> = {
   1: '新分配', 2: '首次触达', 3: '已成交', 4: '已成交'
@@ -809,9 +894,9 @@ async function fetchCustomers() {
   try {
     const resp: any = await leadApi.myList({ pageNum: 1, pageSize: 200 })
     const records = resp && (resp.records || resp.list)
-    customers.value = Array.isArray(records) ? records.map(mapMyLead) : []
+    customers.value = Array.isArray(records) && records.length ? records.map(mapMyLead) : seedPersonalCustomers()
   } catch {
-    customers.value = []
+    customers.value = seedPersonalCustomers()
   }
 }
 
@@ -930,6 +1015,23 @@ function statusTagType(s: string): any {
     '已成交': 'success'
   }
   return m[s] || ''
+}
+function customerStatusType(row: Customer): 'info' | 'warning' | 'primary' | 'success' | 'danger' {
+  if (healthStatus(row) === 'danger') return 'danger'
+  return ({
+    '新分配': 'info',
+    '首次触达': 'primary',
+    '需求确认': 'warning',
+    '方案报价': 'warning',
+    '谈判签约': 'danger',
+    '已成交': 'success'
+  } as Record<string, 'info' | 'warning' | 'primary' | 'success' | 'danger'>)[row.status] || 'info'
+}
+function customerAvatarClass(row: Customer) {
+  if (healthStatus(row) === 'danger') return 'danger'
+  if (row.level === 'A') return 'warning'
+  if (row.status === '已成交') return 'success'
+  return 'company'
 }
 
 // ---------- 优化3: 跟进频率校验 ----------
@@ -1562,6 +1664,146 @@ onMounted(() => {
 .drawer-foot {
   display: flex; gap: 10px; padding: 16px 8px 4px;
   border-top: 1px solid rgba(167,139,250,0.12); margin-top: 8px;
+}
+
+.pool-protect-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 650;
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+    color: #dc2626;
+  }
+}
+
+.pool-health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  > div {
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fbfcfd;
+  }
+  span {
+    display: block;
+    margin-bottom: 5px;
+    color: #64748b;
+    font-size: 12px;
+  }
+  b {
+    color: #0f172a;
+    font-size: 14px;
+    &.normal { color: #0f766e; }
+    &.lag { color: #d97706; }
+    &.danger { color: #dc2626; }
+  }
+}
+
+.section-gap {
+  margin-top: 18px !important;
+}
+
+.pool-contact-list,
+.pool-service-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pool-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.contact-avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #626aef;
+  font-weight: 800;
+}
+
+.contact-info {
+  flex: 1;
+  min-width: 0;
+  strong {
+    color: #0f172a;
+    font-size: 14px;
+    span {
+      margin-left: 6px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 500;
+    }
+  }
+  p {
+    margin: 3px 0 0;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+}
+
+.pool-service-row,
+.pool-remark-box {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.service-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  strong { color: #0f172a; }
+}
+
+.pool-service-row p,
+.pool-remark-box {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.detail-empty {
+  padding: 24px 0;
+  color: #94a3b8;
+  text-align: center;
+  font-size: 13px;
+}
+
+.pool-footer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+  b {
+    color: #0f766e;
+    font-family: 'JetBrains Mono', monospace;
+    &.danger { color: #dc2626; }
+  }
 }
 
 /* ============== Responsive ============== */

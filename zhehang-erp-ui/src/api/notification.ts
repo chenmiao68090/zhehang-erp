@@ -10,7 +10,7 @@ export type NotificationType =
   | 'tax'
 
 export type NotificationPriority = 'urgent' | 'high' | 'normal' | 'low'
-export type NotificationBox = 'inbox' | 'unread' | 'starred' | 'later' | 'archived'
+export type NotificationBox = 'inbox' | 'pending' | 'done' | 'unread' | 'starred' | 'later' | 'archived'
 
 export interface NotificationPreferences {
   enabled: boolean
@@ -44,6 +44,10 @@ export interface NotificationItem {
   isStarred?: boolean
   isLater?: boolean
   isArchived?: boolean
+  isDone?: boolean
+  doneTime?: string
+  doneBy?: string
+  doneRemark?: string
 }
 
 export interface NotificationQuery {
@@ -88,6 +92,7 @@ const seedNotifications: NotificationItem[] = [
     tags: ['ROI', '网销', '高优先级'],
     isRead: false,
     isStarred: true,
+    isDone: false,
     createTime: minutesAgo(18)
   },
   {
@@ -104,6 +109,7 @@ const seedNotifications: NotificationItem[] = [
     actionText: '处理渠道账款',
     tags: ['应收', '账期', '渠道'],
     isRead: false,
+    isDone: false,
     createTime: minutesAgo(36)
   },
   {
@@ -120,6 +126,7 @@ const seedNotifications: NotificationItem[] = [
     actionText: '补税务档案',
     tags: ['工商信息', '税务档案'],
     isRead: false,
+    isDone: false,
     createTime: minutesAgo(72)
   },
   {
@@ -137,6 +144,7 @@ const seedNotifications: NotificationItem[] = [
     tags: ['撞单', '客户归属'],
     isRead: false,
     isLater: true,
+    isDone: false,
     createTime: hoursAgo(2)
   },
   {
@@ -152,6 +160,7 @@ const seedNotifications: NotificationItem[] = [
     actionText: '核对订单',
     tags: ['提单', '财务核对'],
     isRead: false,
+    isDone: false,
     createTime: hoursAgo(3)
   },
   {
@@ -167,6 +176,7 @@ const seedNotifications: NotificationItem[] = [
     actionText: '查看任务',
     tags: ['代理记账', '申报截止'],
     isRead: false,
+    isDone: false,
     createTime: hoursAgo(4)
   },
   {
@@ -182,6 +192,7 @@ const seedNotifications: NotificationItem[] = [
     actionText: '整理流水',
     tags: ['日记账', '科目归集'],
     isRead: true,
+    isDone: false,
     createTime: hoursAgo(6)
   },
   {
@@ -197,6 +208,7 @@ const seedNotifications: NotificationItem[] = [
     actionText: '查看讨论',
     tags: ['@我', '续费'],
     isRead: false,
+    isDone: false,
     createTime: hoursAgo(7)
   },
   {
@@ -212,6 +224,10 @@ const seedNotifications: NotificationItem[] = [
     actionText: '查看规则',
     tags: ['公海', '回收'],
     isRead: true,
+    isDone: true,
+    doneBy: '系统',
+    doneRemark: '规则扫描已同步到公海池。',
+    doneTime: yesterdayAt('17:45'),
     createTime: yesterdayAt('17:40')
   },
   {
@@ -227,6 +243,7 @@ const seedNotifications: NotificationItem[] = [
     actionText: '审批报销',
     tags: ['报销', '审批'],
     isRead: true,
+    isDone: false,
     createTime: yesterdayAt('15:12')
   }
 ]
@@ -285,6 +302,10 @@ function normalizeItem(item: any): NotificationItem {
     isStarred: item.isStarred === true,
     isLater: item.isLater === true,
     isArchived: item.isArchived === true,
+    isDone: item.isDone === true,
+    doneTime: typeof item.doneTime === 'string' ? item.doneTime : undefined,
+    doneBy: typeof item.doneBy === 'string' ? item.doneBy : undefined,
+    doneRemark: typeof item.doneRemark === 'string' ? item.doneRemark : undefined,
     tags: Array.isArray(item.tags) ? item.tags : []
   }
 }
@@ -326,6 +347,8 @@ function filterList(params: NotificationQuery = {}) {
     list = list.filter((item) => !item.isArchived)
   }
   if (params.box === 'unread') list = list.filter((item) => !item.isRead)
+  if (params.box === 'pending') list = list.filter((item) => !item.isDone)
+  if (params.box === 'done') list = list.filter((item) => item.isDone)
   if (params.box === 'starred') list = list.filter((item) => item.isStarred)
   if (params.box === 'later') list = list.filter((item) => item.isLater)
   if (params.isRead !== undefined) list = list.filter((item) => item.isRead === Boolean(params.isRead))
@@ -363,6 +386,8 @@ export function getNotificationStats() {
     data: {
       total: active.length,
       unread: active.filter((item) => !item.isRead).length,
+      pending: active.filter((item) => !item.isDone).length,
+      done: active.filter((item) => item.isDone).length,
       urgent: active.filter((item) => !item.isRead && item.priority === 'urgent').length,
       later: active.filter((item) => item.isLater && !item.isArchived).length,
       starred: active.filter((item) => item.isStarred && !item.isArchived).length,
@@ -385,12 +410,56 @@ export function readAllNotification() {
   return Promise.resolve({ data: null })
 }
 
+export function doneNotification(id: number, remark?: string) {
+  return updateNotification(id, (item) => ({
+    ...item,
+    isDone: true,
+    isRead: true,
+    isLater: false,
+    doneTime: new Date().toISOString(),
+    doneBy: '当前用户',
+    doneRemark: remark || item.doneRemark || '已处理'
+  }))
+}
+
+export function undoneNotification(id: number) {
+  return updateNotification(id, (item) => ({
+    ...item,
+    isDone: false,
+    doneTime: undefined,
+    doneBy: undefined,
+    doneRemark: undefined
+  }))
+}
+
 export function batchReadNotifications(ids: number[]) {
   return batchUpdateNotifications(ids, (item) => ({ ...item, isRead: true }))
 }
 
 export function batchUnreadNotifications(ids: number[]) {
   return batchUpdateNotifications(ids, (item) => ({ ...item, isRead: false }))
+}
+
+export function batchDoneNotifications(ids: number[], remark?: string) {
+  return batchUpdateNotifications(ids, (item) => ({
+    ...item,
+    isDone: true,
+    isRead: true,
+    isLater: false,
+    doneTime: new Date().toISOString(),
+    doneBy: '当前用户',
+    doneRemark: remark || item.doneRemark || '批量标记已处理'
+  }))
+}
+
+export function batchUndoneNotifications(ids: number[]) {
+  return batchUpdateNotifications(ids, (item) => ({
+    ...item,
+    isDone: false,
+    doneTime: undefined,
+    doneBy: undefined,
+    doneRemark: undefined
+  }))
 }
 
 export function deleteNotification(id: number) {

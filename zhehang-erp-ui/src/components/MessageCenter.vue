@@ -11,7 +11,7 @@
         <header class="msg-head">
           <div>
             <h3>消息中心</h3>
-            <p>{{ stats.unread }} 条未读 · {{ stats.urgent }} 条加急 · {{ preferenceLine }}</p>
+            <p>{{ stats.unread }} 条未读 · {{ stats.pending }} 条待处理 · {{ stats.urgent }} 条加急 · {{ preferenceLine }}</p>
           </div>
           <el-button link type="primary" :disabled="stats.unread === 0" @click="markAllRead">全部已读</el-button>
         </header>
@@ -117,7 +117,7 @@ const router = useRouter()
 const visible = ref(false)
 const activeTab = ref<NotificationBox>('inbox')
 const messages = ref<NotificationItem[]>([])
-const stats = ref({ total: 0, unread: 0, urgent: 0, later: 0, starred: 0, archived: 0 })
+const stats = ref({ total: 0, unread: 0, pending: 0, done: 0, urgent: 0, later: 0, starred: 0, archived: 0 })
 const preferences = ref<NotificationPreferences>({
   enabled: true,
   desktopEnabled: true,

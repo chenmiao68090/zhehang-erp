@@ -16,6 +16,16 @@
     </header>
 
     <section class="metric-grid">
+      <div class="metric-card pending">
+        <span>待处理</span>
+        <strong>{{ stats.pending }}</strong>
+        <small>未形成闭环</small>
+      </div>
+      <div class="metric-card done">
+        <span>已处理</span>
+        <strong>{{ stats.done }}</strong>
+        <small>今日复盘可追踪</small>
+      </div>
       <div class="metric-card unread">
         <span>未读消息</span>
         <strong>{{ stats.unread }}</strong>
@@ -124,6 +134,9 @@
             <span>已选 {{ selectedIds.length }} 条</span>
             <el-button size="small" @click="batchMarkRead">标为已读</el-button>
             <el-button size="small" @click="batchMarkUnread">标为未读</el-button>
+            <el-button size="small" type="success" @click="batchDone">
+              {{ activeBox === 'done' ? '重新打开' : '标记处理完成' }}
+            </el-button>
             <el-button size="small" @click="batchLater">
               {{ activeBox === 'later' ? '取消稍后' : '稍后处理' }}
             </el-button>
@@ -148,7 +161,7 @@
                 v-for="item in group.items"
                 :key="item.id"
                 class="business-message"
-                :class="{ unread: !item.isRead, archived: item.isArchived, selected: selectedIds.includes(item.id), muted: isTypeMuted(item.type) }"
+                :class="{ unread: !item.isRead, archived: item.isArchived, selected: selectedIds.includes(item.id), muted: isTypeMuted(item.type), done: item.isDone }"
                 @click="openDetail(item)"
               >
                 <div class="select-cell" @click.stop>
@@ -171,6 +184,7 @@
                     </el-tag>
                     <el-tag v-if="item.isLater" type="warning" effect="plain" size="small">稍后</el-tag>
                     <el-tag v-if="item.isStarred" type="primary" effect="plain" size="small">星标</el-tag>
+                    <el-tag v-if="item.isDone" type="success" effect="plain" size="small">已处理</el-tag>
                     <el-tag v-if="isTypeMuted(item.type)" type="info" effect="plain" size="small">已静音</el-tag>
                   </div>
                   <p class="message-content">{{ item.content }}</p>
@@ -191,6 +205,9 @@
                     </el-button>
                     <el-button size="small" @click="toggleRead(item)">
                       {{ item.isRead ? '标未读' : '已读' }}
+                    </el-button>
+                    <el-button size="small" :type="item.isDone ? 'info' : 'success'" @click="toggleDone(item)">
+                      {{ item.isDone ? '重新打开' : '完成' }}
                     </el-button>
                   </div>
                 </div>
@@ -250,13 +267,61 @@
           </div>
           <div>
             <dt>状态</dt>
-            <dd>{{ currentItem.isRead ? '已读' : '未读' }}</dd>
+            <dd>{{ currentItem.isDone ? '已处理' : currentItem.isRead ? '已读' : '未读' }}</dd>
+          </div>
+          <div>
+            <dt>处理人</dt>
+            <dd>{{ currentItem.doneBy || '-' }}</dd>
+          </div>
+          <div>
+            <dt>处理时间</dt>
+            <dd>{{ currentItem.doneTime ? formatTime(currentItem.doneTime) : '-' }}</dd>
           </div>
         </dl>
+
+        <div class="done-editor">
+          <span>处理备注</span>
+          <el-input
+            v-model="doneRemarkDraft"
+            type="textarea"
+            :rows="3"
+            maxlength="120"
+            show-word-limit
+            placeholder="填写处理结论,例如:已联系负责人、已补齐资料、已转交财务。"
+          />
+        </div>
+
+        <div class="timeline-panel">
+          <div class="timeline-title">流转记录</div>
+          <div class="timeline-item">
+            <span />
+            <div>
+              <strong>{{ currentItem.sender || '系统' }} 发起消息</strong>
+              <p>{{ formatTime(currentItem.createTime) }}</p>
+            </div>
+          </div>
+          <div v-if="currentItem.isRead" class="timeline-item">
+            <span />
+            <div>
+              <strong>当前用户已读</strong>
+              <p>消息已进入处理视图</p>
+            </div>
+          </div>
+          <div v-if="currentItem.isDone" class="timeline-item done">
+            <span />
+            <div>
+              <strong>{{ currentItem.doneBy || '当前用户' }} 完成处理</strong>
+              <p>{{ currentItem.doneRemark || '已处理' }}</p>
+            </div>
+          </div>
+        </div>
 
         <div class="detail-actions">
           <el-button v-if="currentItem.link" type="primary" @click="goBusiness(currentItem)">
             {{ currentItem.actionText || '去处理' }}
+          </el-button>
+          <el-button :type="currentItem.isDone ? 'info' : 'success'" @click="toggleDone(currentItem)">
+            {{ currentItem.isDone ? '重新打开' : '标记处理完成' }}
           </el-button>
           <el-button @click="toggleLater(currentItem)">{{ currentItem.isLater ? '取消稍后' : '稍后处理' }}</el-button>
           <el-button @click="toggleStar(currentItem)">{{ currentItem.isStarred ? '取消星标' : '星标' }}</el-button>
@@ -398,11 +463,14 @@ import {
   batchArchiveNotifications,
   batchCancelLaterNotifications,
   batchDeleteNotifications,
+  batchDoneNotifications,
   batchLaterNotifications,
   batchReadNotifications,
   batchRestoreNotifications,
+  batchUndoneNotifications,
   batchUnreadNotifications,
   deleteNotification,
+  doneNotification,
   getNotificationPreferences,
   getNotificationStats,
   listNotification,
@@ -413,6 +481,7 @@ import {
   restoreNotification,
   toggleLaterNotification,
   toggleStarNotification,
+  undoneNotification,
   updateNotificationPreferences,
   unreadNotification,
   type NotificationBox,
@@ -432,7 +501,8 @@ const selectedIds = ref<number[]>([])
 const currentItem = ref<NotificationItem | null>(null)
 const detailVisible = ref(false)
 const preferenceVisible = ref(false)
-const stats = ref({ total: 0, unread: 0, urgent: 0, later: 0, starred: 0, archived: 0 })
+const doneRemarkDraft = ref('')
+const stats = ref({ total: 0, unread: 0, pending: 0, done: 0, urgent: 0, later: 0, starred: 0, archived: 0 })
 const preferences = reactive<NotificationPreferences>({
   enabled: true,
   desktopEnabled: true,
@@ -455,6 +525,8 @@ const query = reactive({
 
 const folders = computed(() => [
   { key: 'inbox' as NotificationBox, label: '全部消息', count: stats.value.total, icon: Bell },
+  { key: 'pending' as NotificationBox, label: '待处理', count: stats.value.pending, icon: Clock },
+  { key: 'done' as NotificationBox, label: '已处理', count: stats.value.done, icon: DocumentChecked },
   { key: 'unread' as NotificationBox, label: '未读', count: stats.value.unread, icon: Check },
   { key: 'starred' as NotificationBox, label: '星标', count: stats.value.starred, icon: Star },
   { key: 'later' as NotificationBox, label: '稍后处理', count: stats.value.later, icon: Clock },
@@ -630,6 +702,7 @@ async function handleResetPreferences() {
 
 async function openDetail(item: NotificationItem) {
   currentItem.value = item
+  doneRemarkDraft.value = item.doneRemark || ''
   detailVisible.value = true
   if (!item.isRead) {
     await readNotification(item.id)
@@ -657,6 +730,30 @@ async function toggleLater(item: NotificationItem) {
   await toggleLaterNotification(item.id)
   await handleRefresh()
   if (currentItem.value?.id === item.id) currentItem.value = { ...item, isLater: !item.isLater }
+}
+
+async function toggleDone(item: NotificationItem) {
+  if (item.isDone) {
+    await undoneNotification(item.id)
+    ElMessage.success('已重新打开消息')
+  } else {
+    await doneNotification(item.id, doneRemarkDraft.value.trim() || undefined)
+    ElMessage.success('已标记处理完成')
+  }
+  await handleRefresh()
+  const latest = messages.value.find((message) => message.id === item.id)
+  if (currentItem.value?.id === item.id) {
+    currentItem.value = latest ? { ...latest } : {
+      ...item,
+      isRead: !item.isDone ? true : item.isRead,
+      isLater: item.isDone ? item.isLater : false,
+      isDone: !item.isDone,
+      doneTime: item.isDone ? undefined : new Date().toISOString(),
+      doneBy: item.isDone ? undefined : '当前用户',
+      doneRemark: item.isDone ? undefined : (doneRemarkDraft.value.trim() || '已处理')
+    }
+    doneRemarkDraft.value = currentItem.value.doneRemark || ''
+  }
 }
 
 async function archiveItem(item: NotificationItem) {
@@ -721,6 +818,20 @@ async function batchMarkUnread() {
   if (!selectedIds.value.length) return
   await batchUnreadNotifications([...selectedIds.value])
   ElMessage.success(`已将 ${selectedIds.value.length} 条消息标为未读`)
+  clearSelection()
+  await handleRefresh()
+}
+
+async function batchDone() {
+  if (!selectedIds.value.length) return
+  const ids = [...selectedIds.value]
+  if (activeBox.value === 'done') {
+    await batchUndoneNotifications(ids)
+    ElMessage.success(`已重新打开 ${ids.length} 条消息`)
+  } else {
+    await batchDoneNotifications(ids)
+    ElMessage.success(`已将 ${ids.length} 条消息标记处理完成`)
+  }
   clearSelection()
   await handleRefresh()
 }
@@ -892,7 +1003,7 @@ function formatTime(value: string) {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -930,6 +1041,8 @@ function formatTime(value: string) {
     background: #3370ff;
   }
 
+  &.pending::after { background: #3370ff; }
+  &.done::after { background: #00b42a; }
   &.urgent::after { background: #f53f3f; }
   &.later::after { background: #ff7d00; }
   &.starred::after { background: #626aef; }
@@ -1154,6 +1267,15 @@ function formatTime(value: string) {
     box-shadow: 0 0 0 2px rgba(51, 112, 255, 0.08);
   }
 
+  &.done {
+    background: #fbfffb;
+    border-color: #d9f7df;
+
+    .message-title-row h4 {
+      color: #4e5969;
+    }
+  }
+
   &.muted {
     background: #fafafa;
 
@@ -1336,6 +1458,66 @@ function formatTime(value: string) {
   }
 }
 
+.done-editor {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+
+  span {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+}
+
+.timeline-panel {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.timeline-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+
+  > span {
+    width: 9px;
+    height: 9px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: #bedaff;
+    box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.08);
+  }
+
+  strong {
+    color: var(--text-primary);
+    font-size: 13px;
+  }
+
+  p {
+    margin: 3px 0 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  &.done > span {
+    background: #00b42a;
+    box-shadow: 0 0 0 3px rgba(0, 180, 42, 0.12);
+  }
+}
+
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1461,6 +1643,10 @@ function formatTime(value: string) {
 }
 
 @media (max-width: 1180px) {
+  .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .message-shell {
     grid-template-columns: 1fr;
   }

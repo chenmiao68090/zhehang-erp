@@ -298,7 +298,7 @@ export default {
       "emptyNumbers": "暂无号码记录",
       "emptyTrunks": "暂无中继配置",
       "extPrefix": "分机",
-      "marqueeBrand": "浙杭企服 · 呼叫中心",
+      "marqueeBrand": "浙杭集团 · 呼叫中心",
       "action": {
         "batchImport": "批量导入",
         "addNumber": "新增号码"
@@ -357,7 +357,7 @@ export default {
         "publishedOnline": "已发布上线",
         "copyFailed": "复制失败",
         "templateLoadedPrefix": "已加载模板：",
-        "heroEyebrow": "CALL CENTER · IVR ENGINE / 浙杭企服",
+        "heroEyebrow": "CALL CENTER · IVR ENGINE / 浙杭集团",
         "heroTitleMain": "交互语音流程",
         "heroTitleEm": "设计中枢",
         "heroSub": "可视化编排呼入路由 ／ 复用预置模板 ／ 协同上线发布"
@@ -366,7 +366,7 @@ export default {
         "presaleName": "售前咨询",
         "presaleDesc": "产品咨询 / 价格优惠 / 转人工三路分流",
         "presaleFlowName": "售前咨询流程",
-        "presaleWelcome": "您好，欢迎致电浙杭企服售前咨询热线",
+        "presaleWelcome": "您好，欢迎致电浙杭集团售前咨询热线",
         "presaleMenu": "产品咨询请按1，价格优惠请按2，转人工请按0",
         "presaleNodeWelcome": "欢迎语",
         "presaleNodeMain": "主菜单",
@@ -936,7 +936,7 @@ export default {
           "jazz": "爵士 · Smooth",
           "jazzMeta": "Norah Jones 风格",
           "brand": "品牌定制音效",
-          "brandMeta": "浙杭企服专属"
+          "brandMeta": "浙杭集团专属"
         },
         "msg": {
           "validName": "请输入技能组名称",

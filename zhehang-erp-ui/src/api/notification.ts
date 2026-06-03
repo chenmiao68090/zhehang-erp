@@ -1,20 +1,30 @@
 import { get, put, del } from './request'
 
+export type NotificationType = 'system' | 'approval' | 'task' | 'message'
+
 /** 通知项 */
 export interface NotificationItem {
   id: number
   title: string
   content: string
-  type: 'system' | 'approval' | 'task' | 'message'
+  type: NotificationType
   isRead: boolean
   link?: string
   createTime: string
   sender?: string
 }
 
+export interface NotificationQuery {
+  keyword?: string
+  type?: NotificationType
+  isRead?: number
+  pageNum?: number
+  pageSize?: number
+}
+
 /** 获取通知列表 */
-export function listNotification(params?: { type?: string; isRead?: number; pageNum?: number; pageSize?: number }) {
-  return get<{ data: { list: NotificationItem[]; total: number } }>('/system/notification/list', params)
+export function listNotification(params?: NotificationQuery) {
+  return get('/system/notification/list', params)
 }
 
 /** 标记单条已读 */

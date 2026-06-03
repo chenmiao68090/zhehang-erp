@@ -13,9 +13,35 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/404',
     name: 'NotFound',
-    component: () => import('@/views/login/index.vue'), // TODO: 404 page
+    component: () => import('@/views/error/404.vue'),
     meta: { title: '404', hidden: true }
   },
+  {
+    path: '/500',
+    name: 'ServerError',
+    component: () => import('@/views/error/500.vue'),
+    meta: { title: '500', hidden: true }
+  },
+  { path: '/crm/customer', redirect: '/leads/workbench', meta: { hidden: true } },
+  { path: '/crm/follow', redirect: '/leads/workbench', meta: { hidden: true } },
+  { path: '/crm/contract', redirect: '/order/contract', meta: { hidden: true } },
+  { path: '/sales/order', redirect: '/order/bill', meta: { hidden: true } },
+  { path: '/finance/voucher', redirect: '/finance/journal', meta: { hidden: true } },
+  { path: '/finance/report', redirect: '/dashboard/cockpit', meta: { hidden: true } },
+  { path: '/workflow/todo', redirect: '/task-center/once', meta: { hidden: true } },
+  { path: '/collaboration/notification', redirect: '/system/notification', meta: { hidden: true } },
+  { path: '/leads/enterprise-master', redirect: '/customer/enterprise-master', meta: { hidden: true } },
+  { path: '/leads/company-pool', redirect: '/customer/company-pool', meta: { hidden: true } },
+  { path: '/leads/personal-pool', redirect: '/customer/personal-pool', meta: { hidden: true } },
+  { path: '/leads/service-renewal', redirect: '/customer/service-renewal', meta: { hidden: true } },
+  { path: '/leads/pool-admin', redirect: '/customer/pool-admin', meta: { hidden: true } },
+  { path: '/leads/collision-manage', redirect: '/customer/collision-manage', meta: { hidden: true } },
+  { path: '/supply/channel-cost', redirect: '/leads/online-roi', meta: { hidden: true } },
+  { path: '/org/dept', redirect: '/hrm/dept', meta: { hidden: true } },
+  { path: '/org/post', redirect: '/hrm/post', meta: { hidden: true } },
+  { path: '/org/employee', redirect: '/hrm/employee', meta: { hidden: true } },
+  { path: '/org/structure', redirect: '/hrm/structure', meta: { hidden: true } },
+  { path: '/ai-chat/index', component: () => import('@/views/ai-chat/index.vue'), meta: { title: 'AI 助手', hidden: true } },
   {
     path: '/',
     component: Layout,
@@ -41,29 +67,95 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'Cockpit',
         component: () => import('@/views/dashboard/cockpit.vue'),
         meta: { title: '驾驶舱', icon: 'DataAnalysis' }
+      },
+      {
+        path: 'marketing-stats',
+        name: 'MarketingStats',
+        component: () => import('@/views/report/marketing-stats.vue'),
+        meta: { title: '营销统计', icon: 'TrendCharts' }
       }
     ]
   },
   {
     path: '/leads',
     component: Layout,
-    redirect: '/leads/index',
-    meta: { title: '线索管理', icon: 'Notebook' },
+    redirect: '/leads/workbench',
+    meta: { title: '营销获客', icon: 'Notebook' },
     children: [
       {
-        path: 'index',
-        name: 'LeadsIndex',
-        component: () => import('@/views/crm/lead.vue'),
-        meta: { title: '线索列表', icon: 'Notebook' }
+        path: 'workbench',
+        name: 'LeadsWorkbench',
+        component: () => import('@/views/leads/workbench.vue'),
+        meta: { title: '运营工作台', icon: 'Monitor' }
       },
-      { path: 'call-center/agent', name: 'CcAgent', component: () => import('@/views/call-center/agent.vue'), meta: { title: '坐席管理', icon: 'Phone' } },
-      { path: 'call-center/number', name: 'CcNumber', component: () => import('@/views/call-center/number.vue'), meta: { title: '号码管理' } },
-      { path: 'call-center/ivr', name: 'CcIvr', component: () => import('@/views/call-center/ivr.vue'), meta: { title: 'IVR设计器' } },
-      { path: 'call-center/skill', name: 'CcSkill', component: () => import('@/views/call-center/skill.vue'), meta: { title: '技能组' } },
-      { path: 'call-center/call-record', name: 'CcCallRecord', component: () => import('@/views/call-center/call-record.vue'), meta: { title: '通话记录' } },
-      { path: 'call-center/outbound', name: 'CcOutbound', component: () => import('@/views/call-center/outbound.vue'), meta: { title: '外呼任务' } },
-      { path: 'call-center/monitor', name: 'CcMonitor', component: () => import('@/views/call-center/monitor.vue'), meta: { title: '实时监控' } },
-      { path: 'call-center/report', name: 'CcReport', component: () => import('@/views/call-center/report.vue'), meta: { title: '话务报表' } }
+      {
+        path: 'market-intelligence',
+        name: 'MarketIntelligence',
+        component: () => import('@/views/leads/market-intelligence.vue'),
+        meta: { title: '拓客情报', icon: 'Aim' }
+      },
+      {
+        path: 'call-workbench',
+        name: 'CallWorkbench',
+        component: () => import('@/views/leads/call-workbench.vue'),
+        meta: { title: '电销工作台', icon: 'Phone' }
+      },
+      {
+        path: 'online-leads',
+        name: 'OnlineLeads',
+        component: () => import('@/views/leads/online-leads.vue'),
+        meta: { title: '网销线索', icon: 'Promotion' }
+      },
+      {
+        path: 'online-roi',
+        name: 'OnlineRoi',
+        component: () => import('@/views/supply/channel-cost.vue'),
+        meta: { title: '网销投产比', icon: 'TrendCharts' }
+      }
+    ]
+  },
+  {
+    path: '/customer',
+    component: Layout,
+    redirect: '/customer/enterprise-master',
+    meta: { title: '客户中心', icon: 'User' },
+    children: [
+      {
+        path: 'enterprise-master',
+        name: 'EnterpriseMaster',
+        component: () => import('@/views/leads/enterprise-master.vue'),
+        meta: { title: '企业主体库', icon: 'OfficeBuilding' }
+      },
+      {
+        path: 'company-pool',
+        name: 'LeadsCompanyPool',
+        component: () => import('@/views/leads/company-pool.vue'),
+        meta: { title: '公司公海', icon: 'OfficeBuilding' }
+      },
+      {
+        path: 'personal-pool',
+        name: 'LeadsPersonalPool',
+        component: () => import('@/views/leads/personal-pool.vue'),
+        meta: { title: '个人私海', icon: 'User' }
+      },
+      {
+        path: 'service-renewal',
+        name: 'ServiceRenewal',
+        component: () => import('@/views/leads/service-renewal.vue'),
+        meta: { title: '续费管理', icon: 'Calendar' }
+      },
+      {
+        path: 'pool-admin',
+        name: 'PoolAdmin',
+        component: () => import('@/views/leads/pool-admin.vue'),
+        meta: { title: '公海管理', icon: 'Setting' }
+      },
+      {
+        path: 'collision-manage',
+        name: 'CollisionManage',
+        component: () => import('@/views/leads/collision-manage.vue'),
+        meta: { title: '撞单管理', icon: 'Warning' }
+      }
     ]
   }
 ]
@@ -71,98 +163,88 @@ export const constantRoutes: RouteRecordRaw[] = [
 /** 动态路由 - 需要权限验证 */
 export const asyncRoutes: RouteRecordRaw[] = [
   {
-    path: '/sales',
+    path: '/order',
     component: Layout,
-    meta: { title: '销售管理', icon: 'Coin' },
+    redirect: '/order/bill',
+    meta: { title: '订单合同', icon: 'Document', roles: ['admin', 'boss', 'manager', 'finance', 'sales'] },
     children: [
-      { path: 'quotation', name: 'SalesQuotation', component: () => import('@/views/sales/quotation.vue'), meta: { title: '报价管理' } },
-      { path: 'order', name: 'SalesOrder', component: () => import('@/views/sales/order.vue'), meta: { title: '订单管理' } },
-      { path: 'delivery', name: 'SalesDelivery', component: () => import('@/views/sales/delivery.vue'), meta: { title: '发货管理' } },
-      { path: 'receipt', name: 'SalesReceipt', component: () => import('@/views/sales/receipt.vue'), meta: { title: '收款管理' } }
+      { path: 'bill', name: 'OrderBill', component: () => import('@/views/order/bill.vue'), meta: { title: '提单系统', icon: 'Tickets', roles: ['admin', 'boss', 'manager', 'finance', 'sales'] } },
+      { path: 'finance-check', name: 'OrderFinanceCheck', component: () => import('@/views/order/finance-check.vue'), meta: { title: '财务核对', icon: 'Checked', roles: ['admin', 'boss', 'finance'] } },
+      { path: 'contract', name: 'OrderContract', component: () => import('@/views/order/contract.vue'), meta: { title: '合同管理', icon: 'Document', roles: ['admin', 'boss', 'manager', 'finance'] } }
     ]
   },
   {
-    path: '/org',
+    path: '/task-center',
     component: Layout,
-    meta: { title: '组织管理', icon: 'OfficeBuilding' },
+    redirect: '/task-center/once',
+    meta: { title: '服务交付', icon: 'List', roles: ['admin', 'boss', 'manager', 'sales'] },
     children: [
-      { path: 'dept', name: 'OrgDept', component: () => import('@/views/org/dept.vue'), meta: { title: '部门管理' } },
-      { path: 'post', name: 'OrgPost', component: () => import('@/views/org/post.vue'), meta: { title: '岗位管理' } },
-      { path: 'employee', name: 'OrgEmployee', component: () => import('@/views/org/employee.vue'), meta: { title: '员工管理' } },
-      { path: 'structure', name: 'OrgStructure', component: () => import('@/views/org/structure.vue'), meta: { title: '组织架构图' } }
+      { path: 'once', name: 'TaskOnce', component: () => import('@/views/task-center/once.vue'), meta: { title: '一次性任务', icon: 'DocumentChecked' } },
+      { path: 'periodic', name: 'TaskPeriodic', component: () => import('@/views/task-center/periodic.vue'), meta: { title: '周期性任务', icon: 'Timer' } },
+      { path: 'department', name: 'TaskDepartment', component: () => import('@/views/task-center/department.vue'), meta: { title: '项目部任务', icon: 'Suitcase' } },
+      { path: 'boss', name: 'TaskBoss', component: () => import('@/views/task-center/boss.vue'), meta: { title: '老板安排任务', icon: 'Star' } },
+      { path: 'handover', name: 'TaskHandover', component: () => import('@/views/task-center/handover.vue'), meta: { title: '客户交接', icon: 'Switch' } },
+      { path: 'commission', name: 'TaskCommission', component: () => import('@/views/task-center/commission.vue'), meta: { title: '提成结算', icon: 'Money' } },
+      { path: 'sales-performance', name: 'SalesPerformance', component: () => import('@/views/sales/performance.vue'), meta: { title: '销售业绩', icon: 'TrendCharts' } },
+      { path: 'satisfaction', name: 'TaskSatisfaction', component: () => import('@/views/task-center/satisfaction.vue'), meta: { title: '满意度回访', icon: 'Star' } }
     ]
   },
   {
-    path: '/crm',
+    path: '/business',
     component: Layout,
-    meta: { title: '客户关系', icon: 'User' },
+    redirect: '/business/index',
+    meta: { title: '业务管理', icon: 'Briefcase', roles: ['admin', 'boss', 'manager'] },
     children: [
-      { path: 'customer', name: 'CrmCustomer', component: () => import('@/views/crm/customer.vue'), meta: { title: '客户管理' } },
-      { path: 'contact', name: 'CrmContact', component: () => import('@/views/crm/contact.vue'), meta: { title: '联系人' } },
-      { path: 'opportunity', name: 'CrmOpportunity', component: () => import('@/views/crm/opportunity.vue'), meta: { title: '商机管理' } },
-      { path: 'contract', name: 'CrmContract', component: () => import('@/views/crm/contract.vue'), meta: { title: '合同管理' } }
-    ]
-  },
-  {
-    path: '/hrm',
-    component: Layout,
-    meta: { title: '人力资源', icon: 'Avatar' },
-    children: [
-      { path: 'recruit', name: 'HrmRecruit', component: () => import('@/views/hrm/recruit.vue'), meta: { title: '招聘管理' } },
-      { path: 'attendance', name: 'HrmAttendance', component: () => import('@/views/hrm/attendance.vue'), meta: { title: '考勤管理' } },
-      { path: 'salary', name: 'HrmSalary', component: () => import('@/views/hrm/salary.vue'), meta: { title: '薪酬管理' } },
-      { path: 'performance', name: 'HrmPerformance', component: () => import('@/views/hrm/performance.vue'), meta: { title: '绩效管理' } }
-    ]
-  },
-  {
-    path: '/finance',
-    component: Layout,
-    meta: { title: '财务管理', icon: 'Money' },
-    children: [
-      { path: 'voucher', name: 'FinVoucher', component: () => import('@/views/finance/voucher.vue'), meta: { title: '凭证管理' } },
-      { path: 'ledger', name: 'FinLedger', component: () => import('@/views/finance/ledger.vue'), meta: { title: '账簿管理' } },
-      { path: 'report', name: 'FinReport', component: () => import('@/views/finance/report.vue'), meta: { title: '财务报表' } },
-      { path: 'tax', name: 'FinTax', component: () => import('@/views/finance/tax.vue'), meta: { title: '税务管理' } },
-      { path: 'invoice', name: 'FinInvoice', component: () => import('@/views/finance/invoice.vue'), meta: { title: '发票管理' } },
-      { path: 'reimburse', name: 'FinReimburse', component: () => import('@/views/finance/reimburse.vue'), meta: { title: '报销管理' } }
-    ]
-  },
-  {
-    path: '/project',
-    component: Layout,
-    meta: { title: '项目管理', icon: 'Briefcase' },
-    children: [
-      { path: 'list', name: 'ProjectList', component: () => import('@/views/project/list.vue'), meta: { title: '项目列表' } },
-      { path: 'detail', name: 'ProjectDetail', component: () => import('@/views/project/detail.vue'), meta: { title: '项目详情', hidden: true } },
-      { path: 'gantt', name: 'ProjectGantt', component: () => import('@/views/project/gantt.vue'), meta: { title: '甘特图' } },
-      { path: 'board', name: 'ProjectBoard', component: () => import('@/views/project/board.vue'), meta: { title: '看板' } }
+      { path: 'index', name: 'BusinessIndex', component: () => import('@/views/business/index.vue'), meta: { title: '业务管理', icon: 'Briefcase' } }
     ]
   },
   {
     path: '/supply',
     component: Layout,
-    meta: { title: '供应链', icon: 'Van' },
+    redirect: '/supply/channel-partner',
+    meta: { title: '渠道管理', icon: 'Van', roles: ['admin', 'boss', 'manager'] },
     children: [
-      { path: 'vendor', name: 'SupplyVendor', component: () => import('@/views/supply/vendor.vue'), meta: { title: '供应商管理' } },
-      { path: 'purchase', name: 'SupplyPurchase', component: () => import('@/views/supply/purchase.vue'), meta: { title: '采购管理' } },
-      { path: 'receipt', name: 'SupplyReceipt', component: () => import('@/views/supply/receipt.vue'), meta: { title: '入库管理' } }
+      { path: 'channel-partner', name: 'SupplyChannelPartner', component: () => import('@/views/supply/channel-partner.vue'), meta: { title: '同行渠道' } },
+      { path: 'vendor', name: 'SupplyVendor', component: () => import('@/views/supply/vendor.vue'), meta: { title: '地址供应商' } },
+      { path: 'receipt', name: 'SupplyReceipt', component: () => import('@/views/supply/receipt.vue'), meta: { title: '地址资源池' } },
+      { path: 'purchase', name: 'SupplyPurchase', component: () => import('@/views/supply/purchase.vue'), meta: { title: '资源补充单' } }
     ]
   },
   {
-    path: '/workflow',
+    path: '/finance',
     component: Layout,
-    meta: { title: '工作流', icon: 'Connection' },
+    redirect: '/finance/journal',
+    meta: { title: '财务结算', icon: 'Wallet', roles: ['admin', 'boss', 'finance'] },
     children: [
-      { path: 'designer', name: 'WfDesigner', component: () => import('@/views/workflow/designer.vue'), meta: { title: '流程设计' } },
-      { path: 'todo', name: 'WfTodo', component: () => import('@/views/workflow/todo.vue'), meta: { title: '待办任务' } },
-      { path: 'done', name: 'WfDone', component: () => import('@/views/workflow/done.vue'), meta: { title: '已办任务' } },
-      { path: 'started', name: 'WfStarted', component: () => import('@/views/workflow/started.vue'), meta: { title: '我发起的' } }
+      { path: 'journal', name: 'FinJournal', component: () => import('@/views/finance/journal.vue'), meta: { title: '日记账', icon: 'Notebook' } },
+      { path: 'petty-cash', name: 'FinPettyCash', component: () => import('@/views/finance/petty-cash.vue'), meta: { title: '备用金管理', icon: 'Money' } },
+      { path: 'expense', name: 'FinExpense', component: () => import('@/views/finance/expense.vue'), meta: { title: '业务支出管理', icon: 'CreditCard' } },
+      { path: 'reimburse', name: 'FinReimburse', component: () => import('@/views/finance/reimburse.vue'), meta: { title: '报销管理', icon: 'Tickets' } },
+      { path: 'salary', name: 'FinSalary', component: () => import('@/views/finance/salary.vue'), meta: { title: '薪酬管理', icon: 'Coin' } },
+      { path: 'cost', name: 'FinCost', component: () => import('@/views/finance/cost.vue'), meta: { title: '管理成本', icon: 'PieChart' } },
+      { path: 'performance', name: 'FinPerformance', component: () => import('@/views/finance/performance.vue'), meta: { title: '绩效提成', icon: 'TrendCharts' } }
+    ]
+  },
+  {
+    path: '/hrm',
+    component: Layout,
+    meta: { title: '人力组织', icon: 'Avatar', roles: ['admin', 'boss', 'manager'] },
+    children: [
+      { path: 'structure', name: 'OrgStructure', component: () => import('@/views/org/structure.vue'), meta: { title: '组织架构图' } },
+      { path: 'dept', name: 'OrgDept', component: () => import('@/views/org/dept.vue'), meta: { title: '部门管理' } },
+      { path: 'post', name: 'OrgPost', component: () => import('@/views/org/post.vue'), meta: { title: '岗位管理' } },
+      { path: 'employee', name: 'OrgEmployee', component: () => import('@/views/org/employee.vue'), meta: { title: '员工管理' } },
+      { path: 'recruit', name: 'HrmRecruit', component: () => import('@/views/hrm/recruit.vue'), meta: { title: '招聘管理' } },
+      { path: 'interview', name: 'HrmInterview', component: () => import('@/views/hrm/interview.vue'), meta: { title: '面试管理' } },
+      { path: 'attendance', name: 'HrmAttendance', component: () => import('@/views/hrm/attendance.vue'), meta: { title: '考勤管理' } },
+      { path: 'contract', name: 'HrmContract', component: () => import('@/views/hrm/contract.vue'), meta: { title: '劳动合同管理' } },
+      { path: 'archive', name: 'HrmArchive', component: () => import('@/views/hrm/archive.vue'), meta: { title: '人员档案管理' } }
     ]
   },
   {
     path: '/file',
     component: Layout,
-    meta: { title: '文件知识', icon: 'FolderOpened' },
+    meta: { title: '培训中心', icon: 'FolderOpened', roles: ['admin', 'boss', 'manager', 'sales'] },
     children: [
       { path: 'manager', name: 'FileManager', component: () => import('@/views/file/manager.vue'), meta: { title: '文件管理' } },
       { path: 'kb', name: 'FileKb', component: () => import('@/views/file/kb.vue'), meta: { title: '知识库' } },
@@ -170,44 +252,31 @@ export const asyncRoutes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/report',
+    path: '/collaboration',
     component: Layout,
-    meta: { title: '报表中心', icon: 'PieChart' },
+    redirect: '/collaboration/chat',
+    meta: { title: '协作中心', icon: 'ChatLineSquare', roles: ['admin', 'boss', 'manager', 'sales'] },
     children: [
-      { path: 'designer', name: 'ReportDesigner', component: () => import('@/views/report/designer.vue'), meta: { title: '报表设计' } },
-      { path: 'list', name: 'ReportList', component: () => import('@/views/report/list.vue'), meta: { title: '报表列表' } },
-      { path: 'preview', name: 'ReportPreview', component: () => import('@/views/report/preview.vue'), meta: { title: '报表预览', hidden: true } }
+      { path: 'chat', name: 'CollabChat', component: () => import('@/views/collaboration/chat.vue'), meta: { title: '即时消息', icon: 'ChatDotRound' } },
+      { path: 'contacts', name: 'CollabContacts', component: () => import('@/views/collaboration/contacts.vue'), meta: { title: '通讯录', icon: 'Notebook' } },
+      { path: 'meeting', name: 'CollabMeeting', component: () => import('@/views/collaboration/meeting.vue'), meta: { title: '视频会议', icon: 'VideoCameraFilled' } },
+      { path: 'docs', name: 'CollabDocs', component: () => import('@/views/collaboration/docs.vue'), meta: { title: '协作文档', icon: 'Document' } }
     ]
   },
-  {
-    path: '/multidim',
-    component: Layout,
-    meta: { title: '多维表格', icon: 'Grid' },
-    children: [
-      { path: 'index', name: 'MultidimIndex', component: () => import('@/views/multidim/index.vue'), meta: { title: '表格列表' } },
-      { path: 'detail', name: 'MultidimDetail', component: () => import('@/views/multidim/detail.vue'), meta: { title: '表格详情', hidden: true } }
-    ]
-  },
-  {
-    path: '/ai-chat',
-    component: Layout,
-    meta: { title: 'AI 助手', icon: 'ChatDotRound' },
-    children: [
-      { path: 'index', name: 'AiChat', component: () => import('@/views/ai-chat/index.vue'), meta: { title: 'AI 对话' } }
-    ]
-  },
-
   {
     path: '/system',
     component: Layout,
-    meta: { title: '系统管理', icon: 'Setting' },
+    meta: { title: '系统管理', icon: 'Setting', roles: ['admin', 'boss', 'manager'] },
     children: [
       { path: 'user', name: 'SystemUser', component: () => import('@/views/system/user.vue'), meta: { title: '用户管理' } },
       { path: 'role', name: 'SystemRole', component: () => import('@/views/system/role.vue'), meta: { title: '角色管理' } },
       { path: 'menu', name: 'SystemMenu', component: () => import('@/views/system/menu.vue'), meta: { title: '菜单管理' } },
       { path: 'login-log', name: 'LoginLog', component: () => import('@/views/system/login-log.vue'), meta: { title: '登录日志' } },
       { path: 'oper-log', name: 'OperLog', component: () => import('@/views/system/oper-log.vue'), meta: { title: '操作日志' } },
-      { path: 'notification', name: 'Notification', component: () => import('@/views/system/notification.vue'), meta: { title: '通知公告' } }
+      { path: 'notification', name: 'Notification', component: () => import('@/views/system/notification.vue'), meta: { title: '通知公告' } },
+      { path: 'distribute-config', name: 'DistributeConfig', component: () => import('@/views/system/distribute-config.vue'), meta: { title: '分配规则', icon: 'Connection' } },
+      { path: 'recycle-config', name: 'RecycleConfig', component: () => import('@/views/system/recycle-config.vue'), meta: { title: '回收规则', icon: 'RefreshRight' } },
+      { path: 'operation', name: 'RuleEngine', component: () => import('@/views/system/operation.vue'), meta: { title: '流程引擎', icon: 'SetUp' } }
     ]
   }
 ]

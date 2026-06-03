@@ -18,5 +18,6 @@ public class UserVO {
     private String deptName;
     private String remark;
     private List<Long> roleIds;
+    private List<String> roleNames;
     private LocalDateTime createTime;
 }

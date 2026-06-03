@@ -136,7 +136,7 @@ const loadData = async () => {
     tableData.value = data.records || data.list || []
     total.value = data.total || 0
   } catch (e) {
-    console.error(e)
+    // ignore
   } finally {
     loading.value = false
   }
@@ -190,7 +190,7 @@ const submitForm = async () => {
     dialogVisible.value = false
     loadData()
   } catch (e) {
-    console.error(e)
+    // ignore
   }
 }
 

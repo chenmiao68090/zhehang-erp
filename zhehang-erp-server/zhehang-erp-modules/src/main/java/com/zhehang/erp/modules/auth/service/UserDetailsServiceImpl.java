@@ -47,6 +47,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
         List<String> perms = userMapper.selectPermsByUserId(user.getId());
         Set<String> permSet = perms == null ? new HashSet<>() : new HashSet<>(perms);
+        if (Long.valueOf(1L).equals(user.getId()) || "admin".equals(user.getUsername())) {
+            permSet.add("*:*:*");
+        }
         loginUser.setPermissions(permSet);
         loginUser.setAuthorities(permSet.stream()
                 .map(SimpleGrantedAuthority::new)

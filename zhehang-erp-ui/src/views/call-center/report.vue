@@ -45,7 +45,7 @@
       <div class="kpi-card kpi-total">
         <div class="kpi-corner"></div>
         <div class="kpi-head">
-          <span class="kpi-eyebrow">TOTAL · CALLS</span>
+          <span class="kpi-eyebrow">总通话量</span>
           <span class="kpi-tag">{{ $t('cc.report.kpi.currentPeriod') }}</span>
         </div>
         <div class="kpi-label">{{ $t('cc.report.kpi.totalCalls') }}</div>
@@ -68,7 +68,7 @@
       <div class="kpi-card kpi-answer">
         <div class="kpi-corner"></div>
         <div class="kpi-head">
-          <span class="kpi-eyebrow">ANSWER · RATE</span>
+          <span class="kpi-eyebrow">接通率</span>
           <span class="kpi-tag">{{ $t('cc.report.kpi.sla') }}</span>
         </div>
         <div class="kpi-label">{{ $t('cc.report.kpi.answerRate') }}</div>
@@ -90,7 +90,7 @@
       <div class="kpi-card kpi-duration">
         <div class="kpi-corner"></div>
         <div class="kpi-head">
-          <span class="kpi-eyebrow">AVG · DURATION</span>
+          <span class="kpi-eyebrow">平均时长</span>
           <span class="kpi-tag">mm:ss</span>
         </div>
         <div class="kpi-label">{{ $t('cc.report.kpi.avgDuration') }}</div>
@@ -111,8 +111,8 @@
       <div class="kpi-card kpi-satisfaction">
         <div class="kpi-corner"></div>
         <div class="kpi-head">
-          <span class="kpi-eyebrow">SATISFACTION</span>
-          <span class="kpi-tag">CSAT</span>
+          <span class="kpi-eyebrow">满意度</span>
+          <span class="kpi-tag">评分</span>
         </div>
         <div class="kpi-label">{{ $t('cc.report.kpi.satisfaction') }}</div>
         <div class="kpi-value">

@@ -31,10 +31,10 @@ public class DashboardController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
         List<TodoVO> list = new ArrayList<>();
-        list.add(new TodoVO(1L, "审批张三的报销申请 (¥3,200)", "approval", "high", "pending", "今天 17:00", "/workflow/todo"));
-        list.add(new TodoVO(2L, "跟进杭州科技有限公司合同续签", "follow", "high", "pending", "今天 15:00", "/crm/contract"));
+        list.add(new TodoVO(1L, "审批张三的报销申请 (¥3,200)", "approval", "high", "pending", "今天 17:00", "/task-center/once"));
+        list.add(new TodoVO(2L, "跟进杭州科技有限公司合同续签", "follow", "high", "pending", "今天 15:00", "/order/contract"));
         list.add(new TodoVO(3L, "完成月度销售报告", "task", "medium", "pending", "明天 12:00", null));
-        list.add(new TodoVO(4L, "回复宁波客户技术咨询", "follow", "medium", "pending", "明天 10:00", "/crm/customer"));
+        list.add(new TodoVO(4L, "回复宁波客户技术咨询", "follow", "medium", "pending", "明天 10:00", "/leads/workbench"));
         list.add(new TodoVO(5L, "检查系统安全日志", "other", "low", "done", "昨天", "/system/oper-log"));
         return R.ok(list);
     }

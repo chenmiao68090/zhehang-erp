@@ -6,6 +6,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhehang.erp.common.core.domain.PageQuery;
+import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.common.core.exception.ErrorCode;
+import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.workflow.domain.entity.WfHistory;
 import com.zhehang.erp.modules.workflow.domain.entity.WfInstance;
 import com.zhehang.erp.modules.workflow.domain.entity.WfProcessDef;
@@ -18,6 +21,7 @@ import com.zhehang.erp.modules.workflow.mapper.WfInstanceMapper;
 import com.zhehang.erp.modules.workflow.mapper.WfProcessDefMapper;
 import com.zhehang.erp.modules.workflow.mapper.WfTaskMapper;
 import com.zhehang.erp.modules.workflow.service.IWfInstanceService;
+import com.zhehang.erp.modules.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -37,11 +41,22 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     private final WfInstanceMapper instanceMapper;
     private final WfTaskMapper taskMapper;
     private final WfHistoryMapper historyMapper;
+    private final SysUserMapper userMapper;
     private final ObjectMapper objectMapper;
 
-    // 模拟当前用户ID（实际项目从SecurityContext获取）
     private Long getCurrentUserId() {
-        return 1L;
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
+    }
+
+    private void assertTaskAssignee(WfTask task) {
+        Long userId = getCurrentUserId();
+        if (task.getAssigneeId() != null && !task.getAssigneeId().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     @Override
@@ -91,6 +106,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
         if (task == null || task.getStatus() != 0) {
             throw new RuntimeException("任务不存在或已处理");
         }
+        assertTaskAssignee(task);
 
         // 更新任务状态
         task.setStatus(1); // 已通过
@@ -136,6 +152,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
         if (task == null || task.getStatus() != 0) {
             throw new RuntimeException("任务不存在或已处理");
         }
+        assertTaskAssignee(task);
 
         task.setStatus(2); // 已拒绝
         task.setComment(comment);
@@ -158,6 +175,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
         if (task == null || task.getStatus() != 0) {
             throw new RuntimeException("任务不存在或已处理");
         }
+        assertTaskAssignee(task);
 
         // 标记当前任务为已转交
         task.setStatus(3);
@@ -332,13 +350,26 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     }
 
     private Long resolveAssignee(String assigneeType, String assigneeValue) {
-        // 简化实现：实际项目中应根据角色/部门查询对应用户
         if ("user".equals(assigneeType)) {
             return Long.parseLong(assigneeValue);
         }
-        // role / dept_leader 等类型 - 简化返回管理员ID
-        // 实际项目中应查询角色对应的用户
-        return 1L;
+        if ("role".equals(assigneeType) || "dept_leader".equals(assigneeType)) {
+            String roleKey = normalizeWorkflowRoleKey(assigneeValue);
+            Long userId = userMapper.selectFirstUserIdByRoleKey(roleKey);
+            if (userId != null) {
+                return userId;
+            }
+            log.warn("未找到流程角色对应审批人, assigneeType={}, assigneeValue={}, roleKey={}",
+                    assigneeType, assigneeValue, roleKey);
+        }
+        return getCurrentUserId();
+    }
+
+    private String normalizeWorkflowRoleKey(String roleKey) {
+        if ("dept_leader".equals(roleKey)) {
+            return "dept_manager";
+        }
+        return roleKey;
     }
 
     private void handleConditionNode(WfInstance instance, Map<String, Object> condNode,

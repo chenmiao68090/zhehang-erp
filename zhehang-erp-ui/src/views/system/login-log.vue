@@ -29,8 +29,8 @@
         <div class="card-header">
           <span>{{ $t('system.loginLog.title') }}</span>
           <div class="toolbar-btns">
-            <el-button type="warning" v-hasPermi="['system:log:export']" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
-            <el-button type="danger" v-hasPermi="['system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
+            <el-button type="warning" v-hasPermi="['log:login:export', 'system:log:export']" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
+            <el-button type="danger" v-hasPermi="['log:login:remove', 'system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
           </div>
         </div>
       </template>
@@ -60,6 +60,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { loginLogApi } from '@/api/system'
+import { downloadBlob } from '@/utils/download'
 
 const { t } = useI18n()
 
@@ -108,8 +109,10 @@ function resetQuery() {
   handleQuery()
 }
 
-function handleExport() {
-  loginLogApi.export(queryParams)
+async function handleExport() {
+  const data = await loginLogApi.export(buildQueryParams())
+  downloadBlob(data as Blob, `login-logs-${Date.now()}.csv`)
+  ElMessage.success(t('common.success'))
 }
 
 function handleClean() {
@@ -122,6 +125,15 @@ function handleClean() {
     ElMessage.success(t('common.success'))
     getList()
   }).catch(() => {})
+}
+
+function buildQueryParams() {
+  const params: any = { ...queryParams }
+  if (dateRange.value && dateRange.value.length === 2) {
+    params.beginTime = dateRange.value[0]
+    params.endTime = dateRange.value[1]
+  }
+  return params
 }
 </script>
 

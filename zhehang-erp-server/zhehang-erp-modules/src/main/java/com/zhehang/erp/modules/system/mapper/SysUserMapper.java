@@ -9,5 +9,7 @@ import java.util.List;
 @Mapper
 public interface SysUserMapper extends BaseMapper<SysUser> {
     List<String> selectPermsByUserId(@Param("userId") Long userId);
+    List<String> selectRoleKeysByUserId(@Param("userId") Long userId);
     List<Long> selectRoleIdsByUserId(@Param("userId") Long userId);
+    Long selectFirstUserIdByRoleKey(@Param("roleKey") String roleKey);
 }

@@ -11,7 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/system/menu")
@@ -26,7 +28,7 @@ public class SysMenuController {
         return R.ok(menuService.selectMenuList(menuName, status));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     @PreAuthorize("@perm.hasPermission('system:menu:query')")
     public R<SysMenu> getInfo(@PathVariable Long id) {
         return R.ok(menuService.getById(id));
@@ -38,11 +40,15 @@ public class SysMenuController {
     }
 
     @GetMapping("/tree/role/{roleId}")
-    public R<List<MenuTreeVO>> roleMenuTree(@PathVariable Long roleId) {
-        return R.ok(menuService.selectMenuTreeByRoleId(roleId));
+    public R<Map<String, Object>> roleMenuTree(@PathVariable Long roleId) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("menus", menuService.selectMenuTree());
+        data.put("menuIds", menuService.selectMenuIdsByRoleId(roleId));
+        data.put("checkedKeys", menuService.selectCheckedMenuIdsByRoleId(roleId));
+        return R.ok(data);
     }
 
-    @GetMapping("/routers")
+    @GetMapping({"/routers", "/routes"})
     public R<List<RouterVO>> getRouters() {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(menuService.buildRouters(userId));

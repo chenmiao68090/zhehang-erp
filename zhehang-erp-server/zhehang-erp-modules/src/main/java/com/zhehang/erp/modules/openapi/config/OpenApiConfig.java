@@ -22,10 +22,10 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("浙杭企服 ERP API 文档")
-                        .description("浙杭企服企业资源管理系统 OpenAPI 文档（含管理后台 + 开放API）")
+                        .title("浙杭集团 ERP API 文档")
+                        .description("浙杭集团企业资源管理系统 OpenAPI 文档（含管理后台 + 开放API）")
                         .version("1.0.0")
-                        .contact(new Contact().name("浙杭企服").email("dev@zhehang.com"))
+                        .contact(new Contact().name("浙杭集团").email("dev@zhehang.com"))
                         .license(new License().name("Apache 2.0")))
                 .components(new Components()
                         .addSecuritySchemes("JWT", new SecurityScheme()

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 import { asyncRoutes, constantRoutes } from '@/router/routes'
+import router from '@/router'
 import { useUserStore } from './user'
 import { menuApi } from '@/api/system'
 
@@ -98,9 +99,16 @@ export const usePermissionStore = defineStore('permission', () => {
   }
 
   function resetRoutes() {
-    routes.value = []
+    // 从 router 中移除所有动态添加的路由
+    addRoutes.value.forEach((route) => {
+      if (route.name && router.hasRoute(route.name as string)) {
+        router.removeRoute(route.name as string)
+      }
+    })
+    // 清空状态，恢复为常量路由
     addRoutes.value = []
-    menuList.value = []
+    routes.value = [...constantRoutes]
+    menuList.value = routes.value.filter((r) => !r.meta?.hidden)
   }
 
   return {

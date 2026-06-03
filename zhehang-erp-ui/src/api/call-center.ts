@@ -240,134 +240,23 @@ export interface CurrentCall {
 const delay = <T>(data: T, ms = 240): Promise<{ code: number; data: T; message: string }> =>
   new Promise(resolve => setTimeout(() => resolve({ code: 200, data, message: 'ok' }), ms))
 
-const _agents: Agent[] = [
-  { id: 1, agentNo: '1001', name: '张敏', extension: '8001', sipAccount: 'sip1001', skillGroupIds: [1, 2], skillGroupNames: ['客服一组', '售后组'], status: 'idle', deptName: '客户服务部', phone: '13800138001', email: 'zhangmin@zh.com', maxConcurrent: 1, enabled: true, loginAt: '2026-05-19 08:55:00', createdAt: '2025-11-01 10:00:00' },
-  { id: 2, agentNo: '1002', name: '李伟', extension: '8002', sipAccount: 'sip1002', skillGroupIds: [1], skillGroupNames: ['客服一组'], status: 'busy', deptName: '客户服务部', phone: '13800138002', email: 'liwei@zh.com', maxConcurrent: 1, enabled: true, loginAt: '2026-05-19 08:50:00', createdAt: '2025-11-01 10:00:00' },
-  { id: 3, agentNo: '1003', name: '王芳', extension: '8003', sipAccount: 'sip1003', skillGroupIds: [3], skillGroupNames: ['销售外呼组'], status: 'afterwork', deptName: '销售部', phone: '13800138003', email: 'wangfang@zh.com', maxConcurrent: 1, enabled: true, loginAt: '2026-05-19 09:00:00', createdAt: '2025-12-15 09:30:00' },
-  { id: 4, agentNo: '1004', name: '赵磊', extension: '8004', sipAccount: 'sip1004', skillGroupIds: [2, 4], skillGroupNames: ['售后组', 'VIP组'], status: 'break', deptName: '客户服务部', phone: '13800138004', email: 'zhaolei@zh.com', maxConcurrent: 1, enabled: true, loginAt: '2026-05-19 08:30:00', createdAt: '2025-09-20 14:00:00' },
-  { id: 5, agentNo: '1005', name: '陈静', extension: '8005', sipAccount: 'sip1005', skillGroupIds: [4], skillGroupNames: ['VIP组'], status: 'idle', deptName: 'VIP服务部', phone: '13800138005', email: 'chenjing@zh.com', maxConcurrent: 2, enabled: true, loginAt: '2026-05-19 08:45:00', createdAt: '2025-08-10 11:00:00' },
-  { id: 6, agentNo: '1006', name: '孙浩', extension: '8006', sipAccount: 'sip1006', skillGroupIds: [3], skillGroupNames: ['销售外呼组'], status: 'offline', deptName: '销售部', phone: '13800138006', email: 'sunhao@zh.com', maxConcurrent: 1, enabled: true, createdAt: '2026-01-05 10:00:00' }
-]
+const _agents: Agent[] = []
 
-const _trunks: SipTrunk[] = [
-  { id: 1, name: '联通-杭州主干', protocol: 'SIP', host: '120.78.x.x', port: 5060, username: 'zh-trunk-01', status: 'online', channels: 60, remark: '主用线路' },
-  { id: 2, name: '电信-备用线路', protocol: 'SIP', host: '218.75.x.x', port: 5060, username: 'zh-trunk-02', status: 'online', channels: 30, remark: '灾备' },
-  { id: 3, name: '移动-外呼专线', protocol: 'SIP', host: '111.13.x.x', port: 5060, username: 'zh-trunk-03', status: 'offline', channels: 20, remark: '外呼任务专用' }
-]
+const _trunks: SipTrunk[] = []
 
-const _numbers: PhoneNumber[] = [
-  { id: 1, number: '4001008888', type: 'inbound', trunkId: 1, trunkName: '联通-杭州主干', callerIdName: '浙杭企服-客服热线', bindRoute: 'IVR-客服总线', province: '浙江', city: '杭州', enabled: true, remark: '主客服号码', createdAt: '2025-09-01 10:00:00' },
-  { id: 2, number: '057188889999', type: 'both', trunkId: 1, trunkName: '联通-杭州主干', callerIdName: '浙杭企服-销售', province: '浙江', city: '杭州', enabled: true, remark: '销售外呼+回访', createdAt: '2025-10-12 14:30:00' },
-  { id: 3, number: '95055-12345', type: 'inbound', trunkId: 2, trunkName: '电信-备用线路', callerIdName: '浙杭企服-VIP', bindRoute: 'IVR-VIP直通', province: '全国', city: '-', enabled: true, remark: 'VIP专线', createdAt: '2025-11-20 09:00:00' },
-  { id: 4, number: '057155556666', type: 'outbound', trunkId: 3, trunkName: '移动-外呼专线', callerIdName: '浙杭企服', province: '浙江', city: '杭州', enabled: false, remark: '已停用', createdAt: '2024-06-15 11:00:00' }
-]
+const _numbers: PhoneNumber[] = []
 
-const _skillGroups: SkillGroup[] = [
-  { id: 1, name: '客服一组', code: 'cs-01', strategy: 'least-busy', agentCount: 12, maxQueue: 30, timeoutSec: 60, description: '常规客服咨询', enabled: true, createdAt: '2025-09-01 10:00:00' },
-  { id: 2, name: '售后组', code: 'as-01', strategy: 'skill-based', agentCount: 8, maxQueue: 20, timeoutSec: 90, description: '售后投诉与退换货', enabled: true, createdAt: '2025-09-01 10:00:00' },
-  { id: 3, name: '销售外呼组', code: 'sale-out', strategy: 'round-robin', agentCount: 15, maxQueue: 0, timeoutSec: 30, description: '外呼营销专组', enabled: true, createdAt: '2025-10-01 10:00:00' },
-  { id: 4, name: 'VIP组', code: 'vip-01', strategy: 'priority', agentCount: 4, maxQueue: 5, timeoutSec: 30, description: 'VIP客户优先接入', enabled: true, createdAt: '2025-08-15 10:00:00' }
-]
+const _skillGroups: SkillGroup[] = []
 
-const _ivrFlows: IvrFlow[] = [
-  {
-    id: 1,
-    name: 'IVR-客服总线',
-    description: '主客服号码默认 IVR',
-    version: 3,
-    enabled: true,
-    bindNumbers: ['4001008888'],
-    updatedAt: '2026-04-12 16:20:00',
-    nodes: [
-      { id: 'n1', type: 'start', name: '开始', x: 80, y: 200 },
-      { id: 'n2', type: 'play', name: '欢迎语', x: 240, y: 200, config: { audio: 'welcome.wav' } },
-      { id: 'n3', type: 'menu', name: '主菜单', x: 420, y: 200, config: { options: { '1': 'n4', '2': 'n5', '0': 'n6' } } },
-      { id: 'n4', type: 'queue', name: '客服排队', x: 600, y: 80, config: { skillGroupId: 1 } },
-      { id: 'n5', type: 'queue', name: '售后排队', x: 600, y: 200, config: { skillGroupId: 2 } },
-      { id: 'n6', type: 'transfer', name: '转人工', x: 600, y: 320, config: { agentNo: '1001' } }
-    ],
-    edges: [
-      { id: 'e1', source: 'n1', target: 'n2' },
-      { id: 'e2', source: 'n2', target: 'n3' },
-      { id: 'e3', source: 'n3', target: 'n4', label: '按1' },
-      { id: 'e4', source: 'n3', target: 'n5', label: '按2' },
-      { id: 'e5', source: 'n3', target: 'n6', label: '按0' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'IVR-VIP直通',
-    description: 'VIP 客户直连专属坐席',
-    version: 1,
-    enabled: true,
-    bindNumbers: ['95055-12345'],
-    updatedAt: '2026-03-08 10:00:00',
-    nodes: [
-      { id: 'n1', type: 'start', name: '开始', x: 80, y: 200 },
-      { id: 'n2', type: 'play', name: 'VIP欢迎', x: 260, y: 200, config: { audio: 'vip-welcome.wav' } },
-      { id: 'n3', type: 'queue', name: 'VIP排队', x: 460, y: 200, config: { skillGroupId: 4 } }
-    ],
-    edges: [
-      { id: 'e1', source: 'n1', target: 'n2' },
-      { id: 'e2', source: 'n2', target: 'n3' }
-    ]
-  }
-]
+const _ivrFlows: IvrFlow[] = []
 
-const _ivrTemplates: IvrTemplate[] = [
-  { id: 1, name: '标准客服分流', category: '客服', description: '欢迎语 → 主菜单(1客服/2售后/0人工) → 排队', preview: 'welcome→menu→queue' },
-  { id: 2, name: '售后投诉受理', category: '售后', description: '欢迎语 → 工号采集 → 问题分类 → 排队 → 满意度评价' },
-  { id: 3, name: '销售外呼应答', category: '销售', description: '识别接听 → 营销话术播放 → 转人工/挂机' },
-  { id: 4, name: '满意度回访', category: '回访', description: '播报背景 → 1-5 评分采集 → 文字备注 → 挂机' },
-  { id: 5, name: '通用语音菜单', category: '通用', description: '可自由组合的多级菜单模板' }
-]
+const _ivrTemplates: IvrTemplate[] = []
 
-const _callRecords: CallRecord[] = Array.from({ length: 18 }).map((_, i) => {
-  const directions: CallDirection[] = ['inbound', 'outbound', 'inbound', 'inbound', 'outbound']
-  const results: CallResult[] = ['answered', 'answered', 'answered', 'no-answer', 'abandoned', 'busy']
-  const direction = directions[i % directions.length]
-  const result = results[i % results.length]
-  const ring = 5 + (i * 3) % 25
-  const talk = result === 'answered' ? 30 + (i * 17) % 600 : 0
-  const start = new Date(Date.now() - i * 1800_000)
-  const answer = result === 'answered' ? new Date(start.getTime() + ring * 1000) : null
-  const end = new Date(start.getTime() + (ring + talk) * 1000)
-  const fmt = (d: Date) => d.toISOString().replace('T', ' ').slice(0, 19)
-  return {
-    id: i + 1,
-    callId: `CID${String(20260519000 + i).padStart(12, '0')}`,
-    direction,
-    caller: direction === 'inbound' ? `138${String(10000000 + i * 137).padStart(8, '0')}` : '4001008888',
-    callee: direction === 'inbound' ? '4001008888' : `139${String(20000000 + i * 211).padStart(8, '0')}`,
-    agentNo: i % 4 === 3 ? undefined : _agents[i % _agents.length].agentNo,
-    agentName: i % 4 === 3 ? undefined : _agents[i % _agents.length].name,
-    skillGroup: _skillGroups[i % _skillGroups.length].name,
-    startTime: fmt(start),
-    answerTime: answer ? fmt(answer) : undefined,
-    endTime: fmt(end),
-    ringDuration: ring,
-    talkDuration: talk,
-    totalDuration: ring + talk,
-    result,
-    hangupBy: i % 2 === 0 ? 'caller' : 'callee',
-    recordingUrl: result === 'answered' ? `/recordings/2026/05/19/${i}.mp3` : undefined,
-    satisfaction: result === 'answered' ? (i % 5) + 1 : undefined,
-    remark: i % 5 === 0 ? '客户咨询产品价格' : ''
-  }
-})
+const _callRecords: CallRecord[] = []
 
-const _outboundTasks: OutboundTask[] = [
-  { id: 1, name: '618 营销外呼-A组', type: 'predictive', status: 'running', totalCount: 5000, completedCount: 1284, successCount: 612, failedCount: 672, skillGroupId: 3, skillGroupName: '销售外呼组', callerNumber: '057188889999', startTime: '2026-05-19 09:00:00', scriptId: 1, createdBy: '王芳', createdAt: '2026-05-18 17:00:00' },
-  { id: 2, name: '老客户回访-Q2', type: 'preview', status: 'paused', totalCount: 1200, completedCount: 540, successCount: 401, failedCount: 139, skillGroupId: 4, skillGroupName: 'VIP组', callerNumber: '95055-12345', startTime: '2026-05-15 10:00:00', scriptId: 2, createdBy: '陈静', createdAt: '2026-05-14 16:30:00' },
-  { id: 3, name: '5月新签满意度调研', type: 'progressive', status: 'completed', totalCount: 800, completedCount: 800, successCount: 712, failedCount: 88, skillGroupId: 2, skillGroupName: '售后组', callerNumber: '057188889999', startTime: '2026-05-10 09:00:00', endTime: '2026-05-12 18:00:00', scriptId: 3, createdBy: '张敏', createdAt: '2026-05-09 14:00:00' },
-  { id: 4, name: '欠费提醒外呼', type: 'manual', status: 'draft', totalCount: 320, completedCount: 0, successCount: 0, failedCount: 0, callerNumber: '057188889999', createdBy: '李伟', createdAt: '2026-05-19 11:30:00' }
-]
+const _outboundTasks: OutboundTask[] = []
 
-const _monitorTrend = Array.from({ length: 12 }).map((_, i) => ({
-  time: `${String(8 + i).padStart(2, '0')}:00`,
-  inbound: 30 + Math.round(Math.sin(i / 2) * 15) + (i % 3) * 8,
-  outbound: 18 + Math.round(Math.cos(i / 2) * 10) + (i % 4) * 6
-}))
+const _monitorTrend: { time: string; inbound: number; outbound: number }[] = []
 
 // ============================================================
 // API 函数
@@ -660,7 +549,6 @@ export const getReportData = (params?: { startDate?: string; endDate?: string; d
   return delay(data)
 }
 
-export const exportReport = (params?: any) => {
-  console.log('[mock] exportReport', params)
+export const exportReport = (_params?: any) => {
   return delay({ url: '/mock-export/cc-report-' + Date.now() + '.xlsx' })
 }

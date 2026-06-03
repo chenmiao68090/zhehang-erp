@@ -11,10 +11,11 @@ import multidimZhCN from './multidim-zh-CN'
 import multidimEnUS from './multidim-en-US'
 import ccZhCN from './cc-zh-CN'
 import ccEnUS from './cc-en-US'
+import bizZhCN from './biz-zh-CN'
 import { getStorage } from '@/utils/storage'
 
 const messages = {
-  'zh-CN': { ...zhCN, ...crmZhCN, ...hrmZhCN, ...salesZhCN, ...multidimZhCN, ...ccZhCN },
+  'zh-CN': { ...zhCN, ...crmZhCN, ...hrmZhCN, ...salesZhCN, ...multidimZhCN, ...ccZhCN, ...bizZhCN },
   'en-US': { ...enUS, ...crmEnUS, ...hrmEnUS, ...salesEnUS, ...multidimEnUS, ...ccEnUS }
 }
 

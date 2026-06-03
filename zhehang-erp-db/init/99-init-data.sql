@@ -2,7 +2,7 @@ SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
 -- ============================================================
--- 浙杭企服ERP系统 - 初始化数据
+-- 浙杭集团ERP系统 - 初始化数据
 -- ============================================================
 
 USE `zhehang_erp`;
@@ -70,6 +70,23 @@ INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `compone
 (103, '菜单管理', 100, 3, '/system/menu', 'system/menu/index', 'C', 1, 0, 'system:menu:list', 'menu', 1, 1),
 (104, '部门管理', 100, 4, '/system/dept', 'system/dept/index', 'C', 1, 0, 'system:dept:list', 'dept', 1, 1),
 (105, '通知公告', 100, 5, '/system/notice', 'system/notice/index', 'C', 1, 0, 'system:notice:list', 'notice', 1, 1);
+
+-- 系统管理按钮权限
+INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES
+(10101, '用户查询', 101, 1, NULL, NULL, 'F', 0, 0, 'system:user:query', NULL, 1, 1),
+(10102, '用户新增', 101, 2, NULL, NULL, 'F', 0, 0, 'system:user:add', NULL, 1, 1),
+(10103, '用户修改', 101, 3, NULL, NULL, 'F', 0, 0, 'system:user:edit', NULL, 1, 1),
+(10104, '用户删除', 101, 4, NULL, NULL, 'F', 0, 0, 'system:user:remove', NULL, 1, 1),
+(10105, '重置密码', 101, 5, NULL, NULL, 'F', 0, 0, 'system:user:resetPwd', NULL, 1, 1),
+(10106, '用户导出', 101, 6, NULL, NULL, 'F', 0, 0, 'system:user:export', NULL, 1, 1),
+(10201, '角色查询', 102, 1, NULL, NULL, 'F', 0, 0, 'system:role:query', NULL, 1, 1),
+(10202, '角色新增', 102, 2, NULL, NULL, 'F', 0, 0, 'system:role:add', NULL, 1, 1),
+(10203, '角色修改', 102, 3, NULL, NULL, 'F', 0, 0, 'system:role:edit', NULL, 1, 1),
+(10204, '角色删除', 102, 4, NULL, NULL, 'F', 0, 0, 'system:role:remove', NULL, 1, 1),
+(10301, '菜单查询', 103, 1, NULL, NULL, 'F', 0, 0, 'system:menu:query', NULL, 1, 1),
+(10302, '菜单新增', 103, 2, NULL, NULL, 'F', 0, 0, 'system:menu:add', NULL, 1, 1),
+(10303, '菜单修改', 103, 3, NULL, NULL, 'F', 0, 0, 'system:menu:edit', NULL, 1, 1),
+(10304, '菜单删除', 103, 4, NULL, NULL, 'F', 0, 0, 'system:menu:remove', NULL, 1, 1);
 
 -- ===== 组织架构 =====
 INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES
@@ -163,6 +180,13 @@ INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `compone
 (1201, '登录日志', 1200, 1, '/log/login', 'log/login/index', 'C', 1, 0, 'log:login:list', 'login-log', 1, 1),
 (1202, '操作日志', 1200, 2, '/log/oper', 'log/oper/index', 'C', 1, 0, 'log:oper:list', 'oper-log', 1, 1),
 (1203, '异常日志', 1200, 3, '/log/error', 'log/error/index', 'C', 1, 0, 'log:error:list', 'error-log', 1, 1);
+
+-- 日志管理按钮权限
+INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES
+(120101, '登录日志导出', 1201, 1, NULL, NULL, 'F', 0, 0, 'log:login:export', NULL, 1, 1),
+(120102, '登录日志清空', 1201, 2, NULL, NULL, 'F', 0, 0, 'log:login:remove', NULL, 1, 1),
+(120201, '操作日志导出', 1202, 1, NULL, NULL, 'F', 0, 0, 'log:oper:export', NULL, 1, 1),
+(120202, '操作日志清空', 1202, 2, NULL, NULL, 'F', 0, 0, 'log:oper:remove', NULL, 1, 1);
 
 -- ===== 系统监控 =====
 INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES

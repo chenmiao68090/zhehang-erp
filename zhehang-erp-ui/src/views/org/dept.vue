@@ -164,7 +164,7 @@ const loadTree = async () => {
     const res = await deptApi.tree()
     deptTree.value = res.data || []
   } catch (e) {
-    console.error(e)
+    // ignore
   }
 }
 
@@ -222,7 +222,7 @@ const submitForm = async () => {
     dialogVisible.value = false
     loadTree()
   } catch (e) {
-    console.error(e)
+    // ignore
   }
 }
 

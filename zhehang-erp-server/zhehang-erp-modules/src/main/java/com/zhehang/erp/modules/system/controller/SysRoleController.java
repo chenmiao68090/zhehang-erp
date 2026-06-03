@@ -1,6 +1,7 @@
 package com.zhehang.erp.modules.system.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.system.domain.dto.RoleDTO;
@@ -26,8 +27,20 @@ public class SysRoleController {
     public R<IPage<SysRole>> list(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) String roleName) {
-        return R.ok(roleService.selectRolePage(pageNum, pageSize, roleName));
+            @RequestParam(required = false) String roleName,
+            @RequestParam(required = false) String roleKey,
+            @RequestParam(required = false) Integer status) {
+        return R.ok(roleService.selectRolePage(pageNum, pageSize, roleName, roleKey, status));
+    }
+
+    @GetMapping("/all")
+    @PreAuthorize("@perm.hasPermission('system:role:list')")
+    public R<List<SysRole>> all() {
+        return R.ok(roleService.list(
+                new LambdaQueryWrapper<SysRole>()
+                        .eq(SysRole::getStatus, 0)
+                        .orderByAsc(SysRole::getRoleSort)
+        ));
     }
 
     @GetMapping("/{id}")

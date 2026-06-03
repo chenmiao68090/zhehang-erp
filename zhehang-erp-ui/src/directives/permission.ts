@@ -10,10 +10,12 @@ const hasPermi: Directive = {
     const { value } = binding
     const userStore = useUserStore()
     const permissions = userStore.permissions
+    const roles = userStore.roles
     const allPermission = '*:*:*'
+    const superAdmin = 'admin'
 
     if (value && value.length > 0) {
-      const hasPermission = permissions.some((perm: string) => {
+      const hasPermission = roles.includes(superAdmin) || permissions.some((perm: string) => {
         return allPermission === perm || value.includes(perm)
       })
       if (!hasPermission) {

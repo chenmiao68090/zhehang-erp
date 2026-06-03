@@ -31,9 +31,9 @@
         <div class="card-header">
           <span>{{ $t('system.user.title') }}</span>
           <div class="toolbar-btns">
-            <el-button type="primary" @click="handleAdd"><el-icon><Plus /></el-icon>{{ $t('common.add') }}</el-button>
-            <el-button type="danger" :disabled="selectedIds.length === 0" @click="handleBatchDelete"><el-icon><Delete /></el-icon>{{ $t('common.batchDelete') }}</el-button>
-            <el-button type="warning" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
+            <el-button type="primary" v-hasPermi="['system:user:add']" @click="handleAdd"><el-icon><Plus /></el-icon>{{ $t('common.add') }}</el-button>
+            <el-button type="danger" v-hasPermi="['system:user:remove']" :disabled="selectedIds.length === 0" @click="handleBatchDelete"><el-icon><Delete /></el-icon>{{ $t('common.batchDelete') }}</el-button>
+            <el-button type="warning" v-hasPermi="['system:user:export']" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
           </div>
         </div>
       </template>
@@ -43,19 +43,25 @@
         <el-table-column :label="$t('system.user.username')" prop="username" min-width="120" />
         <el-table-column :label="$t('system.user.nickname')" prop="nickname" min-width="120" />
         <el-table-column :label="$t('system.user.deptName')" prop="deptName" min-width="120" />
-        <el-table-column prop="postName" label="所属岗位" min-width="100" />
+        <el-table-column :label="$t('system.user.roles')" prop="roleNames" min-width="140">
+          <template #default="{ row }">
+            <el-tag v-for="role in row.roleNames || []" :key="role" size="small">{{ role }}</el-tag>
+            <span v-if="!row.roleNames || row.roleNames.length === 0">-</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="$t('system.user.phone')" prop="phone" min-width="120" />
         <el-table-column :label="$t('system.user.status')" prop="status" width="100" align="center">
           <template #default="{ row }">
-            <el-switch v-model="row.status" :active-value="0" :inactive-value="1" @change="handleStatusChange(row)" />
+            <el-switch v-if="canEditUser" v-model="row.status" :active-value="0" :inactive-value="1" @change="handleStatusChange(row)" />
+            <el-tag v-else :type="row.status === 0 ? 'success' : 'danger'">{{ row.status === 0 ? $t('common.enabled') : $t('common.disabled') }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="$t('system.user.createTime')" prop="createTime" width="180" align="center" />
         <el-table-column :label="$t('common.operation')" width="200" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="handleEdit(row)"><el-icon><Edit /></el-icon>{{ $t('common.edit') }}</el-button>
-            <el-button link type="danger" @click="handleDelete(row)"><el-icon><Delete /></el-icon>{{ $t('common.delete') }}</el-button>
-            <el-button link type="warning" @click="handleResetPwd(row)"><el-icon><Key /></el-icon>{{ $t('system.user.resetPwd') }}</el-button>
+            <el-button link type="primary" v-hasPermi="['system:user:edit']" @click="handleEdit(row)"><el-icon><Edit /></el-icon>{{ $t('common.edit') }}</el-button>
+            <el-button link type="danger" v-hasPermi="['system:user:remove']" @click="handleDelete(row)"><el-icon><Delete /></el-icon>{{ $t('common.delete') }}</el-button>
+            <el-button link type="warning" v-hasPermi="['system:user:resetPwd']" @click="handleResetPwd(row)"><el-icon><Key /></el-icon>{{ $t('system.user.resetPwd') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -118,18 +124,9 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item :label="$t('system.user.dept')" prop="deptId">
-              <el-tree-select v-model="form.deptId" :data="deptTree" :props="{ label: 'label', children: 'children', value: 'id' }" :placeholder="$t('common.selectPlaceholder')" check-strictly filterable />
+              <el-tree-select v-model="form.deptId" :data="deptTree" :props="{ label: 'deptName', children: 'children', value: 'id' }" :placeholder="$t('common.selectPlaceholder')" check-strictly filterable />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="所属岗位" prop="postId">
-              <el-select v-model="form.postId" placeholder="请选择岗位角色" clearable style="width: 100%">
-                <el-option v-for="r in roleList" :key="r.id" :label="r.roleName" :value="r.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item :label="$t('system.user.roles')" prop="roleIds">
               <el-select v-model="form.roleIds" multiple :placeholder="$t('common.selectPlaceholder')" clearable style="width: 100%">
@@ -168,13 +165,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { userApi, roleApi, deptApi } from '@/api/system'
+import { downloadBlob } from '@/utils/download'
+import { useUserStore } from '@/stores/user'
 
 const { t } = useI18n()
+const userStore = useUserStore()
+const canEditUser = computed(() => hasPermission('system:user:edit'))
+
+function hasPermission(permission: string) {
+  return userStore.roles.includes('admin')
+    || userStore.permissions.includes('*:*:*')
+    || userStore.permissions.includes(permission)
+}
 
 const queryParams = reactive({
   pageNum: 1,
@@ -203,7 +210,6 @@ const form = reactive<any>({
   gender: 0,
   status: 0,
   deptId: undefined,
-  postId: undefined,
   roleIds: [],
   remark: ''
 })
@@ -275,7 +281,7 @@ async function handleAdd() {
   try {
     const roleRes: any = await roleApi.list({ pageSize: 999 })
     roleList.value = roleRes.data?.records || roleRes.data?.list || roleRes.data || []
-  } catch (e) { console.warn('加载角色列表失败', e) }
+  } catch (e) { /* 加载角色列表失败 */ }
 }
 
 async function handleEdit(row: any) {
@@ -284,13 +290,15 @@ async function handleEdit(row: any) {
   try {
     const res: any = await userApi.detail(row.id)
     Object.assign(form, res.data)
-  } catch (_e) { /* */ }
-  dialogVisible.value = true
+  } catch (_e) {
+    return
+  }
   // 加载角色列表
   try {
     const roleRes: any = await roleApi.list({ pageSize: 999 })
     roleList.value = roleRes.data?.records || roleRes.data?.list || roleRes.data || []
-  } catch (e) { console.warn('加载角色列表失败', e) }
+  } catch (e) { /* 加载角色列表失败 */ }
+  dialogVisible.value = true
 }
 
 function handleDelete(row: any) {
@@ -362,8 +370,10 @@ async function submitForm() {
   }
 }
 
-function handleExport() {
-  userApi.export(queryParams)
+async function handleExport() {
+  const data = await userApi.export(queryParams)
+  downloadBlob(data as Blob, `system-users-${Date.now()}.csv`)
+  ElMessage.success(t('common.success'))
 }
 
 function resetForm() {
@@ -376,7 +386,6 @@ function resetForm() {
   form.gender = 0
   form.status = 0
   form.deptId = undefined
-  form.postId = undefined
   form.roleIds = []
   form.remark = ''
 }

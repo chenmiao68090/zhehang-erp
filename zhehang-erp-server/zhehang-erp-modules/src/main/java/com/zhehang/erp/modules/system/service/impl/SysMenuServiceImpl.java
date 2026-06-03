@@ -13,6 +13,8 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,18 +53,43 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
     }
 
     @Override
+    public List<Long> selectMenuIdsByRoleId(Long roleId) {
+        return menuMapper.selectMenuIdsByRoleId(roleId);
+    }
+
+    @Override
+    public List<Long> selectCheckedMenuIdsByRoleId(Long roleId) {
+        List<Long> menuIds = selectMenuIdsByRoleId(roleId);
+        if (menuIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Set<Long> parentIds = menuMapper.selectList(new LambdaQueryWrapper<SysMenu>())
+            .stream()
+            .map(SysMenu::getParentId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+
+        return menuIds.stream()
+            .filter(menuId -> !parentIds.contains(menuId))
+            .collect(Collectors.toList());
+    }
+
+    @Override
     public List<RouterVO> buildRouters(Long userId) {
         List<SysMenu> menus = menuMapper.selectMenusByUserId(userId);
-        return buildRouterTree(menus, 0L);
+        return buildRouterTree(menus.stream().filter(menu -> !"F".equals(menu.getMenuType())).toList(), 0L);
     }
 
     @Override
     public void createMenu(SysMenu menu) {
+        normalizeMenu(menu);
         menuMapper.insert(menu);
     }
 
     @Override
     public void updateMenu(SysMenu menu) {
+        normalizeMenu(menu);
         menuMapper.updateById(menu);
     }
 
@@ -105,12 +132,24 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
             RouterVO.MetaVO meta = new RouterVO.MetaVO();
             meta.setTitle(menu.getMenuName());
             meta.setIcon(menu.getIcon());
-            meta.setHidden(menu.getVisible() != null && menu.getVisible() == 1);
+            meta.setHidden(menu.getVisible() != null && menu.getVisible() == 0);
             router.setMeta(meta);
 
             router.setChildren(buildRouterTree(menus, menu.getId()));
             routers.add(router);
         }
         return routers;
+    }
+
+    private void normalizeMenu(SysMenu menu) {
+        if (menu.getVisible() == null) {
+            menu.setVisible(1);
+        }
+        if ("F".equals(menu.getMenuType())) {
+            menu.setPath(null);
+            menu.setComponent(null);
+            menu.setIcon(null);
+            menu.setVisible(0);
+        }
     }
 }

@@ -6,10 +6,15 @@ import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.system.domain.dto.UserDTO;
 import com.zhehang.erp.modules.system.domain.vo.UserVO;
 import com.zhehang.erp.modules.system.service.ISysUserService;
+import com.zhehang.erp.modules.system.util.CsvExportUtils;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/system/user")
@@ -78,11 +83,25 @@ public class SysUserController {
     @GetMapping("/export")
     @PreAuthorize("@perm.hasPermission('system:user:export')")
     @Log(module = "用户管理", type = Log.OperationType.EXPORT)
-    public R<?> export(
+    public void export(
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String phone,
-            @RequestParam(required = false) Integer status) {
-        // TODO: Implement Excel export
-        return R.ok(userService.selectUserPage(1, 10000, username, phone, status));
+            @RequestParam(required = false) Integer status,
+            HttpServletResponse response) throws IOException {
+        List<UserVO> users = userService.selectUserPage(1, 10000, username, phone, status).getRecords();
+        CsvExportUtils.write(response, "system-users.csv",
+                List.of("用户ID", "用户名", "姓名", "手机号", "邮箱", "部门", "状态", "角色", "创建时间"),
+                users,
+                List.of(
+                        UserVO::getId,
+                        UserVO::getUsername,
+                        UserVO::getNickname,
+                        UserVO::getPhone,
+                        UserVO::getEmail,
+                        UserVO::getDeptName,
+                        user -> user.getStatus() != null && user.getStatus() == 0 ? "启用" : "停用",
+                        user -> user.getRoleNames() == null ? "" : String.join("、", user.getRoleNames()),
+                        UserVO::getCreateTime
+                ));
     }
 }

@@ -2,7 +2,7 @@ SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
 -- ============================================================
--- 浙杭企服ERP系统 - 系统管理模块
+-- 浙杭集团ERP系统 - 系统管理模块
 -- ============================================================
 
 USE `zhehang_erp`;
@@ -72,7 +72,7 @@ CREATE TABLE `sys_menu` (
   `path`        VARCHAR(200) DEFAULT NULL            COMMENT '路由地址',
   `component`   VARCHAR(200) DEFAULT NULL            COMMENT '组件路径',
   `menu_type`   CHAR(1)      DEFAULT 'C'             COMMENT '菜单类型（M目录 C菜单 F按钮）',
-  `visible`     TINYINT(1)   DEFAULT 0               COMMENT '是否可见（0显示 1隐藏）',
+  `visible`     TINYINT(1)   DEFAULT 1               COMMENT '是否可见（1显示 0隐藏）',
   `status`      TINYINT(1)   DEFAULT 0               COMMENT '状态（0正常 1禁用）',
   `perms`       VARCHAR(200) DEFAULT NULL            COMMENT '权限标识',
   `icon`        VARCHAR(100) DEFAULT NULL            COMMENT '菜单图标',

@@ -341,7 +341,7 @@ const loadData = async () => {
     tableData.value = data.records || data.list || []
     total.value = data.total || 0
   } catch (e) {
-    console.error(e)
+    // ignore
   } finally {
     loading.value = false
   }
@@ -351,14 +351,14 @@ const loadDeptTree = async () => {
   try {
     const res = await deptApi.tree()
     deptTree.value = res.data || []
-  } catch (e) { console.error(e) }
+  } catch (e) { /* ignore */ }
 }
 
 const loadPostList = async () => {
   try {
     const res = await postApi.all()
     postList.value = res.data || []
-  } catch (e) { console.error(e) }
+  } catch (e) { /* ignore */ }
 }
 
 const handleSearch = () => {
@@ -405,7 +405,7 @@ const handleRowClick = async (row: any) => {
     const res = await employeeApi.detail(row.id)
     detailData.value = res.data
     drawerVisible.value = true
-  } catch (e) { console.error(e) }
+  } catch (e) { /* ignore */ }
 }
 
 const submitForm = async () => {
@@ -420,7 +420,7 @@ const submitForm = async () => {
     ElMessage.success(t('common.success'))
     dialogVisible.value = false
     loadData()
-  } catch (e) { console.error(e) }
+  } catch (e) { /* ignore */ }
 }
 
 onMounted(() => {

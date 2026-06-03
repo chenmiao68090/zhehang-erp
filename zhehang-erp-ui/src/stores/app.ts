@@ -4,8 +4,7 @@ import { getStorage, setStorage } from '@/utils/storage'
 
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref<boolean>(getStorage('sidebarCollapsed') === 'true')
-  // isDark 始终为 true（黑金主题固定深色模式）
-  const isDark = ref<boolean>(true)
+  const isDark = ref<boolean>(getStorage('isDark') === 'true')
   const language = ref<string>(getStorage('language') || 'zh-CN')
   const size = ref<'default' | 'small' | 'large'>(
     (getStorage('size') as 'default' | 'small' | 'large') || 'default'
@@ -17,7 +16,9 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function toggleDark() {
-    // 黑金主题固定为深色模式，无需切换
+    isDark.value = !isDark.value
+    setStorage('isDark', String(isDark.value))
+    document.documentElement.classList.toggle('dark', isDark.value)
   }
 
   function setLanguage(lang: string) {
@@ -30,8 +31,7 @@ export const useAppStore = defineStore('app', () => {
     setStorage('size', val)
   }
 
-  // 初始化时始终设置 dark class
-  document.documentElement.classList.add('dark')
+  document.documentElement.classList.toggle('dark', isDark.value)
 
   return {
     sidebarCollapsed,

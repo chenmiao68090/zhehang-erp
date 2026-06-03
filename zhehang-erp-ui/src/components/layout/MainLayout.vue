@@ -30,7 +30,7 @@ const appStore = useAppStore()
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background-color: var(--bg-darkest);
+  background: var(--bg-page);
 }
 
 .main-content {
@@ -48,14 +48,15 @@ const appStore = useAppStore()
 
 .content-area {
   flex: 1;
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
-  background-color: var(--bg-darkest);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0, rgba(255, 255, 255, 0) 180px),
+    var(--bg-page);
 }
 
-/* 页面切换动效 - 升级为金色 fadeSlideUp */
 .fade-enter-active {
-  animation: fadeSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .fade-leave-active {
@@ -67,7 +68,7 @@ const appStore = useAppStore()
 }
 
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 </style>

@@ -8,6 +8,7 @@ import com.zhehang.erp.modules.crm.service.ICrmContractService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -53,5 +54,19 @@ public class CrmContractController {
         Integer status = Integer.valueOf(params.get("status").toString());
         contractService.changeStatus(id, status);
         return R.ok();
+    }
+
+    /** 销售业绩(按签订人):合同数量 + 合同金额,可按签约年份/状态过滤 */
+    @GetMapping("/performance")
+    public R<List<Map<String, Object>>> performance(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer status) {
+        return R.ok(contractService.performanceByOwner(year, status));
+    }
+
+    /** 合同月度趋势(签约金额/数量,12 月补零) */
+    @GetMapping("/trend")
+    public R<List<Map<String, Object>>> trend(@RequestParam(required = false) Integer year) {
+        return R.ok(contractService.monthlyTrend(year));
     }
 }

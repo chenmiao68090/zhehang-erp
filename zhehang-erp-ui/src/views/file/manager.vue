@@ -366,7 +366,7 @@ async function submitUpload() {
 }
 
 function handleDownload(row: any) {
-  window.open(`${import.meta.env.VITE_API_BASE_URL}/api/file/info/download/${row.id}`, '_blank')
+  window.open(`${import.meta.env.VITE_API_BASE_URL}/file/info/download/${row.id}`, '_blank')
 }
 
 async function handlePreview(row: any) {

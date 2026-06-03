@@ -32,7 +32,8 @@
         <div class="card-header">
           <span>{{ $t('system.operLog.title') }}</span>
           <div class="toolbar-btns">
-            <el-button type="danger" v-hasPermi="['system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
+            <el-button type="warning" v-hasPermi="['log:oper:export', 'system:log:export']" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
+            <el-button type="danger" v-hasPermi="['log:oper:remove', 'system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
           </div>
         </div>
       </template>
@@ -97,7 +98,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import { operLogApi } from '@/api/system'
+import { downloadBlob } from '@/utils/download'
 
 const { t } = useI18n()
 
@@ -149,6 +152,12 @@ function resetQuery() {
   handleQuery()
 }
 
+async function handleExport() {
+  const data = await operLogApi.export(buildQueryParams())
+  downloadBlob(data as Blob, `operation-logs-${Date.now()}.csv`)
+  ElMessage.success(t('common.success'))
+}
+
 async function handleRowClick(row: any) {
   try {
     const res: any = await operLogApi.detail(row.id)
@@ -169,6 +178,15 @@ function handleClean() {
     ElMessage.success(t('common.success'))
     getList()
   }).catch(() => {})
+}
+
+function buildQueryParams() {
+  const params: any = { ...queryParams }
+  if (dateRange.value && dateRange.value.length === 2) {
+    params.beginTime = dateRange.value[0]
+    params.endTime = dateRange.value[1]
+  }
+  return params
 }
 
 function getOperTypeTag(type: string): string {

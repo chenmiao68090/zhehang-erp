@@ -3,6 +3,7 @@
     <router-view />
     <Softphone />
     <CallPopup />
+    <RoleSwitcher />
   </el-config-provider>
 </template>
 
@@ -13,6 +14,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
 import Softphone from '@/components/call-center/Softphone.vue'
 import CallPopup from '@/components/call-center/CallPopup.vue'
+import RoleSwitcher from '@/components/RoleSwitcher.vue'
 
 const appStore = useAppStore()
 

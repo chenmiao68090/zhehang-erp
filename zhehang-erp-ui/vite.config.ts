@@ -10,6 +10,12 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       vue(),
+      {
+        name: 'html-transform-env',
+        transformIndexHtml(html: string) {
+          return html.replace(/%VITE_APP_TITLE%/g, env.VITE_APP_TITLE || '浙杭集团CRM')
+        }
+      },
       AutoImport({
         imports: ['vue', 'vue-router', 'pinia', 'vue-i18n'],
         resolvers: [ElementPlusResolver()],
@@ -36,7 +42,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8080',
+          target: env.VITE_PROXY_TARGET || 'http://localhost:8080',
           changeOrigin: true
         }
       }
@@ -47,6 +53,13 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       chunkSizeWarningLimit: 1500,
       reportCompressedSize: false,
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true
+        }
+      },
       rollupOptions: {
         output: {
           // Manual chunk splitting to optimize bundle size

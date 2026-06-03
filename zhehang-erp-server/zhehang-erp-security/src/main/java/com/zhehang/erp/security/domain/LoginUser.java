@@ -28,6 +28,7 @@ public class LoginUser implements UserDetails, AuthUser {
     private boolean enabled = true;
 
     @Override
+    @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {
         if (authorities == null) {
             if (permissions == null || permissions.isEmpty()) {

@@ -8,8 +8,11 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.common.core.exception.ErrorCode;
 import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.system.domain.dto.UserDTO;
+import com.zhehang.erp.modules.system.domain.entity.SysDept;
+import com.zhehang.erp.modules.system.domain.entity.SysRole;
 import com.zhehang.erp.modules.system.domain.entity.SysUser;
 import com.zhehang.erp.modules.system.domain.vo.UserVO;
+import com.zhehang.erp.modules.system.mapper.SysDeptMapper;
 import com.zhehang.erp.modules.system.mapper.SysRoleMapper;
 import com.zhehang.erp.modules.system.mapper.SysUserMapper;
 import com.zhehang.erp.modules.system.service.ISysUserService;
@@ -20,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +33,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
+    private final SysDeptMapper deptMapper;
 
     @Override
     public IPage<UserVO> selectUserPage(int pageNum, int pageSize, String username, String phone, Integer status) {
@@ -39,12 +45,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
                .orderByDesc(SysUser::getCreateTime);
 
         IPage<SysUser> userPage = userMapper.selectPage(page, wrapper);
-        return userPage.convert(user -> {
-            UserVO vo = new UserVO();
-            BeanUtils.copyProperties(user, vo);
-            vo.setRoleIds(userMapper.selectRoleIdsByUserId(user.getId()));
-            return vo;
-        });
+        return userPage.convert(this::toUserVO);
     }
 
     @Override
@@ -53,10 +54,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
-        UserVO vo = new UserVO();
-        BeanUtils.copyProperties(user, vo);
-        vo.setRoleIds(userMapper.selectRoleIdsByUserId(userId));
-        return vo;
+        return toUserVO(user);
     }
 
     @Override
@@ -116,5 +114,26 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         user.setId(userId);
         user.setStatus(status);
         userMapper.updateById(user);
+    }
+
+    private UserVO toUserVO(SysUser user) {
+        UserVO vo = new UserVO();
+        BeanUtils.copyProperties(user, vo);
+        if (user.getDeptId() != null) {
+            SysDept dept = deptMapper.selectById(user.getDeptId());
+            if (dept != null) {
+                vo.setDeptName(dept.getDeptName());
+            }
+        }
+        List<Long> roleIds = userMapper.selectRoleIdsByUserId(user.getId());
+        vo.setRoleIds(roleIds);
+        if (CollectionUtils.isEmpty(roleIds)) {
+            vo.setRoleNames(Collections.emptyList());
+        } else {
+            vo.setRoleNames(roleMapper.selectBatchIds(roleIds).stream()
+                    .map(SysRole::getRoleName)
+                    .collect(Collectors.toList()));
+        }
+        return vo;
     }
 }

@@ -114,3 +114,13 @@ export function getAlerts() {
 export function getAiSummary() {
   return post<{ data: AiSummary }>(BASE + '/ai-summary')
 }
+
+/** 营收趋势下钻 - 按月查看日数据 */
+export function getRevenueDrillDown(params: { month: string }) {
+  return get<{ data: { date: string; revenue: number; receipt: number }[] }>(BASE + '/revenue-drill', params)
+}
+
+/** 区域分布下钻 - 按省查看城市数据 */
+export function getRegionDrillDown(params: { province: string }) {
+  return get<{ data: { city: string; count: number }[] }>(BASE + '/region-drill', params)
+}

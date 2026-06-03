@@ -8,7 +8,7 @@ import com.zhehang.erp.modules.system.domain.entity.SysRole;
 import java.util.List;
 
 public interface ISysRoleService extends IService<SysRole> {
-    IPage<SysRole> selectRolePage(int pageNum, int pageSize, String roleName);
+    IPage<SysRole> selectRolePage(int pageNum, int pageSize, String roleName, String roleKey, Integer status);
     void createRole(RoleDTO dto);
     void updateRole(RoleDTO dto);
     void deleteRole(Long roleId);

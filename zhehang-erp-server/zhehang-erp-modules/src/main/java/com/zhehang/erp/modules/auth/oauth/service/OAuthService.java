@@ -6,6 +6,7 @@ import com.zhehang.erp.modules.auth.oauth.domain.entity.SysUserOauth;
 import com.zhehang.erp.modules.auth.oauth.mapper.SysUserOauthMapper;
 import com.zhehang.erp.modules.auth.oauth.provider.OAuthProvider;
 import com.zhehang.erp.modules.system.domain.entity.SysUser;
+import com.zhehang.erp.modules.system.mapper.SysUserMapper;
 import com.zhehang.erp.modules.system.service.ISysUserService;
 import com.zhehang.erp.security.domain.LoginUser;
 import com.zhehang.erp.security.service.TokenService;
@@ -22,17 +23,20 @@ public class OAuthService {
     private final ISysOauthConfigService oauthConfigService;
     private final SysUserOauthMapper userOauthMapper;
     private final ISysUserService userService;
+    private final SysUserMapper userMapper;
     private final TokenService tokenService;
     private final Map<String, OAuthProvider> providerMap;
 
     public OAuthService(ISysOauthConfigService oauthConfigService,
                         SysUserOauthMapper userOauthMapper,
                         ISysUserService userService,
+                        SysUserMapper userMapper,
                         TokenService tokenService,
                         List<OAuthProvider> providers) {
         this.oauthConfigService = oauthConfigService;
         this.userOauthMapper = userOauthMapper;
         this.userService = userService;
+        this.userMapper = userMapper;
         this.tokenService = tokenService;
         this.providerMap = new HashMap<>();
         for (OAuthProvider provider : providers) {
@@ -96,9 +100,16 @@ public class OAuthService {
      */
     @Transactional
     public void bindOAuth(Long userId, String provider, String code) {
+        if (userId == null) {
+            throw new BusinessException(401, "请先登录后再绑定第三方账号");
+        }
         SysOauthConfig config = oauthConfigService.getByProvider(provider);
         if (config == null) {
             throw new BusinessException(500, "第三方配置不存在");
+        }
+        SysUser user = userService.getById(userId);
+        if (user == null) {
+            throw new BusinessException(500, "绑定的用户不存在");
         }
         OAuthProvider oAuthProvider = getProvider(provider);
         Map<String, String> userInfo = oAuthProvider.getUserInfoByCode(
@@ -111,6 +122,7 @@ public class OAuthService {
         binding.setUnionId(userInfo.get("unionId"));
         binding.setNickname(userInfo.get("nickname"));
         binding.setAvatar(userInfo.get("avatar"));
+        binding.setTenantId(user.getTenantId());
         userOauthMapper.insert(binding);
     }
 
@@ -119,6 +131,9 @@ public class OAuthService {
      */
     @Transactional
     public void unbindOAuth(Long userId, String provider) {
+        if (userId == null) {
+            throw new BusinessException(401, "请先登录后再解绑第三方账号");
+        }
         userOauthMapper.delete(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUserOauth>()
                         .eq(SysUserOauth::getUserId, userId)
@@ -141,10 +156,22 @@ public class OAuthService {
     }
 
     private LoginUser buildLoginUser(SysUser user) {
+        if (user.getStatus() != null && user.getStatus() == 1) {
+            throw new BusinessException(403, "用户已禁用");
+        }
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(user.getId());
         loginUser.setUsername(user.getUsername());
-        loginUser.setPermissions(new HashSet<>());
+        loginUser.setPassword(user.getPassword());
+        loginUser.setTenantId(user.getTenantId());
+        loginUser.setEnabled(true);
+
+        List<String> perms = userMapper.selectPermsByUserId(user.getId());
+        Set<String> permSet = perms == null ? new HashSet<>() : new HashSet<>(perms);
+        if (Long.valueOf(1L).equals(user.getId()) || "admin".equals(user.getUsername())) {
+            permSet.add("*:*:*");
+        }
+        loginUser.setPermissions(permSet);
         return loginUser;
     }
 }

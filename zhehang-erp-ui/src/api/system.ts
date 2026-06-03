@@ -37,7 +37,7 @@ export const menuApi = {
 
 // Department Tree
 export const deptApi = {
-  treeselect: () => get('/system/dept/tree')
+  treeselect: () => get('/org/dept/tree')
 }
 
 // Login Log

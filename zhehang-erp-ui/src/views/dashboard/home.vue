@@ -5,6 +5,9 @@
       <div class="welcome-info">
         <h2>{{ greeting }}，{{ userName }}</h2>
         <p class="welcome-summary">{{ aiSummary || '今日工作加油！' }}</p>
+        <div class="welcome-focus">
+          <span v-for="item in focusTags" :key="item">{{ item }}</span>
+        </div>
       </div>
       <div class="welcome-date">
         <el-icon :size="18"><Calendar /></el-icon>
@@ -14,7 +17,7 @@
 
     <!-- 统计卡片行 -->
     <el-row :gutter="16" class="stat-row">
-      <el-col :span="6" v-for="(stat, idx) in statCards" :key="idx">
+      <el-col :xs="24" :sm="12" :md="8" :lg="4" v-for="(stat, idx) in statCards" :key="idx">
         <div class="stat-card">
           <div class="stat-icon" :style="{ background: stat.bgColor }">
             <el-icon :size="24" color="#fff"><component :is="stat.icon" /></el-icon>
@@ -22,6 +25,7 @@
           <div class="stat-info">
             <div class="stat-value">{{ stat.value }}</div>
             <div class="stat-label">{{ stat.label }}</div>
+            <div class="stat-trend" :class="stat.trendType">{{ stat.trend }}</div>
           </div>
         </div>
       </el-col>
@@ -29,7 +33,7 @@
 
     <!-- 主内容区 -->
     <el-row :gutter="16">
-      <el-col :span="16">
+      <el-col :xs="24" :lg="16">
         <!-- 快捷导航九宫格 -->
         <el-card class="shortcut-card" shadow="never">
           <template #header><span class="card-title">{{ $t('dashboard.shortcut') }}</span></template>
@@ -43,11 +47,33 @@
           </div>
         </el-card>
 
+        <!-- 经营漏斗 -->
+        <el-card class="funnel-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">今日经营漏斗</span>
+              <el-link type="primary" :underline="false" @click="router.push('/dashboard/cockpit')">看经营驾驶舱</el-link>
+            </div>
+          </template>
+          <div class="funnel-list">
+            <div v-for="stage in funnelStages" :key="stage.name" class="funnel-stage">
+              <div class="funnel-stage-head">
+                <span class="stage-name">{{ stage.name }}</span>
+                <span class="stage-value">{{ stage.value }}</span>
+                <span class="stage-rate">{{ stage.rate }}</span>
+              </div>
+              <div class="stage-bar">
+                <span :style="{ width: stage.percent + '%', background: stage.color }"></span>
+              </div>
+            </div>
+          </div>
+        </el-card>
+
         <!-- 待办事项 -->
         <el-card class="todo-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="card-title">{{ $t('dashboard.todoList') }}</span>
+              <span class="card-title">今日重点动作</span>
               <el-badge :value="pendingCount" :max="99" type="danger" />
             </div>
           </template>
@@ -68,9 +94,60 @@
             </div>
           </div>
         </el-card>
+
+        <!-- 业务进展 -->
+        <el-card class="progress-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">关键业务进展</span>
+              <el-link type="primary" :underline="false" @click="router.push('/order/finance-check')">查看财务核对</el-link>
+            </div>
+          </template>
+          <div class="business-grid">
+            <div v-for="item in businessProgress" :key="item.title" class="business-item">
+              <div class="business-title">{{ item.title }}</div>
+              <div class="business-value">{{ item.value }}</div>
+              <div class="business-desc">{{ item.desc }}</div>
+            </div>
+          </div>
+        </el-card>
       </el-col>
 
-      <el-col :span="8">
+      <el-col :xs="24" :lg="8">
+        <!-- 风险预警 -->
+        <el-card class="risk-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">经营风险预警</span>
+              <el-tag type="danger" effect="light" size="small">{{ riskAlerts.length }} 项</el-tag>
+            </div>
+          </template>
+          <div class="risk-list">
+            <div v-for="risk in riskAlerts" :key="risk.title" class="risk-item" :class="risk.level">
+              <div class="risk-top">
+                <span class="risk-title">{{ risk.title }}</span>
+                <el-tag :type="risk.level === 'high' ? 'danger' : 'warning'" effect="plain" size="small">{{ risk.label }}</el-tag>
+              </div>
+              <p>{{ risk.desc }}</p>
+              <el-link type="primary" :underline="false" @click="router.push(risk.path)">去处理</el-link>
+            </div>
+          </div>
+        </el-card>
+
+        <!-- 今日日程 -->
+        <el-card class="schedule-card" shadow="never">
+          <template #header><span class="card-title">今日日程</span></template>
+          <div class="schedule-list">
+            <div v-for="item in schedules" :key="item.time + item.title" class="schedule-item">
+              <span class="schedule-time">{{ item.time }}</span>
+              <div>
+                <div class="schedule-title">{{ item.title }}</div>
+                <div class="schedule-desc">{{ item.desc }}</div>
+              </div>
+            </div>
+          </div>
+        </el-card>
+
         <!-- 通知公告 -->
         <el-card class="notice-card" shadow="never">
           <template #header>
@@ -141,6 +218,7 @@ const greeting = computed(() => {
 })
 
 const aiSummary = ref('')
+const focusTags = ref(['网销ROI低于目标需复盘', '同行渠道应收需跟进', '地址资源余量偏紧'])
 const currentDateStr = computed(() => {
   const d = new Date()
   const w = ['日', '一', '二', '三', '四', '五', '六']
@@ -148,40 +226,70 @@ const currentDateStr = computed(() => {
 })
 
 const statCards = ref([
-  { label: '今日待办', value: 12, icon: 'DocumentChecked', bgColor: '#F26522' },
-  { label: '待审批', value: 5, icon: 'Tickets', bgColor: '#3B82F6' },
-  { label: '客户跟进', value: 8, icon: 'UserIcon', bgColor: '#10B981' },
-  { label: '本月业绩', value: '¥128.6万', icon: 'TrendCharts', bgColor: '#F59E0B' }
+  { label: '今日新增线索', value: 86, trend: '网销 52 · 电销 34', trendType: 'up', icon: 'UserIcon', bgColor: '#2563EB' },
+  { label: '网销ROI', value: '2.8', trend: '目标 3.2，需优化', trendType: 'warn', icon: 'TrendCharts', bgColor: '#0F766E' },
+  { label: '本月回款', value: '¥82.4万', trend: '完成率 64%', trendType: 'up', icon: 'Money', bgColor: '#7C3AED' },
+  { label: '待交付订单', value: 39, trend: '逾期 3 单', trendType: 'warn', icon: 'DocumentChecked', bgColor: '#EA580C' },
+  { label: '可售地址资源', value: 126, trend: '西湖区偏紧', trendType: 'warn', icon: 'Briefcase', bgColor: '#0891B2' },
+  { label: '渠道应收', value: '¥18.6万', trend: '1 家超账期', trendType: 'danger', icon: 'Tickets', bgColor: '#DC2626' }
 ])
 
 const shortcuts = ref([
-  { name: '客户管理', path: '/crm/customer', icon: 'UserIcon', color: '#F26522' },
-  { name: '财务管理', path: '/finance/voucher', icon: 'Money', color: '#3B82F6' },
-  { name: '待办任务', path: '/workflow/todo', icon: 'DocumentChecked', color: '#10B981' },
-  { name: '合同管理', path: '/crm/contract', icon: 'Briefcase', color: '#8B5CF6' },
-  { name: '订单管理', path: '/sales/order', icon: 'ListIcon', color: '#F59E0B' },
-  { name: '财务报表', path: '/finance/report', icon: 'DataAnalysis', color: '#EF4444' },
-  { name: '通知公告', path: '/system/notification', icon: 'ChatDotRound', color: '#06B6D4' },
-  { name: '系统管理', path: '/system/user', icon: 'Setting', color: '#64748B' },
-  { name: 'AI 助手', path: '/ai-chat/index', icon: 'ChatDotRound', color: '#EC4899' }
+  { name: '线索工作台', path: '/leads/workbench', icon: 'UserIcon', color: '#2563EB' },
+  { name: '网销ROI', path: '/leads/online-roi', icon: 'TrendCharts', color: '#0F766E' },
+  { name: '企业工商库', path: '/customer/enterprise-master', icon: 'Briefcase', color: '#7C3AED' },
+  { name: '同行渠道', path: '/supply/channel-partner', icon: 'Tickets', color: '#EA580C' },
+  { name: '地址资源池', path: '/supply/receipt', icon: 'ListIcon', color: '#0891B2' },
+  { name: '合同订单', path: '/order/contract', icon: 'Briefcase', color: '#F59E0B' },
+  { name: '财务日记账', path: '/finance/journal', icon: 'Money', color: '#DC2626' },
+  { name: '任务中心', path: '/task-center/once', icon: 'DocumentChecked', color: '#16A34A' },
+  { name: '经营驾驶舱', path: '/dashboard/cockpit', icon: 'DataAnalysis', color: '#475569' }
 ])
 
 const todoList = ref<TodoItem[]>([
-  { id: 1, title: '审批张三的报销申请 (¥3,200)', type: 'approval', priority: 'high', status: 'pending', dueDate: '今天 17:00' },
-  { id: 2, title: '跟进杭州科技有限公司合同续签', type: 'follow', priority: 'high', status: 'pending', dueDate: '今天 15:00' },
-  { id: 3, title: '完成月度销售报告', type: 'task', priority: 'medium', status: 'pending', dueDate: '明天 12:00' },
-  { id: 4, title: '回复宁波客户技术咨询', type: 'follow', priority: 'medium', status: 'pending', dueDate: '明天 10:00' },
-  { id: 5, title: '检查系统安全日志', type: 'other', priority: 'low', status: 'done', dueDate: '昨天' }
+  { id: 1, title: '复盘抖音渠道 ROI：消费 ¥12,600，成交 3 单', type: 'task', priority: 'high', status: 'pending', dueDate: '今天 11:30' },
+  { id: 2, title: '跟进杭州松柏科技代理记账合同续签', type: 'follow', priority: 'high', status: 'pending', dueDate: '今天 15:00' },
+  { id: 3, title: '审批同行渠道“杭企伙伴”月结额度调整', type: 'approval', priority: 'medium', status: 'pending', dueDate: '今天 17:00' },
+  { id: 4, title: '确认滨江区挂靠地址资源补充 20 套', type: 'task', priority: 'medium', status: 'pending', dueDate: '明天 10:00' },
+  { id: 5, title: '核对昨日新增客户工商信息补全率', type: 'other', priority: 'low', status: 'done', dueDate: '已完成' }
+])
+
+const funnelStages = ref([
+  { name: '新增线索', value: '86 条', rate: '100%', percent: 100, color: '#2563EB' },
+  { name: '有效商机', value: '43 条', rate: '50.0%', percent: 72, color: '#0F766E' },
+  { name: '已报价', value: '21 单', rate: '48.8%', percent: 54, color: '#7C3AED' },
+  { name: '已签约', value: '9 单', rate: '42.9%', percent: 36, color: '#EA580C' },
+  { name: '已回款', value: '7 单', rate: '77.8%', percent: 28, color: '#DC2626' }
+])
+
+const businessProgress = ref([
+  { title: '代理记账', value: '312 户', desc: '本月新增 24 户，续费预警 11 户' },
+  { title: '工商注册', value: '68 单', desc: '待材料 9 单，待核名 6 单' },
+  { title: '税务异常解除', value: '17 单', desc: '高优先级 4 单，平均周期 2.8 天' },
+  { title: '挂靠地址', value: '53 单', desc: '同行渠道贡献 34 单，占比 64%' }
+])
+
+const riskAlerts = ref([
+  { title: '网销ROI低于目标', label: '高', level: 'high', desc: '信息流投放 ROI 2.8，低于目标 3.2，建议检查关键词与落地页转化。', path: '/leads/online-roi' },
+  { title: '渠道应收超账期', label: '高', level: 'high', desc: '杭企伙伴应收 ¥42,800，超账期 9 天，新单建议先冻结。', path: '/supply/channel-partner' },
+  { title: '地址资源余量不足', label: '中', level: 'medium', desc: '西湖区可售资源仅 8 套，按近 7 日消耗预计 4 天用尽。', path: '/supply/receipt' },
+  { title: '交付节点临期', label: '中', level: 'medium', desc: '3 个工商注册订单今日需补材料，否则会影响承诺周期。', path: '/task-center/periodic' }
+])
+
+const schedules = ref([
+  { time: '09:30', title: '营销早会', desc: '复盘昨日线索、成交和投放 ROI' },
+  { time: '11:00', title: '渠道应收沟通', desc: '确认超账期渠道付款计划' },
+  { time: '15:30', title: '财税交付排期', desc: '处理工商注册和税务异常临期单' }
 ])
 
 const pendingCount = computed(() => todoList.value.filter(t => t.status === 'pending').length)
 
 const notices = ref<NoticeItem[]>([
-  { id: 1, title: '2026年端午节放假通知', type: 'announcement', publishTime: '05-16', publisher: '行政部' },
-  { id: 2, title: 'ERP系统将于本周日凌晨进行升级维护', type: 'notice', publishTime: '05-15', publisher: '技术部' },
-  { id: 3, title: '关于规范出差报销流程的通知', type: 'announcement', publishTime: '05-13', publisher: '财务部' },
-  { id: 4, title: '5月份团建活动报名开始', type: 'notice', publishTime: '05-10', publisher: '行政部' },
-  { id: 5, title: '新客户管理规范发布', type: 'announcement', publishTime: '05-08', publisher: '销售部' }
+  { id: 1, title: '本周起新客户必须补全统一社会信用代码', type: 'announcement', publishTime: '06-03', publisher: '运营部' },
+  { id: 2, title: '同行渠道月结额度调整需走主管审批', type: 'notice', publishTime: '06-02', publisher: '财务部' },
+  { id: 3, title: '网销落地页新增“工商信息自动带出”表单', type: 'notice', publishTime: '06-01', publisher: '市场部' },
+  { id: 4, title: '地址资源池低库存区域请提前 7 天补充', type: 'announcement', publishTime: '05-31', publisher: '渠道资源部' },
+  { id: 5, title: '代理记账续费客户回访话术已更新', type: 'notice', publishTime: '05-30', publisher: '客户成功部' }
 ])
 
 interface RecentVisit { path: string; title: string; time: string }
@@ -206,7 +314,7 @@ function priorityTagType(p: string) {
 
 onMounted(() => {
   loadRecentVisits()
-  aiSummary.value = '今日有 12 项待办事项，5 条审批等待处理，重点关注杭州科技合同续签。'
+  aiSummary.value = '今日线索增长正常，但网销投产比、同行渠道应收和地址资源库存需要优先处理。'
 })
 </script>
 
@@ -214,9 +322,11 @@ onMounted(() => {
 .dashboard-home { display: flex; flex-direction: column; gap: 16px; }
 
 .welcome-card {
-  background: linear-gradient(135deg, #12121A 0%, #1A1A24 100%);
-  border: 1px solid rgba(212, 175, 55, 0.2);
-  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(15, 118, 110, 0.08)),
+    #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   padding: 24px 32px;
   margin-bottom: 0;
   position: relative;
@@ -224,16 +334,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.4), transparent);
-  }
+  box-shadow: var(--shadow-card);
 
   h2 {
     color: var(--text-primary);
@@ -247,16 +348,36 @@ onMounted(() => {
     font-size: 14px;
   }
 
+  .welcome-focus {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+
+    span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      color: var(--text-body);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+  }
+
   .welcome-date {
     color: var(--text-muted);
     display: flex;
     align-items: center;
     gap: 6px;
     font-size: 14px;
-    background: rgba(212, 175, 55, 0.08);
+    background: rgba(255, 255, 255, 0.68);
     padding: 8px 16px;
     border-radius: 8px;
-    border: 1px solid rgba(212, 175, 55, 0.15);
+    border: 1px solid var(--border-color);
   }
 }
 
@@ -266,15 +387,16 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   background: var(--bg-card);
-  border: 1px solid var(--border-gold);
-  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   padding: 20px;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: var(--shadow-card);
 
   &:hover {
-    border-color: var(--border-gold-hover);
-    box-shadow: var(--shadow-gold);
-    transform: translateY(-2px);
+    border-color: #bfdbfe;
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-1px);
   }
 }
 .stat-icon {
@@ -287,17 +409,30 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .stat-info {
+  min-width: 0;
+
   .stat-value {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 700;
-    color: var(--gold-primary);
+    color: var(--text-primary);
     line-height: 1.2;
+    white-space: nowrap;
   }
   .stat-label {
     color: var(--text-muted);
     font-size: 13px;
     margin-top: 4px;
+  }
+  .stat-trend {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+    white-space: normal;
+
+    &.up { color: #047857; }
+    &.warn { color: #b45309; }
+    &.danger { color: #dc2626; }
   }
 }
 
@@ -305,19 +440,19 @@ onMounted(() => {
 .card-header { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 
 :deep(.el-card) {
-  border-radius: 12px;
-  border: 1px solid rgba(212, 175, 55, 0.1);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
   background: var(--bg-card);
   box-shadow: var(--shadow-card);
   margin-bottom: 16px;
 }
 :deep(.el-card__header) {
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  border-bottom: 1px solid var(--border-soft);
 }
 :deep(.el-card__body) { padding: 16px 20px; }
 
-.shortcut-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .shortcut-item {
   display: flex;
   flex-direction: column;
@@ -325,15 +460,15 @@ onMounted(() => {
   gap: 8px;
   cursor: pointer;
   padding: 16px;
-  border-radius: 12px;
-  transition: all 0.3s ease;
+  border-radius: 8px;
+  transition: background 0.2s ease, transform 0.2s ease;
 
   &:hover {
-    background: rgba(212, 175, 55, 0.05);
-    transform: translateY(-2px);
+    background: #f8fbff;
+    transform: translateY(-1px);
 
     .shortcut-icon {
-      box-shadow: 0 4px 16px rgba(212, 175, 55, 0.2);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
     }
   }
 }
@@ -348,6 +483,43 @@ onMounted(() => {
 }
 .shortcut-name { font-size: 12px; color: var(--text-body); }
 
+.funnel-list {
+  display: grid;
+  gap: 14px;
+}
+.funnel-stage {
+  display: grid;
+  gap: 8px;
+}
+.funnel-stage-head {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.stage-name { color: var(--text-muted); }
+.stage-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.stage-rate {
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+.stage-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f7;
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+}
+
 .todo-list { display: flex; flex-direction: column; gap: 2px; }
 .todo-item {
   display: flex;
@@ -356,13 +528,112 @@ onMounted(() => {
   padding: 10px 4px;
   border-radius: 6px;
   transition: background 0.15s;
-  &:hover { background: rgba(212, 175, 55, 0.05); }
+  &:hover { background: #f8fbff; }
   &.done .todo-title { text-decoration: line-through; color: var(--text-muted); }
 }
 .todo-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .todo-title { font-size: 14px; color: var(--text-primary); }
 .todo-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .todo-date { font-size: 12px; color: var(--text-muted); }
+
+.business-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.business-item {
+  min-height: 104px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 14px;
+  background: #f8fbff;
+}
+.business-title {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.business-value {
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+.business-desc {
+  margin-top: 8px;
+  color: var(--text-body);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.risk-list {
+  display: grid;
+  gap: 10px;
+}
+.risk-item {
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px 12px 10px;
+  background: #fff;
+
+  &.high {
+    border-left-color: #dc2626;
+    background: #fff7f7;
+  }
+
+  p {
+    margin: 8px 0;
+    color: var(--text-body);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+.risk-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.risk-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.schedule-list {
+  display: grid;
+  gap: 12px;
+}
+.schedule-item {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 12px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--border-soft);
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+}
+.schedule-time {
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+.schedule-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.schedule-desc {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 
 .notice-list { display: flex; flex-direction: column; gap: 2px; }
 .notice-item {
@@ -373,7 +644,7 @@ onMounted(() => {
   border-radius: 6px;
   transition: background 0.15s;
   cursor: pointer;
-  &:hover { background: rgba(212, 175, 55, 0.05); }
+  &:hover { background: #f8fbff; }
 }
 .notice-title { flex: 1; font-size: 14px; color: var(--text-primary); }
 .notice-time { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
@@ -393,8 +664,36 @@ onMounted(() => {
   font-size: 14px;
   color: var(--text-primary);
   transition: background 0.15s;
-  &:hover { background: rgba(212, 175, 55, 0.05); }
+  &:hover { background: #f8fbff; }
 }
 .recent-time { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 .empty-tip { text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 14px; }
+
+@media (max-width: 1200px) {
+  .business-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .welcome-card {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .shortcut-grid,
+  .business-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .todo-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .todo-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
 </style>

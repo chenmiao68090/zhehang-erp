@@ -102,21 +102,29 @@ defineExpose({ tableRef })
 
 <style lang="scss" scoped>
 .pro-table {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+
   .pro-table-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 14px;
 
     .table-title h3 {
       font-size: 16px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--text-primary);
     }
 
     .table-toolbar {
       display: flex;
       gap: 8px;
+      flex-wrap: wrap;
     }
   }
 }

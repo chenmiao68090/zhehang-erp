@@ -3,30 +3,39 @@
     <div class="login-left">
       <div class="brand-content">
         <div class="brand-logo">
-          <img src="/vite.svg" alt="Logo" class="logo" />
-          <h1>{{ $t('login.title') }}</h1>
+          <div class="brand-mark">ZH</div>
+          <h1>浙杭集团</h1>
         </div>
         <p class="brand-subtitle">{{ $t('login.subtitle') }}</p>
         <div class="brand-features">
           <div class="feature-item">
             <el-icon :size="20"><DataAnalysis /></el-icon>
-            <span>智能数据分析</span>
+            <span>财税客户全流程经营看板</span>
           </div>
           <div class="feature-item">
             <el-icon :size="20"><Connection /></el-icon>
-            <span>全流程协同</span>
+            <span>挂靠地址与同行渠道管理</span>
           </div>
           <div class="feature-item">
             <el-icon :size="20"><Monitor /></el-icon>
-            <span>多端适配</span>
+            <span>网销线索与投产比追踪</span>
           </div>
         </div>
       </div>
     </div>
     <div class="login-right">
       <div class="login-form-wrapper">
-        <h2 class="login-title">欢迎登录</h2>
-        <p class="login-desc">请输入您的账号和密码</p>
+        <h2 class="login-title">浙杭集团工作台</h2>
+        <p class="login-desc">登录后进入客户、渠道、财务与交付协同工作台</p>
+        <div v-if="isDev" class="dev-account">
+          <div class="dev-account-copy">
+            <span>开发预览账号</span>
+            <strong>admin</strong>
+            <em>/</em>
+            <strong>admin123</strong>
+          </div>
+          <el-button link type="primary" @click="fillDemoAccount">填入</el-button>
+        </div>
         <el-form ref="loginFormRef" :model="loginForm" :rules="loginRules" size="large">
           <el-form-item prop="username">
             <el-input
@@ -45,16 +54,22 @@
               @keyup.enter="handleLogin"
             />
           </el-form-item>
-          <el-form-item prop="code">
+          <el-form-item v-if="captchaEnabled" prop="code">
             <div class="captcha-row">
               <el-input
                 v-model="loginForm.code"
                 :placeholder="$t('login.captcha')"
                 prefix-icon="Key"
               />
-              <div class="captcha-img" @click="refreshCaptcha">
-                <img v-if="captchaUrl" :src="captchaUrl" alt="captcha" />
-                <span v-else>点击获取</span>
+              <div class="captcha-img" :class="{ placeholder: captchaEmpty }" @click="refreshCaptcha">
+                <img
+                  v-if="captchaUrl"
+                  :src="captchaUrl"
+                  alt="captcha"
+                  @load="handleCaptchaLoad"
+                  @error="handleCaptchaError"
+                />
+                <span v-if="!captchaUrl || captchaEmpty">{{ captchaLoading ? '加载中' : '点击刷新验证码' }}</span>
               </div>
             </div>
           </el-form-item>
@@ -81,12 +96,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis, Connection, Monitor } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { setToken } from '@/utils/auth'
+
+// Mock 模式下使用的固定 Token（与 router/guard.ts 保持一致）
+const MOCK_TOKEN = 'mock_admin_token'
+// 开发环境允许后端不可用时回退 Mock 登录，生产环境仍只在显式开启时启用
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || import.meta.env.DEV
+const isDev = import.meta.env.DEV
+const captchaEnabled = import.meta.env.VITE_CAPTCHA_ENABLED === 'true'
 
 const router = useRouter()
 const route = useRoute()
@@ -96,22 +119,67 @@ const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
 const rememberMe = ref(false)
 const captchaUrl = ref('')
+const captchaLoading = ref(false)
+let captchaObjectUrl = ''
 
 const loginForm = reactive({
-  username: '',
-  password: '',
+  username: isDev ? 'admin' : '',
+  password: isDev ? 'admin123' : '',
   code: ''
 })
+
+const captchaEmpty = ref(false)
 
 const loginRules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
-function refreshCaptcha() {
+async function refreshCaptcha() {
   const apiBase = import.meta.env.VITE_API_BASE_URL || ''
   const captchaPath = apiBase ? `${apiBase}/auth/captcha` : '/api/auth/captcha'
-  captchaUrl.value = `${captchaPath}?t=${Date.now()}`
+  captchaLoading.value = true
+  captchaEmpty.value = false
+  try {
+    const response = await fetch(`${captchaPath}?t=${Date.now()}`, {
+      headers: { Accept: 'image/png,image/*;q=0.8' },
+      cache: 'no-store'
+    })
+    if (!response.ok) {
+      throw new Error(`captcha request failed: ${response.status}`)
+    }
+    const blob = await response.blob()
+    if (!blob.size || !blob.type.startsWith('image/')) {
+      throw new Error('captcha response is not an image')
+    }
+    if (captchaObjectUrl) {
+      URL.revokeObjectURL(captchaObjectUrl)
+    }
+    captchaObjectUrl = URL.createObjectURL(blob)
+    captchaUrl.value = captchaObjectUrl
+  } catch (error) {
+    console.error('[Login] 验证码加载失败', error)
+    captchaUrl.value = ''
+    captchaEmpty.value = true
+    ElMessage.warning('验证码加载失败，请点击重试')
+  } finally {
+    captchaLoading.value = false
+  }
+}
+
+function handleCaptchaLoad(event: Event) {
+  const img = event.target as HTMLImageElement
+  captchaEmpty.value = img.naturalWidth <= 1 && img.naturalHeight <= 1
+}
+
+function handleCaptchaError() {
+  captchaEmpty.value = true
+}
+
+function fillDemoAccount() {
+  loginForm.username = 'admin'
+  loginForm.password = 'admin123'
+  loginForm.code = ''
 }
 
 async function handleLogin() {
@@ -120,12 +188,24 @@ async function handleLogin() {
     if (!valid) return
     loading.value = true
     try {
-      await userStore.login(loginForm)
+      // 调用真实后端登录接口
+      await userStore.login({
+        ...loginForm,
+        username: loginForm.username.trim()
+      })
       const redirect = (route.query.redirect as string) || '/'
       router.push(redirect)
       ElMessage.success('登录成功')
     } catch (error: any) {
-      ElMessage.error(error.message || '登录失败')
+      if (USE_MOCK) {
+        console.warn('[Login] 后端不可用，开发环境回退 Mock 登录', error)
+        setToken(MOCK_TOKEN)
+        userStore.token = MOCK_TOKEN
+        router.push((route.query.redirect as string) || '/')
+        ElMessage.success('登录成功（Mock 模式）')
+      } else {
+        ElMessage.error(error?.message || '登录失败，请检查账号密码或后端服务')
+      }
     } finally {
       loading.value = false
     }
@@ -133,7 +213,15 @@ async function handleLogin() {
 }
 
 onMounted(() => {
-  refreshCaptcha()
+  if (captchaEnabled) {
+    refreshCaptcha()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (captchaObjectUrl) {
+    URL.revokeObjectURL(captchaObjectUrl)
+  }
 })
 </script>
 
@@ -200,10 +288,21 @@ onMounted(() => {
     gap: 16px;
     margin-bottom: 16px;
 
-    .logo {
+    .brand-mark {
       width: 48px;
       height: 48px;
-      filter: drop-shadow(0 0 12px rgba(212, 175, 55, 0.4));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(255, 255, 255, 0.04));
+      color: #D4AF37;
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0;
+      filter: drop-shadow(0 0 12px rgba(212, 175, 55, 0.26));
     }
 
     h1 {
@@ -282,7 +381,42 @@ onMounted(() => {
   .login-desc {
     font-size: 14px;
     color: var(--text-muted);
-    margin-bottom: 32px;
+    margin-bottom: 16px;
+  }
+
+  .dev-account {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    margin-bottom: 24px;
+    padding: 0 12px;
+    border: 1px solid rgba(212, 175, 55, 0.22);
+    border-radius: 8px;
+    background: rgba(212, 175, 55, 0.08);
+    color: var(--text-muted);
+    font-size: 12px;
+
+    .dev-account-copy {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    strong {
+      color: #D4AF37;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    em {
+      color: rgba(255, 255, 255, 0.35);
+      font-style: normal;
+    }
   }
 }
 
@@ -308,16 +442,31 @@ onMounted(() => {
     background-color: var(--bg-elevated);
     font-size: 12px;
     color: var(--text-muted);
-    transition: border-color 0.3s;
+    transition: border-color 0.3s, background-color 0.3s;
 
     &:hover {
       border-color: rgba(212, 175, 55, 0.4);
+      background-color: rgba(212, 175, 55, 0.04);
+    }
+
+    &.placeholder {
+      background-image: linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0%, rgba(255,255,255,0.02) 50%, rgba(212, 175, 55, 0.08) 100%);
+      color: #D4AF37;
+      font-weight: 600;
+      letter-spacing: 0.5px;
     }
 
     img {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      background-color: transparent;
+    }
+
+    span {
+      padding: 0 8px;
+      text-align: center;
+      line-height: 1.2;
     }
   }
 }

@@ -24,10 +24,12 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
     private final SysRoleMapper roleMapper;
 
     @Override
-    public IPage<SysRole> selectRolePage(int pageNum, int pageSize, String roleName) {
+    public IPage<SysRole> selectRolePage(int pageNum, int pageSize, String roleName, String roleKey, Integer status) {
         Page<SysRole> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<SysRole> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StringUtils.hasText(roleName), SysRole::getRoleName, roleName)
+               .like(StringUtils.hasText(roleKey), SysRole::getRoleKey, roleKey)
+               .eq(status != null, SysRole::getStatus, status)
                .orderByAsc(SysRole::getRoleSort);
         return roleMapper.selectPage(page, wrapper);
     }

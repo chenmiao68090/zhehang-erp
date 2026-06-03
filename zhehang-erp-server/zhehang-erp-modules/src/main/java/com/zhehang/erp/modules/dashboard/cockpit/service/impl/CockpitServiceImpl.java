@@ -57,13 +57,13 @@ public class CockpitServiceImpl implements CockpitService {
     @Cacheable(value = "cockpit:customer-source", unless = "#result == null")
     public List<CustomerSourceVO> getCustomerSource() {
         return Arrays.asList(
-            new CustomerSourceVO("\u7f51\u7edc\u63a8\u5e7f", 320),
-            new CustomerSourceVO("\u8001\u5ba2\u6237\u8f6c\u4ecb\u7ecd", 256),
-            new CustomerSourceVO("\u7535\u8bdd\u8425\u9500", 198),
-            new CustomerSourceVO("\u5c55\u4f1a\u6d3b\u52a8", 145),
-            new CustomerSourceVO("\u5408\u4f5c\u4f19\u4f34", 112),
-            new CustomerSourceVO("\u81ea\u4e3b\u62dc\u8bbf", 89),
-            new CustomerSourceVO("\u5176\u4ed6", 166)
+            new CustomerSourceVO("抖音信息流", 286),
+            new CustomerSourceVO("百度搜索", 238),
+            new CustomerSourceVO("电销拓客", 216),
+            new CustomerSourceVO("同行转介绍", 168),
+            new CustomerSourceVO("企查工商库", 142),
+            new CustomerSourceVO("老客户复购", 126),
+            new CustomerSourceVO("自然咨询", 110)
         );
     }
 
@@ -71,16 +71,16 @@ public class CockpitServiceImpl implements CockpitService {
     @Cacheable(value = "cockpit:sales-rank", unless = "#result == null")
     public List<SalesRankVO> getSalesRank() {
         return Arrays.asList(
-            new SalesRankVO(1, "\u5f20\u4f1f", "\u9500\u552e\u4e00\u90e8", new BigDecimal("2860000"), 18.5),
-            new SalesRankVO(2, "\u674e\u5a1c", "\u9500\u552e\u4e00\u90e8", new BigDecimal("2450000"), 12.3),
-            new SalesRankVO(3, "\u738b\u660e", "\u9500\u552e\u4e8c\u90e8", new BigDecimal("2180000"), 22.1),
-            new SalesRankVO(4, "\u8d75\u9759", "\u9500\u552e\u4e00\u90e8", new BigDecimal("1960000"), -5.2),
-            new SalesRankVO(5, "\u5218\u5f3a", "\u9500\u552e\u4e09\u90e8", new BigDecimal("1850000"), 8.7),
-            new SalesRankVO(6, "\u9648\u82b3", "\u9500\u552e\u4e8c\u90e8", new BigDecimal("1720000"), 15.4),
-            new SalesRankVO(7, "\u5468\u6d77", "\u9500\u552e\u4e09\u90e8", new BigDecimal("1580000"), 3.2),
-            new SalesRankVO(8, "\u6768\u96ea", "\u9500\u552e\u4e00\u90e8", new BigDecimal("1460000"), -2.1),
-            new SalesRankVO(9, "\u5434\u78ca", "\u9500\u552e\u4e8c\u90e8", new BigDecimal("1320000"), 9.8),
-            new SalesRankVO(10, "\u5b59\u4eae", "\u9500\u552e\u4e09\u90e8", new BigDecimal("1180000"), 6.5)
+            new SalesRankVO(1, "张星", "网销一组", new BigDecimal("2860000"), 18.5),
+            new SalesRankVO(2, "李娜", "电销一组", new BigDecimal("2450000"), 12.3),
+            new SalesRankVO(3, "王明", "渠道销售组", new BigDecimal("2180000"), 22.1),
+            new SalesRankVO(4, "赵静", "网销二组", new BigDecimal("1960000"), -5.2),
+            new SalesRankVO(5, "刘强", "企业服务组", new BigDecimal("1850000"), 8.7),
+            new SalesRankVO(6, "陈芳", "客户成功组", new BigDecimal("1720000"), 15.4),
+            new SalesRankVO(7, "周海", "渠道销售组", new BigDecimal("1580000"), 3.2),
+            new SalesRankVO(8, "杨雪", "网销一组", new BigDecimal("1460000"), -2.1),
+            new SalesRankVO(9, "吴磊", "电销二组", new BigDecimal("1320000"), 9.8),
+            new SalesRankVO(10, "孙亮", "企业服务组", new BigDecimal("1180000"), 6.5)
         );
     }
 
@@ -88,14 +88,14 @@ public class CockpitServiceImpl implements CockpitService {
     @Cacheable(value = "cockpit:recent-events", unless = "#result == null")
     public List<RecentEventVO> getRecentEvents() {
         return Arrays.asList(
-            new RecentEventVO("sign", "\u4e0e\u676d\u5dde\u667a\u8054\u79d1\u6280\u7b7e\u7ea6\u5e74\u5ea6\u670d\u52a1\u5408\u540c\uff0c\u91d1\u989d\uffe5128\u4e07", "2\u5206\u949f\u524d", "\u5f20\u4f1f"),
-            new RecentEventVO("receipt", "\u6536\u5230\u5b81\u6ce2\u6d77\u7eb3\u8d38\u6613\u56de\u6b3e\uffe545.6\u4e07", "15\u5206\u949f\u524d", "\u674e\u5a1c"),
-            new RecentEventVO("follow", "\u8ddf\u8fdb\u6e29\u5dde\u6c38\u5609\u673a\u68b0\u5546\u673a\uff0c\u5ba2\u6237\u610f\u5411\u79ef\u6781", "30\u5206\u949f\u524d", "\u738b\u660e"),
-            new RecentEventVO("lead", "\u65b0\u7ebf\u7d22\uff1a\u53f0\u5dde\u5929\u8fbe\u7535\u5b50\u6709\u91c7\u8d2d\u610f\u5411", "1\u5c0f\u65f6\u524d", "\u7cfb\u7edf"),
-            new RecentEventVO("sign", "\u4e0e\u7ecd\u5174\u534e\u7f8e\u7eba\u7ec7\u7b7e\u8ba2\u8bbe\u5907\u91c7\u8d2d\u5408\u540c\uffe586\u4e07", "1.5\u5c0f\u65f6\u524d", "\u8d75\u9759"),
-            new RecentEventVO("receipt", "\u6536\u5230\u91d1\u534e\u7f8e\u8fbe\u5de5\u5177\u56de\u6b3e\uffe532.8\u4e07", "2\u5c0f\u65f6\u524d", "\u5218\u5f3a"),
-            new RecentEventVO("alert", "\u5ba2\u6237\u300c\u5609\u5174\u5b9d\u5229\u300d\u5df2\u8d85\u8fc730\u5929\u672a\u8ddf\u8fdb\uff0c\u5b58\u5728\u6d41\u5931\u98ce\u9669", "3\u5c0f\u65f6\u524d", "\u7cfb\u7edf"),
-            new RecentEventVO("follow", "\u5b8c\u6210\u6e56\u5dde\u5357\u6d54\u96c6\u56e2\u9700\u6c42\u8c03\u7814", "4\u5c0f\u65f6\u524d", "\u9648\u82b3")
+            new RecentEventVO("sign", "与杭州松柏科技签约代理记账+税务顾问年度服务，金额￥12.8万", "2分钟前", "张星"),
+            new RecentEventVO("receipt", "收到同行渠道「杭企伙伴」挂靠地址批量订单回款￥45.6万", "15分钟前", "李娜"),
+            new RecentEventVO("follow", "跟进滨江新注册企业工商注册+银行开户需求，客户意向积极", "30分钟前", "王明"),
+            new RecentEventVO("lead", "新线索：浙江两杉生物科技自动带出工商信息并进入电销队列", "1小时前", "系统"),
+            new RecentEventVO("sign", "与杭州华锋智康签订税务异常解除专项服务￥8.6万", "1.5小时前", "赵静"),
+            new RecentEventVO("receipt", "收到金华美达商贸代理记账续费回款￥3.28万", "2小时前", "刘强"),
+            new RecentEventVO("alert", "渠道「杭企伙伴」应收超过账期 9 天，建议冻结新增订单", "3小时前", "系统"),
+            new RecentEventVO("follow", "完成西湖区挂靠地址资源补充沟通，预计新增 20 套", "4小时前", "陈芳")
         );
     }
 
@@ -103,21 +103,21 @@ public class CockpitServiceImpl implements CockpitService {
     @Cacheable(value = "cockpit:region", unless = "#result == null")
     public List<RegionDistributionVO> getRegionDistribution() {
         return Arrays.asList(
-            new RegionDistributionVO("\u6d59\u6c5f", 386),
-            new RegionDistributionVO("\u6c5f\u82cf", 215),
-            new RegionDistributionVO("\u5e7f\u4e1c", 178),
-            new RegionDistributionVO("\u4e0a\u6d77", 156),
-            new RegionDistributionVO("\u5c71\u4e1c", 98),
-            new RegionDistributionVO("\u5317\u4eac", 87),
-            new RegionDistributionVO("\u798f\u5efa", 76),
-            new RegionDistributionVO("\u56db\u5ddd", 52),
-            new RegionDistributionVO("\u6e56\u5317", 45),
-            new RegionDistributionVO("\u6cb3\u5357", 42),
-            new RegionDistributionVO("\u5b89\u5fbd", 38),
-            new RegionDistributionVO("\u6e56\u5357", 35),
-            new RegionDistributionVO("\u8fbd\u5b81", 28),
-            new RegionDistributionVO("\u91cd\u5e86", 22),
-            new RegionDistributionVO("\u5929\u6d25", 18)
+            new RegionDistributionVO("西湖区", 186),
+            new RegionDistributionVO("滨江区", 165),
+            new RegionDistributionVO("上城区", 142),
+            new RegionDistributionVO("拱墅区", 128),
+            new RegionDistributionVO("萧山区", 116),
+            new RegionDistributionVO("余杭区", 98),
+            new RegionDistributionVO("钱塘区", 86),
+            new RegionDistributionVO("临平区", 72),
+            new RegionDistributionVO("宁波", 65),
+            new RegionDistributionVO("嘉兴", 52),
+            new RegionDistributionVO("绍兴", 46),
+            new RegionDistributionVO("湖州", 38),
+            new RegionDistributionVO("金华", 32),
+            new RegionDistributionVO("台州", 28),
+            new RegionDistributionVO("温州", 24)
         );
     }
 
@@ -125,20 +125,21 @@ public class CockpitServiceImpl implements CockpitService {
     @Cacheable(value = "cockpit:alerts", unless = "#result == null")
     public AlertVO getAlerts() {
         AlertVO vo = new AlertVO();
-        vo.setOverdueReceiptCount(7);
-        vo.setOverdueReceiptAmount(new BigDecimal("456000"));
-        vo.setRiskCustomerCount(12);
-        vo.setExpiringContractCount(5);
-        vo.setStockWarningCount(3);
-        vo.setAbnormalApprovalCount(2);
+        vo.setOverdueReceiptCount(4);
+        vo.setOverdueReceiptAmount(new BigDecimal("186000"));
+        vo.setRiskCustomerCount(18);
+        vo.setExpiringContractCount(11);
+        vo.setStockWarningCount(2);
+        vo.setAbnormalApprovalCount(9);
         return vo;
     }
 
     @Override
     public AiSummaryVO getAiSummary() {
-        String prompt = "\u8bf7\u6839\u636e\u4ee5\u4e0b\u7ecf\u8425\u6570\u636e\u751f\u6210\u4e00\u4efd\u7b80\u6d01\u7684CEO\u7ecf\u8425\u5206\u6790\u6458\u8981\uff08Markdown\u683c\u5f0f\uff09\uff1a\n"
-            + "\u5ba2\u6237\u603b\u65701286\u5bb6\uff0c\u672c\u6708\u65b0\u589e68\u5bb6\uff0c\u5e74\u5ea6\u8425\u65361856\u4e07\uff0c\u672c\u6708\u56de\u6b3e268\u4e07\uff0c"
-            + "\u5f85\u7b7e\u5408\u540c23\u4efd\uff0c\u5458\u5de5186\u4eba\uff0c\u903e\u671f\u56de\u6b3e7\u7b14\uff0c\u6d41\u5931\u98ce\u9669\u5ba2\u624312\u5bb6\u3002";
+        String prompt = "请根据以下财税公司经营数据生成一份简洁的CEO经营分析摘要（Markdown格式）：\n"
+            + "服务客户1286家，本月新签客户68家，本月签约额1856万，本月回款268万，"
+            + "待签订单23份，服务人员186人，同行渠道逾期应收4笔，代理记账续费风险客户18家，"
+            + "地址资源低库存区域2个，工商注册材料异常9单，网销ROI为2.8，目标ROI为3.2。";
         try {
             String reply = aiService.chat(prompt, new HashMap<>());
             AiSummaryVO vo = new AiSummaryVO();
@@ -148,7 +149,7 @@ public class CockpitServiceImpl implements CockpitService {
             return vo;
         } catch (Exception e) {
             AiSummaryVO vo = new AiSummaryVO();
-            vo.setContent("## \u7ecf\u8425\u6458\u8981\n\n### \u6838\u5fc3\u6307\u6807\n- \u5ba2\u6237\u603b\u6570\uff1a**1,286\u5bb6** (\u2191 12.5%)\n- \u5e74\u5ea6\u8425\u6536\uff1a**\uffe51,856\u4e07** (\u2191 15.2%)\n- \u672c\u6708\u56de\u6b3e\uff1a**\uffe5268\u4e07** (\u2193 3.1%)\n\n### \u98ce\u9669\u63d0\u793a\n- \u903e\u671f\u56de\u6b3e **7\u7b14**\uff0c\u91d1\u989d\uffe545.6\u4e07\uff0c\u5efa\u8bae\u52a0\u5feb\u50ac\u6536\n- \u6d41\u5931\u98ce\u9669\u5ba2\u6237 **12\u5bb6**\uff0c\u5efa\u8bae\u5b89\u6392\u4e13\u4eba\u56de\u8bbf\n\n### \u5efa\u8bae\u884c\u52a8\n1. \u672c\u5468\u91cd\u70b9\u63a8\u8fdb23\u4efd\u5f85\u7b7e\u5408\u540c\n2. \u5173\u6ce8\u56de\u6b3e\u4e0b\u964d\u8d8b\u52bf\uff0c\u4f18\u5316\u6536\u6b3e\u7b56\u7565");
+            vo.setContent("## 经营摘要\n\n### 核心指标\n- 服务客户：**1,286家**（↑ 12.5%）\n- 本月签约额：**￥1,856万**（↑ 15.2%）\n- 本月回款：**￥268万**（↓ 3.1%）\n- 网销ROI：**2.8**，低于目标 **3.2**\n\n### 风险提示\n- 同行渠道逾期应收 **4笔**，金额￥18.6万，建议冻结超账期渠道新增订单\n- 代理记账续费风险客户 **18家**，建议客户成功当天完成分层回访\n- 地址资源低库存区域 **2个**，建议提前补充西湖区、滨江区资源\n\n### 建议行动\n1. 先处理网销ROI和渠道应收，避免增长质量下滑\n2. 建立线索入库工商信息自动补全，提升销售跟进效率\n3. 将地址资源库存预警前置到订单创建环节");
             vo.setGeneratedAt(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
             vo.setProvider("fallback");
             return vo;

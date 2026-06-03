@@ -239,11 +239,7 @@ function renderChart(index: number) {
     chartInstances.value[index] = instance
   }
 
-  const demoData = [
-    { name: '1月', value: 120 }, { name: '2月', value: 200 },
-    { name: '3月', value: 150 }, { name: '4月', value: 280 },
-    { name: '5月', value: 220 }, { name: '6月', value: 310 }
-  ]
+  const demoData: Array<{ name: string; value: number }> = []
 
   const color = item.color || '#F26522'
   let option: any = {}

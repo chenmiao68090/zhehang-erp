@@ -22,3 +22,11 @@ target/
 # Misc
 *.tmp
 *.swp
+
+# AI / 工具 的私有工作目录（多 AI 协同：互不提交对方的临时文件）
+.claude/
+.codex-work/
+.codex-screenshots/
+.qoder/
+.cursor/
+.aider*

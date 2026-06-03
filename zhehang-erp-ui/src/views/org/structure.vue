@@ -91,7 +91,7 @@ const loadTree = async () => {
   try {
     const res = await structureApi.tree()
     treeData.value = res.data || []
-  } catch (e) { console.error(e) }
+  } catch (e) { /* ignore */ }
 }
 
 onMounted(loadTree)

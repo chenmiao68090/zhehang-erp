@@ -71,8 +71,8 @@ const msgList = ref<MsgItem[]>([
   { id: 5, title: '李四回复了您的评论', createTime: '昨天', isRead: true, type: 'message' }
 ])
 const todoList = ref<MsgItem[]>([
-  { id: 6, title: '审批张三的报销申请', createTime: '08:45', isRead: false, link: '/workflow/todo', type: 'approval' },
-  { id: 7, title: '合同到期跟进提醒', createTime: '昨天', isRead: false, link: '/crm/contract', type: 'task' },
+  { id: 6, title: '审批张三的报销申请', createTime: '08:45', isRead: false, link: '/task-center/once', type: 'approval' },
+  { id: 7, title: '合同到期跟进提醒', createTime: '昨天', isRead: false, link: '/order/contract', type: 'task' },
   { id: 8, title: '完成月度销售报告', createTime: '05-16', isRead: true, type: 'task' }
 ])
 

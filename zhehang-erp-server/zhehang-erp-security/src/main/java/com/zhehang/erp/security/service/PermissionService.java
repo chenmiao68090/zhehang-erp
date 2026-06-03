@@ -14,6 +14,9 @@ public class PermissionService {
         if (authentication == null || !(authentication.getPrincipal() instanceof LoginUser loginUser)) {
             return false;
         }
+        if (Long.valueOf(1L).equals(loginUser.getUserId()) || "admin".equals(loginUser.getUsername())) {
+            return true;
+        }
         if (CollectionUtils.isEmpty(loginUser.getPermissions())) {
             return false;
         }

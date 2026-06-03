@@ -33,13 +33,14 @@
 
       <el-table v-loading="loading" :data="roleList" border stripe>
         <el-table-column :label="$t('system.role.roleName')" prop="roleName" min-width="150" />
-        <el-table-column label="权限分配" min-width="180">
+        <el-table-column :label="$t('system.role.roleKey')" prop="roleKey" min-width="150" />
+        <el-table-column :label="$t('system.role.permissionAssignment')" min-width="180">
           <template #default="{ row }">
             <el-tag type="warning" size="small">
-              {{ dataScopeLabels[row.dataScope] || '自定义' }}
+              {{ getDataScopeLabel(row.dataScope) }}
             </el-tag>
             <el-tag v-if="row.menuIds && row.menuIds.length" size="small" style="margin-left: 4px">
-              {{ row.menuIds.length }}项菜单
+              {{ $t('system.role.menuCount', { count: row.menuIds.length }) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -68,13 +69,16 @@
         <el-form-item :label="$t('system.role.roleName')" prop="roleName">
           <el-input v-model="form.roleName" :placeholder="$t('common.inputPlaceholder')" />
         </el-form-item>
-        <el-form-item label="数据查看权限" prop="dataScope">
-          <el-select v-model="form.dataScope" placeholder="请选择数据权限范围" style="width: 100%">
-            <el-option label="全部数据权限" :value="1" />
-            <el-option label="自定义数据权限" :value="2" />
-            <el-option label="本部门数据权限" :value="3" />
-            <el-option label="本部门及以下" :value="4" />
-            <el-option label="仅本人数据" :value="5" />
+        <el-form-item :label="$t('system.role.roleKey')" prop="roleKey">
+          <el-input v-model="form.roleKey" :placeholder="$t('common.inputPlaceholder')" />
+        </el-form-item>
+        <el-form-item :label="$t('system.role.dataScopeType')" prop="dataScope">
+          <el-select v-model="form.dataScope" :placeholder="$t('system.role.dataScopePlaceholder')" style="width: 100%">
+            <el-option :label="$t('system.role.scopeAll')" :value="1" />
+            <el-option :label="$t('system.role.scopeCustom')" :value="2" />
+            <el-option :label="$t('system.role.scopeDept')" :value="3" />
+            <el-option :label="$t('system.role.scopeDeptBelow')" :value="4" />
+            <el-option :label="$t('system.role.scopeSelf')" :value="5" />
           </el-select>
         </el-form-item>
         <el-form-item :label="$t('system.role.sort')" prop="roleSort">
@@ -124,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -132,12 +136,12 @@ import { roleApi, menuApi } from '@/api/system'
 
 const { t } = useI18n()
 
-const dataScopeLabels: Record<number, string> = {
-  1: '全部数据',
-  2: '自定义权限',
-  3: '本部门',
-  4: '本部门及以下',
-  5: '仅本人'
+const dataScopeLabelKeys: Record<number, string> = {
+  1: 'system.role.scopeAllShort',
+  2: 'system.role.scopeCustomShort',
+  3: 'system.role.scopeDeptShort',
+  4: 'system.role.scopeDeptBelowShort',
+  5: 'system.role.scopeSelfShort'
 }
 
 const queryParams = reactive({
@@ -169,7 +173,8 @@ const form = reactive<any>({
 
 const rules = reactive<FormRules>({
   roleName: [{ required: true, message: () => t('system.role.roleNameRequired'), trigger: 'blur' }],
-  dataScope: [{ required: true, message: '请选择数据权限范围', trigger: 'change' }]
+  roleKey: [{ required: true, message: () => t('system.role.roleKeyRequired'), trigger: 'blur' }],
+  dataScope: [{ required: true, message: () => t('system.role.dataScopeRequired'), trigger: 'change' }]
 })
 
 const menuTree = ref<any[]>([])
@@ -227,17 +232,20 @@ function handleAdd() {
 async function handleEdit(row: any) {
   resetForm()
   dialogTitle.value = t('common.edit')
+  let checkedKeys: number[] = []
   try {
     const res: any = await roleApi.detail(row.id)
     Object.assign(form, res.data)
-    // Load role menu tree to check nodes
     const menuRes: any = await menuApi.roleMenuTreeselect(row.id)
-    const checkedKeys = menuRes.data?.map((m: any) => m.id) || []
-    setTimeout(() => {
-      menuTreeRef.value?.setCheckedKeys(checkedKeys)
-    }, 100)
-  } catch (_e) { /* */ }
+    checkedKeys = normalizeRoleMenuCheckedKeys(menuRes.data)
+  } catch (_e) {
+    return
+  }
   dialogVisible.value = true
+  await nextTick()
+  window.setTimeout(() => {
+    menuTreeRef.value?.setCheckedKeys(checkedKeys)
+  }, 100)
 }
 
 function handleDelete(row: any) {
@@ -271,7 +279,9 @@ async function submitForm() {
   await formRef.value.validate()
   submitLoading.value = true
   try {
-    const menuIds = menuTreeRef.value?.getCheckedKeys() || []
+    const checkedKeys = menuTreeRef.value?.getCheckedKeys() || []
+    const halfCheckedKeys = menuTreeRef.value?.getHalfCheckedKeys?.() || []
+    const menuIds = Array.from(new Set([...checkedKeys, ...halfCheckedKeys]))
     const data = { ...form, menuIds }
     if (form.id) {
       await roleApi.update(data)
@@ -298,6 +308,60 @@ function resetForm() {
   setTimeout(() => {
     menuTreeRef.value?.setCheckedKeys([])
   }, 100)
+}
+
+function collectTreeIds(nodes: any[]) {
+  const ids: number[] = []
+  const walk = (items: any[]) => {
+    items.forEach((item) => {
+      if (item?.id !== undefined && item?.id !== null) {
+        ids.push(item.id)
+      }
+      if (Array.isArray(item?.children) && item.children.length) {
+        walk(item.children)
+      }
+    })
+  }
+  walk(nodes)
+  return ids
+}
+
+function normalizeRoleMenuCheckedKeys(data: any) {
+  if (Array.isArray(data)) {
+    return collectTreeIds(data)
+  }
+
+  if (Array.isArray(data?.menus)) {
+    menuTree.value = data.menus
+  }
+
+  if (Array.isArray(data?.checkedKeys)) {
+    return data.checkedKeys
+  }
+
+  if (Array.isArray(data?.menuIds)) {
+    return getLeafCheckedKeys(data.menuIds, menuTree.value)
+  }
+
+  return []
+}
+
+function getLeafCheckedKeys(menuIds: number[], tree: any[]) {
+  const parentIds = new Set<number>()
+  const walk = (nodes: any[]) => {
+    nodes.forEach((node) => {
+      if (Array.isArray(node.children) && node.children.length) {
+        parentIds.add(Number(node.id))
+        walk(node.children)
+      }
+    })
+  }
+  walk(tree)
+  return menuIds.filter((id) => !parentIds.has(Number(id)))
+}
+
+function getDataScopeLabel(scope: number) {
+  return t(dataScopeLabelKeys[scope] || 'system.role.scopeCustomShort')
 }
 </script>
 

@@ -196,7 +196,71 @@ function seedTasks(): BizTask[] {
 }
 
 function seedHandovers(): BizTaskHandover[] {
-  return []
+  const itemNames = ['杭州启辰科技有限公司', '银行开户许可证 / 基本户信息', '法人身份证', '税控盘 / CA 证书', '历史账务资料', '三方协议', '发票领购簿', '公司章程', '股东信息', '客户特殊约定']
+  const buildItems = (handoverId: number, confirmedCount: number, rejectedIndex = -1) => itemNames.map((name, index) => ({
+    id: handoverId * 100 + index + 1,
+    handoverId,
+    itemType: index === 0 ? 'customer' : 'document',
+    itemId: index === 0 ? 7000 + handoverId : 0,
+    itemName: index === 0 ? name : itemNames[index],
+    itemDesc: '',
+    status: (index === rejectedIndex ? 'rejected' : index < confirmedCount ? 'confirmed' : 'pending') as BizTaskHandoverItem['status'],
+    remark: index === rejectedIndex ? '资料版本不一致，需销售重新上传' : ''
+  } as BizTaskHandoverItem))
+
+  return [
+    {
+      id: 1,
+      handoverNo: 'HO20260604001',
+      fromUserId: 1003,
+      fromUserName: '张小兰',
+      toUserId: 2001,
+      toUserName: '陈会计',
+      reason: 'transfer',
+      handoverDate: dateOnly(2),
+      status: 'in_progress',
+      approverId: 0,
+      approverName: '',
+      approvalTime: '',
+      items: buildItems(1, 4, 4),
+      remark: '杭州启辰科技有限公司',
+      createTime: ts(-1)
+    },
+    {
+      id: 2,
+      handoverNo: 'HO20260603002',
+      fromUserId: 1004,
+      fromUserName: '李明',
+      toUserId: 2002,
+      toUserName: '王会计',
+      reason: 'transfer',
+      handoverDate: dateOnly(-1),
+      status: 'in_progress',
+      approverId: 0,
+      approverName: '',
+      approvalTime: '',
+      items: buildItems(2, 3),
+      remark: '宁波星禾贸易有限公司',
+      createTime: ts(-2)
+    },
+    {
+      id: 3,
+      handoverNo: 'HO20260601003',
+      fromUserId: 1005,
+      fromUserName: '王倩',
+      toUserId: 2003,
+      toUserName: '李税务',
+      reason: 'transfer',
+      handoverDate: dateOnly(-3),
+      status: 'completed',
+      approverId: 1,
+      approverName: '超级管理员',
+      approvalTime: ts(-1),
+      items: buildItems(3, 10),
+      remark: '绍兴麦田咨询有限公司',
+      createTime: ts(-4)
+    }
+  ]
 }
 
 function seedCommissions(): BizCommission[] {
@@ -421,6 +485,13 @@ export const handoverApi = {
     if (params.status) list = list.filter(h => h.status === params.status)
     if (params.fromUserName) list = list.filter(h => (h.fromUserName || '').includes(params.fromUserName!))
     return delay(paginate(list, params.page, params.pageSize))
+  },
+  ensureSamples() {
+    const list = load<BizTaskHandover>(HO_KEY, seedHandovers)
+    if (list.length > 0) return delay({ created: 0, total: list.length })
+    const seed = seedHandovers()
+    save(HO_KEY, seed)
+    return delay({ created: seed.length, total: seed.length })
   },
   create(data: Partial<BizTaskHandover>): Promise<BizTaskHandover> {
     const list = load<BizTaskHandover>(HO_KEY, seedHandovers)

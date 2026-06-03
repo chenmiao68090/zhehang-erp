@@ -175,26 +175,39 @@
       </el-collapse>
     </section>
 
-    <!-- 结算单详情 Drawer -->
-    <el-drawer v-model="detailVisible" size="68%" :with-header="false" class="commission-drawer">
-      <div v-if="detail" class="drawer-body">
-        <div class="drawer-head">
-          <div>
-            <div class="drawer-tag">SETTLEMENT · {{ detail.commissionNo }}</div>
-            <h2 class="drawer-title">{{ detail.salespersonName }} · {{ detail.period }}</h2>
-          </div>
-          <el-tag :type="statusTagType(detail.status)" effect="dark" size="large">{{ statusLabel(detail.status) }}</el-tag>
-        </div>
+    <BusinessDetailDrawer
+      v-if="detail"
+      v-model="detailVisible"
+      :title="`${detail.salespersonName || '销售'} · ${detail.period}`"
+      :subtitle="`${detail.customerName || '客户'} · ${detail.orderNo || '订单'}`"
+      eyebrow="提成结算单"
+      :avatar="(detail.salespersonName || '提成').slice(0, 2)"
+      :avatar-class="commissionAvatarClass(detail.status)"
+      :status-text="statusLabel(detail.status)"
+      :status-type="statusTagType(detail.status)"
+      size="760px"
+    >
+      <template #actions>
+        <span class="amount-pill">实发 ¥{{ formatAmount(detail.finalAmount) }}</span>
+      </template>
 
-        <div class="info-grid">
-          <div class="info-cell"><label>结算月份</label><span>{{ detail.period }}</span></div>
-          <div class="info-cell"><label>销售</label><span>{{ detail.salespersonName }}</span></div>
-          <div class="info-cell"><label>状态</label><span>{{ statusLabel(detail.status) }}</span></div>
-          <div class="info-cell"><label>创建时间</label><span>{{ detail.createTime }}</span></div>
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>结算单号</span><b>{{ detail.commissionNo }}</b></div>
+          <div class="bd-kv"><span>结算月份</span><b>{{ detail.period }}</b></div>
+          <div class="bd-kv"><span>销售姓名</span><b>{{ detail.salespersonName || '—' }}</b></div>
+          <div class="bd-kv"><span>订单编号</span><b>{{ detail.orderNo || '—' }}</b></div>
+          <div class="bd-kv"><span>业绩金额</span><b>¥{{ formatAmount(detail.baseAmount) }}</b></div>
+          <div class="bd-kv"><span>提成比例</span><b>{{ detail.commissionRate }}%</b></div>
+          <div class="bd-kv"><span>激励奖金</span><b>¥{{ formatAmount(detail.bonusAmount) }}</b></div>
+          <div class="bd-kv"><span>扣回金额</span><b>¥{{ formatAmount(detail.deductionAmount) }}</b></div>
+          <div class="bd-kv"><span>创建时间</span><b>{{ detail.createTime || '—' }}</b></div>
+          <div class="bd-kv"><span>当前状态</span><b>{{ statusLabel(detail.status) }}</b></div>
         </div>
+      </template>
 
-        <div class="drawer-section-title">提成明细</div>
-        <el-table :data="detailItems" stripe class="dark-table">
+      <div class="bd-section-title">提成明细</div>
+      <el-table :data="detailItems" stripe class="drawer-table">
           <el-table-column prop="orderNo" label="订单编号" width="160" />
           <el-table-column prop="customerName" label="客户名称" min-width="200" />
           <el-table-column label="订单金额" align="right" width="130">
@@ -210,8 +223,8 @@
           </el-table-column>
         </el-table>
 
-        <div class="drawer-section-title">退款扣回明细</div>
-        <el-table :data="deductItems" stripe class="dark-table" empty-text="无退款扣回">
+      <div class="bd-section-title commission-section-gap">退款扣回明细</div>
+      <el-table :data="deductItems" stripe class="drawer-table" empty-text="无退款扣回">
           <el-table-column prop="orderNo" label="原订单" width="160" />
           <el-table-column label="退款金额" align="right" width="140">
             <template #default="{ row }">¥{{ formatAmount(row.refundAmount) }}</template>
@@ -224,29 +237,47 @@
           <el-table-column prop="reason" label="扣回原因" min-width="200" />
         </el-table>
 
-        <div class="amount-summary">
-          <div class="sum-cell">
-            <label>应发总额</label>
-            <span>¥{{ formatAmount(detail.commissionAmount + detail.bonusAmount) }}</span>
-          </div>
-          <div class="sum-op">−</div>
-          <div class="sum-cell">
-            <label>扣回金额</label>
-            <span class="deduct">¥{{ formatAmount(detail.deductionAmount) }}</span>
-          </div>
-          <div class="sum-op">＝</div>
-          <div class="sum-cell final">
-            <label>实发金额</label>
-            <span>¥{{ formatAmount(detail.finalAmount) }}</span>
-          </div>
+      <div class="amount-summary">
+        <div class="sum-cell">
+          <label>应发总额</label>
+          <span>¥{{ formatAmount(detail.commissionAmount + detail.bonusAmount) }}</span>
         </div>
+        <div class="sum-op">−</div>
+        <div class="sum-cell">
+          <label>扣回金额</label>
+          <span class="deduct">¥{{ formatAmount(detail.deductionAmount) }}</span>
+        </div>
+        <div class="sum-op">＝</div>
+        <div class="sum-cell final">
+          <label>实发金额</label>
+          <span>¥{{ formatAmount(detail.finalAmount) }}</span>
+        </div>
+      </div>
 
-        <div class="drawer-section-title">审核流程</div>
-        <el-steps :active="stepIndex(detail)" finish-status="success" align-center class="dark-steps">
+      <div class="bd-section-title">审核流程</div>
+      <div class="commission-step-wrap">
+        <el-steps :active="stepIndex(detail)" finish-status="success" align-center>
           <el-step v-for="(s, i) in flowSteps" :key="i" :title="s.label" :description="stepDesc(detail, i)" />
         </el-steps>
+      </div>
 
-        <div class="drawer-actions">
+      <template #timeline>
+        <div v-for="(s, i) in flowSteps" :key="s.key" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: flowStepDone(detail, i) }" />
+          <div>
+            <strong>{{ s.label }}</strong>
+            <p>{{ flowTimelineDesc(detail, i) }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="commission-footer-summary">
+          <span>应发 <b>¥{{ formatAmount(detail.commissionAmount + detail.bonusAmount) }}</b></span>
+          <span>扣回 <b class="deduct">¥{{ formatAmount(detail.deductionAmount) }}</b></span>
+          <span>实发 <b>¥{{ formatAmount(detail.finalAmount) }}</b></span>
+        </div>
+        <div class="commission-footer-actions">
           <template v-if="canSalesAct(detail)">
             <el-button type="primary" @click="actSales(detail, true)">确认无误</el-button>
             <el-button type="danger" @click="actSales(detail, false)">有异议</el-button>
@@ -267,8 +298,8 @@
           <el-button v-if="canMarkPaid(detail)" type="success" @click="markPaid(detail)">标记已发放</el-button>
           <el-button @click="detailVisible = false">关闭</el-button>
         </div>
-      </div>
-    </el-drawer>
+      </template>
+    </BusinessDetailDrawer>
 
     <!-- 生成结算单 -->
     <el-dialog v-model="generateVisible" title="生成结算单" width="520px" class="commission-dialog">
@@ -292,6 +323,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search, View } from '@element-plus/icons-vue'
 import { commissionApi, commissionAggregator, type BizCommission } from '@/api/task-center'
 import { useUserStore } from '@/stores/user'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const userStore = useUserStore()
 
@@ -466,6 +498,17 @@ function statusTagType(s: string): any {
     finance_confirmed: 'warning', boss_approved: 'primary', paid: 'success', rejected: 'danger'
   } as any)[s] || ''
 }
+function commissionAvatarClass(s: string) {
+  return ({
+    pending: 'company',
+    sales_confirmed: 'warning',
+    manager_reviewed: 'warning',
+    finance_confirmed: 'warning',
+    boss_approved: 'channel',
+    paid: 'success',
+    rejected: 'danger'
+  } as Record<string, string>)[s] || 'company'
+}
 
 function stepIndex(c: BizCommission) {
   return ({
@@ -482,6 +525,18 @@ function stepDesc(c: BizCommission, i: number) {
     4: c.payTime ? `发放 · ${c.payTime.slice(5, 16)}` : ''
   }
   return map[i] || ''
+}
+function flowStepDone(c: BizCommission, i: number) {
+  if (c.status === 'paid') return true
+  if (c.status === 'rejected') return i === 0 && !!c.salesConfirmTime
+  return stepIndex(c) > i
+}
+function flowTimelineDesc(c: BizCommission, i: number) {
+  const desc = stepDesc(c, i)
+  if (desc) return desc
+  if (c.status === 'rejected') return i === 0 ? `流程已驳回：${c.remark || '待重新核对'}` : '未进入该节点'
+  if (stepIndex(c) === i) return '当前待处理节点'
+  return stepIndex(c) > i ? '已完成' : '待流转'
 }
 
 function openDetail(row: BizCommission) {
@@ -1058,6 +1113,76 @@ onMounted(async () => {
 }
 .drawer-actions {
   border-top-color: #e2e8f0;
+}
+.amount-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  background: #f0fdf4;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+}
+.commission-section-gap {
+  margin-top: 18px;
+}
+.drawer-table {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  :deep(.el-table__header th) {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 650;
+  }
+  :deep(.el-table__body td) {
+    color: #334155;
+  }
+}
+.commission-step-wrap {
+  padding: 14px 8px 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+  :deep(.el-step__title) {
+    color: #475569;
+  }
+  :deep(.el-step__description) {
+    color: #64748b;
+    font-size: 12px;
+  }
+  :deep(.el-step__head.is-success),
+  :deep(.el-step__head.is-process) {
+    color: #2563eb;
+    border-color: #2563eb;
+  }
+  :deep(.el-step__title.is-success) {
+    color: #2563eb;
+  }
+}
+.commission-footer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+  b {
+    color: #0f766e;
+    font-family: 'JetBrains Mono', monospace;
+    &.deduct {
+      color: #dc2626;
+    }
+  }
+}
+.commission-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .form-tip {
   color: #475569;

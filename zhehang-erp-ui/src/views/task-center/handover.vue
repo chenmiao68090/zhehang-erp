@@ -100,33 +100,41 @@
       </div>
     </section>
 
-    <!-- 交接详情 Drawer -->
-    <el-drawer v-model="detailVisible" size="64%" :with-header="false" class="handover-drawer">
-      <div v-if="detail" class="drawer-body">
-        <div class="drawer-head">
-          <div>
-            <div class="drawer-tag">HANDOVER · {{ detail.handoverNo }}</div>
-            <h2 class="drawer-title">{{ detail.customerName || '客户资料交接' }}</h2>
-          </div>
-          <el-tag :type="statusTagType(detail)" effect="dark" size="large">{{ statusLabel(detail) }}</el-tag>
-        </div>
+    <BusinessDetailDrawer
+      v-if="detail"
+      v-model="detailVisible"
+      :title="detail.customerName || '客户资料交接'"
+      :subtitle="`${detail.fromUserName || '销售'} → ${detail.toUserName || '会计'} · ${detail.handoverNo}`"
+      eyebrow="客户资料交接"
+      :avatar="(detail.customerName || '交接').slice(0, 2)"
+      :avatar-class="handoverAvatarClass(detail)"
+      :status-text="statusLabel(detail)"
+      :status-type="statusTagType(detail)"
+      size="720px"
+    >
+      <template #actions>
+        <span v-if="isOverdue(detail)" class="overdue-pill">逾期 {{ overdueDays(detail) }} 天</span>
+      </template>
 
-        <div v-if="isOverdue(detail)" class="warning-bar">
-          <span class="warning-icon">⚠</span>
-          交接已逾期 {{ overdueDays(detail) }} 天，请尽快协调销售补齐资料并由会计完成确认
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>交接编号</span><b>{{ detail.handoverNo }}</b></div>
+          <div class="bd-kv"><span>关联合同</span><b>{{ detail.contractNo || '—' }}</b></div>
+          <div class="bd-kv"><span>销售移交</span><b>{{ detail.fromUserName || '—' }}</b></div>
+          <div class="bd-kv"><span>会计接收</span><b>{{ detail.toUserName || '—' }}</b></div>
+          <div class="bd-kv"><span>截止日期</span><b>{{ detail.handoverDate || '—' }}</b></div>
+          <div class="bd-kv"><span>创建时间</span><b>{{ detail.createTime || '—' }}</b></div>
+          <div class="bd-kv"><span>必须项完成</span><b>{{ requiredDone(detail) }} / {{ requiredTotal(detail) }}</b></div>
+          <div class="bd-kv"><span>整体完成率</span><b>{{ completion(detail) }}%</b></div>
         </div>
+      </template>
 
-        <div class="info-grid">
-          <div class="info-cell"><label>关联合同</label><span>{{ detail.contractNo || '—' }}</span></div>
-          <div class="info-cell"><label>客户</label><span>{{ detail.customerName }}</span></div>
-          <div class="info-cell"><label>销售</label><span>{{ detail.fromUserName }}</span></div>
-          <div class="info-cell"><label>会计</label><span>{{ detail.toUserName }}</span></div>
-          <div class="info-cell"><label>截止日</label><span>{{ detail.handoverDate }}</span></div>
-          <div class="info-cell"><label>创建时间</label><span>{{ detail.createTime }}</span></div>
-        </div>
+      <div v-if="isOverdue(detail)" class="handover-warning-note">
+        交接已逾期 {{ overdueDays(detail) }} 天，请尽快协调销售补齐资料并由会计完成确认。
+      </div>
 
-        <div class="drawer-section-title">十项标准化交接清单</div>
-        <el-table :data="detail.items" stripe class="dark-table checklist-table">
+      <div class="bd-section-title">十项标准化交接清单</div>
+      <el-table :data="detail.items" stripe class="drawer-table checklist-table">
           <el-table-column type="index" label="序号" width="64" align="center" />
           <el-table-column label="项目名称" min-width="220">
             <template #default="{ row }">
@@ -184,22 +192,50 @@
           </el-table-column>
         </el-table>
 
-        <div class="drawer-footer">
-          <div class="footer-summary">
-            <span>必须项：<b>{{ requiredDone(detail) }} / {{ requiredTotal(detail) }}</b></span>
-            <span>整体完成率：<b>{{ completion(detail) }}%</b></span>
-          </div>
-          <div class="footer-actions">
-            <el-button @click="detailVisible = false">关闭</el-button>
-            <el-button
-              type="primary"
-              :disabled="!canComplete(detail)"
-              @click="completeHandover(detail)"
-            >交接完成</el-button>
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>交接创建</strong>
+            <p>{{ detail.createTime || '—' }} · {{ detail.fromUserName || '销售' }} 发起客户资料交接。</p>
           </div>
         </div>
-      </div>
-    </el-drawer>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: requiredDone(detail) === requiredTotal(detail) }" />
+          <div>
+            <strong>销售补齐资料</strong>
+            <p>必须项 {{ requiredDone(detail) }} / {{ requiredTotal(detail) }}，整体完成率 {{ completion(detail) }}%。</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: detail.items.every(i => i.status === 'confirmed') }" />
+          <div>
+            <strong>会计确认</strong>
+            <p>{{ detail.toUserName || '会计' }} 确认资料是否齐全、合格，并退回不合格项。</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: detail.status === 'completed' }" />
+          <div>
+            <strong>后续联动</strong>
+            <p>{{ detail.status === 'completed' ? '已生成建账初始化任务，客户进入服务准备阶段。' : '必须项全部确认后，可一键完成交接并触发建账初始化。' }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="handover-footer-summary">
+          <span>必须项 <b>{{ requiredDone(detail) }} / {{ requiredTotal(detail) }}</b></span>
+          <span>完成率 <b>{{ completion(detail) }}%</b></span>
+        </div>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          :disabled="!canComplete(detail)"
+          @click="completeHandover(detail)"
+        >交接完成</el-button>
+      </template>
+    </BusinessDetailDrawer>
 
     <!-- 创建交接 Dialog -->
     <el-dialog v-model="createVisible" title="创建交接" width="640px" class="handover-dialog">
@@ -250,6 +286,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { handoverApi, handoverHooks, type BizTaskHandover } from '@/api/task-center'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 interface ChecklistItem {
   id: number
@@ -357,7 +394,13 @@ async function loadList() {
 
 function enrichRow(row: BizTaskHandover): HandoverRow {
   const items = row.items && row.items.length === STANDARD_CHECKLIST.length
-    ? row.items.map((it, i) => ({ ...it, required: STANDARD_CHECKLIST[i].required, itemName: STANDARD_CHECKLIST[i].name }))
+    ? row.items.map((it, i) => ({
+      ...it,
+      required: STANDARD_CHECKLIST[i].required,
+      itemName: STANDARD_CHECKLIST[i].name,
+      salesStatus: it.status === 'pending' ? 'untouched' : 'provided',
+      fileName: it.status === 'pending' ? '' : `${STANDARD_CHECKLIST[i].name}.pdf`
+    }))
     : STANDARD_CHECKLIST.map((s, i) => ({
       id: row.id * 100 + i + 1,
       handoverId: row.id,
@@ -441,6 +484,15 @@ function statusTagType(r: BizTaskHandover): any {
   const today = new Date().toISOString().slice(0, 10)
   if (r.status !== 'completed' && r.handoverDate < today) return 'danger'
   return ({ pending: 'info', in_progress: 'warning', completed: 'success', cancelled: '' } as any)[r.status]
+}
+function handoverAvatarClass(r: BizTaskHandover) {
+  if (isOverdue(r)) return 'danger'
+  return ({
+    pending: 'company',
+    in_progress: 'warning',
+    completed: 'success',
+    cancelled: 'company'
+  } as Record<string, string>)[r.status] || 'company'
 }
 function isOverdue(r: BizTaskHandover) {
   const today = new Date().toISOString().slice(0, 10)
@@ -530,7 +582,10 @@ async function completeHandover(r: HandoverRow) {
   loadList()
 }
 
-onMounted(loadList)
+onMounted(async () => {
+  await handoverApi.ensureSamples?.()
+  await loadList()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -665,11 +720,11 @@ onMounted(loadList)
   font-size: 15px; font-weight: 600; color: var(--gold-primary, #D4AF37);
   margin-bottom: 12px; padding-left: 12px; border-left: 3px solid var(--gold-primary, #D4AF37);
 }
-.checklist-table { margin-bottom: 22px; }
-.item-name { color: #F5F5F5; }
-.item-due { display: block; font-size: 11px; color: #F2B824; margin-top: 2px; }
-.file-link { color: var(--gold-primary, #D4AF37); cursor: pointer; }
-.file-empty { color: #666; font-size: 12px; }
+.checklist-table { margin-bottom: 16px; }
+.item-name { color: #0f172a; font-weight: 650; }
+.item-due { display: block; font-size: 11px; color: #d97706; margin-top: 2px; }
+.file-link { color: #2563eb; cursor: pointer; }
+.file-empty { color: #94a3b8; font-size: 12px; }
 .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .dot-green { background: #67C23A; }
 .dot-orange { background: #F2B824; }
@@ -685,6 +740,57 @@ onMounted(loadList)
   b { color: var(--gold-primary, #D4AF37); font-family: 'JetBrains Mono', monospace; }
 }
 .footer-actions { display: flex; gap: 10px; }
+
+.overdue-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.handover-warning-note {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.drawer-table {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  :deep(.el-table__header th) {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 650;
+  }
+  :deep(.el-table__body td) {
+    color: #334155;
+  }
+}
+
+.handover-footer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+  b {
+    color: #0f766e;
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
 
 /* —— Dialog —— */
 .form-grid :deep(.el-form-item) { margin-bottom: 16px; }

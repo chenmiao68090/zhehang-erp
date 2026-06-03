@@ -196,46 +196,75 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="detailVisible" :title="detail?.name" size="660px">
-      <div v-if="detail" class="detail-body">
-        <div class="detail-hero">
-          <div>
-            <div class="hero-no">{{ detail.code }}</div>
-            <div class="hero-name">{{ detail.name }}</div>
-            <div class="hero-sub">{{ typeLabel(detail.type) }} · {{ detail.ownerName }} 负责</div>
-          </div>
-          <span class="level-badge large" :data-level="detail.level">{{ detail.level }}</span>
+    <BusinessDetailDrawer
+      v-if="detail"
+      v-model="detailVisible"
+      :title="detail.name"
+      :subtitle="`${detail.code} · ${typeLabel(detail.type)} · ${detail.ownerName} 负责`"
+      eyebrow="渠道管理"
+      :avatar="detail.name.slice(0, 2)"
+      avatar-class="channel"
+      :status-text="statusLabel(detail.status)"
+      :status-type="statusType(detail.status)"
+      size="660px"
+    >
+      <template #actions>
+        <span class="level-badge" :data-level="detail.level">{{ detail.level }}</span>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>联系人</span><b>{{ detail.contactName }}</b></div>
+          <div class="bd-kv"><span>电话</span><b>{{ detail.contactPhone }}</b></div>
+          <div class="bd-kv"><span>协议价</span><b>¥{{ formatNum(detail.basePrice) }}</b></div>
+          <div class="bd-kv"><span>结算方式</span><b>{{ detail.settleMode }}</b></div>
+          <div class="bd-kv"><span>信用额度</span><b>¥{{ formatNum(detail.creditLimit) }}</b></div>
+          <div class="bd-kv"><span>应收余额</span><b>¥{{ formatNum(detail.receivable) }}</b></div>
+          <div class="bd-kv wide"><span>可售区域</span><b>{{ detail.regions.join(' / ') }}</b></div>
+          <div class="bd-kv wide"><span>备注</span><b>{{ detail.remark || '—' }}</b></div>
         </div>
+      </template>
 
-        <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="联系人">{{ detail.contactName }}</el-descriptions-item>
-          <el-descriptions-item label="电话">{{ detail.contactPhone }}</el-descriptions-item>
-          <el-descriptions-item label="协议价">¥{{ formatNum(detail.basePrice) }}</el-descriptions-item>
-          <el-descriptions-item label="结算方式">{{ detail.settleMode }}</el-descriptions-item>
-          <el-descriptions-item label="信用额度">¥{{ formatNum(detail.creditLimit) }}</el-descriptions-item>
-          <el-descriptions-item label="应收余额">¥{{ formatNum(detail.receivable) }}</el-descriptions-item>
-          <el-descriptions-item :span="2" label="可售区域">{{ detail.regions.join(' / ') }}</el-descriptions-item>
-          <el-descriptions-item :span="2" label="备注">{{ detail.remark || '—' }}</el-descriptions-item>
-        </el-descriptions>
+      <div class="bd-section-title">近期开单</div>
+      <el-table :data="detail.orders" size="small" stripe>
+        <el-table-column prop="orderNo" label="订单号" width="130" />
+        <el-table-column prop="district" label="区域" width="90" />
+        <el-table-column prop="customer" label="终端客户" show-overflow-tooltip />
+        <el-table-column label="售价" width="100" align="right">
+          <template #default="{ row }"><span class="num price">¥{{ formatNum(row.amount) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="90" />
+      </el-table>
 
-        <h4 class="section-title">近期开单</h4>
-        <el-table :data="detail.orders" size="small" stripe>
-          <el-table-column prop="orderNo" label="订单号" width="130" />
-          <el-table-column prop="district" label="区域" width="90" />
-          <el-table-column prop="customer" label="终端客户" show-overflow-tooltip />
-          <el-table-column label="售价" width="100" align="right">
-            <template #default="{ row }"><span class="num price">¥{{ formatNum(row.amount) }}</span></template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态" width="90" />
-        </el-table>
-      </div>
-    </el-drawer>
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <span class="bd-timeline-dot" />
+          <div>
+            <strong>渠道建档</strong>
+            <p>{{ detail.code }} 已纳入同行渠道管理。</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <span class="bd-timeline-dot success" />
+          <div>
+            <strong>本月开单 {{ detail.monthOrders }} 笔</strong>
+            <p>本月收入 ¥{{ formatNum(detail.monthRevenue) }},应收余额 ¥{{ formatNum(detail.receivable) }}。</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="primary" @click="openEdit(detail)">编辑渠道</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 type ChannelStatus = 'active' | 'watch' | 'paused'
 type ChannelType = 'peer' | 'park' | 'agency' | 'business'

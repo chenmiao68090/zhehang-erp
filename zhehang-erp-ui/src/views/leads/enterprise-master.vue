@@ -188,44 +188,69 @@
       </div>
     </section>
 
-    <el-drawer v-model="drawer.visible" title="企业工商税务档案" size="560px">
-      <template v-if="drawer.entity">
-        <div class="drawer-title">
-          <div class="avatar">{{ drawer.entity.shortName.slice(0, 2) }}</div>
-          <div>
-            <h2>{{ drawer.entity.name }}</h2>
-            <p>{{ drawer.entity.creditCode }}</p>
-          </div>
-        </div>
-        <div class="detail-grid">
-          <div><span>法人</span><b>{{ drawer.entity.legalPerson }}</b></div>
-          <div><span>注册资本</span><b>{{ drawer.entity.registeredCapital }}</b></div>
-          <div><span>成立日期</span><b>{{ drawer.entity.establishDate }}</b></div>
-          <div><span>经营状态</span><b>{{ drawer.entity.businessStatus }}</b></div>
-          <div><span>税号</span><b>{{ drawer.entity.taxNo }}</b></div>
-          <div><span>税务资质</span><b>{{ drawer.entity.taxQualification }}</b></div>
-          <div class="wide"><span>注册地址</span><b>{{ drawer.entity.address }}</b></div>
-          <div class="wide"><span>所属行业</span><b>{{ drawer.entity.industry }}</b></div>
-        </div>
-        <div class="block-title">联系方式</div>
-        <el-table :data="drawer.entity.contacts" size="small" border>
-          <el-table-column prop="name" label="联系人" width="100" />
-          <el-table-column prop="title" label="职务" width="110" />
-          <el-table-column prop="phone" label="电话" />
-        </el-table>
-        <div class="block-title">风险与商机标签</div>
-        <div class="tag-list">
-          <el-tag v-for="tag in drawer.entity.riskTags" :key="tag" type="warning" effect="plain">
-            {{ tag }}
-          </el-tag>
-        </div>
-        <TaxProfilePanel :credit-code="drawer.entity.creditCode" :company-name="drawer.entity.name" />
-        <div class="drawer-actions">
-          <el-button type="primary" @click="createCustomer(drawer.entity)">生成客户主数据</el-button>
-          <el-button @click="drawer.visible = false">关闭</el-button>
+    <BusinessDetailDrawer
+      v-if="drawer.entity"
+      v-model="drawer.visible"
+      :title="drawer.entity.name"
+      :subtitle="drawer.entity.creditCode"
+      eyebrow="企业工商税务档案"
+      :avatar="drawer.entity.shortName.slice(0, 2)"
+      avatar-class="company"
+      :status-text="drawer.entity.businessStatus"
+      status-type="success"
+      size="620px"
+    >
+      <template #actions>
+        <el-tag effect="plain" type="primary">{{ drawer.entity.taxQualification }}</el-tag>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>法人</span><b>{{ drawer.entity.legalPerson }}</b></div>
+          <div class="bd-kv"><span>注册资本</span><b>{{ drawer.entity.registeredCapital }}</b></div>
+          <div class="bd-kv"><span>成立日期</span><b>{{ drawer.entity.establishDate }}</b></div>
+          <div class="bd-kv"><span>税号</span><b>{{ drawer.entity.taxNo }}</b></div>
+          <div class="bd-kv wide"><span>注册地址</span><b>{{ drawer.entity.address }}</b></div>
+          <div class="bd-kv wide"><span>所属行业</span><b>{{ drawer.entity.industry }}</b></div>
         </div>
       </template>
-    </el-drawer>
+
+      <div class="bd-section-title">联系方式</div>
+      <el-table :data="drawer.entity.contacts" size="small" border>
+        <el-table-column prop="name" label="联系人" width="100" />
+        <el-table-column prop="title" label="职务" width="110" />
+        <el-table-column prop="phone" label="电话" />
+      </el-table>
+      <div class="bd-section-title risk-title">风险与商机标签</div>
+      <div class="tag-list">
+        <el-tag v-for="tag in drawer.entity.riskTags" :key="tag" type="warning" effect="plain">
+          {{ tag }}
+        </el-tag>
+      </div>
+      <TaxProfilePanel :credit-code="drawer.entity.creditCode" :company-name="drawer.entity.name" />
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <span class="bd-timeline-dot" />
+          <div>
+            <strong>工商主体命中</strong>
+            <p>{{ drawer.entity.name }} 已从主体库带出基础工商信息。</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <span class="bd-timeline-dot success" />
+          <div>
+            <strong>税务档案待补齐</strong>
+            <p>建议补充税种、申报周期、办税人和客户归属。</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="drawer.visible = false">关闭</el-button>
+        <el-button type="primary" @click="createCustomer(drawer.entity)">生成客户主数据</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -234,6 +259,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { enterpriseApi, type CompanyResolveResult, type EnterpriseEntity } from '@/api/growth'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 import TaxProfilePanel from '@/components/TaxProfilePanel.vue'
 
 const quickKeyword = ref('')

@@ -190,8 +190,34 @@
       />
     </section>
 
-    <el-drawer v-model="detailVisible" title="记录详情" size="480px">
-      <el-form v-if="detailRow" label-width="88px" class="detail-form">
+    <BusinessDetailDrawer
+      v-if="detailRow"
+      v-model="detailVisible"
+      :title="detailRow.summary || '日记账记录'"
+      :subtitle="`${detailRow.entryDate} · ${detailRow.account}`"
+      eyebrow="财务日记账"
+      :avatar="directionLabel(detailRow.direction).slice(0, 1)"
+      :avatar-class="detailRow.direction"
+      :status-text="statusLabel(detailRow.status)"
+      :status-type="statusTagType(detailRow.status)"
+      size="520px"
+    >
+      <template #actions>
+        <el-tag :type="directionTagType(detailRow.direction)" effect="plain">{{ directionLabel(detailRow.direction) }}</el-tag>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>金额</span><b>{{ formatCurrency(detailRow.amount) }}</b></div>
+          <div class="bd-kv"><span>净额</span><b>{{ formatCurrency(signedAmount(detailRow)) }}</b></div>
+          <div class="bd-kv"><span>一级归集</span><b>{{ detailRow.primaryCategory }}</b></div>
+          <div class="bd-kv"><span>二级科目</span><b>{{ detailRow.category }}</b></div>
+          <div class="bd-kv wide"><span>往来方</span><b>{{ detailRow.counterpart || '未填写' }}</b></div>
+        </div>
+      </template>
+
+      <div class="bd-section-title">编辑记录</div>
+      <el-form label-width="88px" class="detail-form">
         <el-form-item label="日期">
           <el-date-picker v-model="detailRow.entryDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" @change="persist" />
         </el-form-item>
@@ -228,7 +254,29 @@
           <el-input v-model="detailRow.remark" type="textarea" :rows="3" @change="persist" />
         </el-form-item>
       </el-form>
-    </el-drawer>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <span class="bd-timeline-dot" />
+          <div>
+            <strong>{{ detailRow.operator || '财务' }} 创建记录</strong>
+            <p>{{ detailRow.createTime }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <span class="bd-timeline-dot success" />
+          <div>
+            <strong>当前状态: {{ statusLabel(detailRow.status) }}</strong>
+            <p>{{ detailRow.primaryCategory }} / {{ detailRow.category }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="primary" @click="persist">保存</el-button>
+      </template>
+    </BusinessDetailDrawer>
 
     <el-dialog v-model="pasteVisible" title="粘贴导入" width="720px">
       <el-alert type="info" :closable="false" show-icon>
@@ -252,6 +300,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { ElButton, ElCheckbox, ElDatePicker, ElInput, ElInputNumber, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag } from 'element-plus'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 import {
   Check,
   CopyDocument,

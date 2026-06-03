@@ -219,6 +219,7 @@
             {{ tag }}
           </el-tag>
         </div>
+        <TaxProfilePanel :credit-code="drawer.entity.creditCode" :company-name="drawer.entity.name" />
         <div class="drawer-actions">
           <el-button type="primary" @click="createCustomer(drawer.entity)">生成客户主数据</el-button>
           <el-button @click="drawer.visible = false">关闭</el-button>
@@ -233,6 +234,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { enterpriseApi, type CompanyResolveResult, type EnterpriseEntity } from '@/api/growth'
+import TaxProfilePanel from '@/components/TaxProfilePanel.vue'
 
 const quickKeyword = ref('')
 const loading = ref(false)

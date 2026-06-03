@@ -40,18 +40,18 @@
 
 .el-menu-item,
 .el-sub-menu__title {
-  color: #cbd5e1 !important;
+  color: var(--text-body) !important;
 
   &:hover {
-    color: #fff !important;
-    background: rgba(255, 255, 255, 0.08) !important;
+    color: var(--brand-primary) !important;
+    background: #f2f7ff !important;
   }
 }
 
 .el-menu-item.is-active {
-  color: #fff !important;
-  background: rgba(59, 130, 246, 0.22) !important;
-  border-left: 3px solid #38bdf8;
+  color: var(--brand-primary) !important;
+  background: #e8f3ff !important;
+  border-left: 0;
 }
 
 .el-card {
@@ -70,9 +70,9 @@
 .el-table {
   --el-table-bg-color: #fff;
   --el-table-tr-bg-color: #fff;
-  --el-table-header-bg-color: #f8fafc;
-  --el-table-row-hover-bg-color: #f8fbff;
-  --el-table-border-color: #eef2f7;
+  --el-table-header-bg-color: #f7f8fa;
+  --el-table-row-hover-bg-color: #f2f7ff;
+  --el-table-border-color: #eff0f1;
   --el-table-text-color: var(--text-body);
   --el-table-header-text-color: var(--text-muted);
   color: var(--text-body);
@@ -83,7 +83,7 @@
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 700;
-    background: #f8fafc !important;
+    background: #f7f8fa !important;
   }
 
   td.el-table__cell {
@@ -91,7 +91,7 @@
   }
 
   .el-table__row:hover > td {
-    background: #f8fbff !important;
+    background: #f2f7ff !important;
   }
 }
 
@@ -103,13 +103,13 @@
   box-shadow: none !important;
 
   &:hover {
-    border-color: #bfdbfe !important;
+    border-color: #bedaff !important;
   }
 
   &.is-focus,
   &.is-focused {
     border-color: var(--brand-primary) !important;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+    box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12) !important;
   }
 }
 
@@ -153,10 +153,10 @@
 .el-select-dropdown__item {
   color: var(--text-body);
 
-  &.hover,
-  &:hover {
-    color: var(--text-primary);
-    background: #eff6ff;
+    &.hover,
+    &:hover {
+      color: var(--text-primary);
+      background: #f2f7ff;
   }
 
   &.selected {
@@ -239,7 +239,7 @@
 }
 
 .el-tabs__active-bar {
-  background: var(--brand-primary);
+    background: var(--brand-primary);
 }
 
 .el-message-box {
@@ -266,7 +266,7 @@
 
     &:hover {
       color: var(--brand-primary);
-      background: #eff6ff;
+      background: #f2f7ff;
     }
   }
 }

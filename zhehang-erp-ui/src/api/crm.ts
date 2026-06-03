@@ -171,6 +171,41 @@ export const customerApi = {
   toPool: (id: number, reason: string) => post(`/crm/customer/toPool/${id}`, { reason })
 }
 
+// 客户税务档案（以统一社会信用代码勾稽，承接工商带出）
+export interface TaxProfile {
+  id?: number
+  customerId?: number
+  creditCode: string
+  companyName?: string
+  taxpayerType?: number
+  collectionType?: string
+  taxAuthority?: string
+  taxOfficer?: string
+  taxOfficerPhone?: string
+  registerDate?: string
+  invoiceType?: string
+  taxTypes?: string
+  filingCycle?: string
+  status?: number
+  remark?: string
+}
+
+function unwrapTaxProfile(res: any): TaxProfile | null {
+  if (!res) return null
+  return Object.prototype.hasOwnProperty.call(res, 'data') ? (res.data || null) : res
+}
+
+export const taxProfileApi = {
+  /** 按统一社会信用代码获取税务档案 */
+  async get(creditCode: string): Promise<TaxProfile | null> {
+    return unwrapTaxProfile(await get('/crm/tax-profile', { creditCode }, { silentError: true }))
+  },
+  /** 保存（按统一社会信用代码 upsert） */
+  async save(data: TaxProfile): Promise<TaxProfile | null> {
+    return unwrapTaxProfile(await post('/crm/tax-profile', data))
+  }
+}
+
 // 联系人管理
 export const contactApi = {
   list: (customerId: number) => get('/crm/contact/list', { customerId }),

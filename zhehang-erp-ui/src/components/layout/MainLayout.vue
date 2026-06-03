@@ -48,11 +48,9 @@ const appStore = useAppStore()
 
 .content-area {
   flex: 1;
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0, rgba(255, 255, 255, 0) 180px),
-    var(--bg-page);
+  background: var(--bg-page);
 }
 
 .fade-enter-active {

@@ -111,7 +111,7 @@ async function handleLogout() {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color);
@@ -146,7 +146,7 @@ async function handleLogout() {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .global-search {
@@ -166,13 +166,13 @@ async function handleLogout() {
   height: 32px;
   padding: 0 10px;
   background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  border: 1px solid #bedaff;
   border-radius: 999px;
   transition: background 0.2s ease, border-color 0.2s ease;
 
   &:hover {
     background: #dbeafe;
-    border-color: #93c5fd;
+    border-color: #7aa2ff;
   }
 
   .role-icon {
@@ -197,7 +197,7 @@ async function handleLogout() {
 
     &:hover {
       background: #eff6ff;
-      border-color: #bfdbfe;
+      border-color: #bedaff;
     }
   }
 }

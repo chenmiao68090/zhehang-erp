@@ -1,0 +1,353 @@
+/* Feishu/Lark inspired visual alignment layer.
+   Keep this file global and late-loaded so legacy dark/gold pages share one office-style surface. */
+
+:root {
+  --fs-primary: #3370ff;
+  --fs-primary-hover: #245bdb;
+  --fs-primary-soft: #e8f3ff;
+  --fs-success: #00b42a;
+  --fs-warning: #ff7d00;
+  --fs-danger: #f53f3f;
+  --fs-bg: #f5f6f7;
+  --fs-card: #ffffff;
+  --fs-card-hover: #fbfcfd;
+  --fs-border: #dee0e3;
+  --fs-border-soft: #eff0f1;
+  --fs-text: #1f2329;
+  --fs-text-secondary: #4e5969;
+  --fs-text-muted: #86909c;
+  --fs-shadow: 0 1px 2px rgba(31, 35, 41, 0.04), 0 8px 24px rgba(31, 35, 41, 0.06);
+}
+
+html,
+body,
+#app {
+  background: var(--fs-bg);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+.main-layout .content-area {
+  --brand-primary: var(--fs-primary);
+  --brand-primary-hover: var(--fs-primary-hover);
+  --gold-primary: var(--fs-primary);
+  --gold-champagne: #7aa2ff;
+  --gold-dark: var(--fs-primary-hover);
+  --gold: var(--fs-primary);
+  --bg-darkest: var(--fs-bg);
+  --bg-page: var(--fs-bg);
+  --bg-card: var(--fs-card);
+  --bg-elevated: var(--fs-card);
+  --bg-soft: #f7f8fa;
+  --border-color: var(--fs-border);
+  --border-soft: var(--fs-border-soft);
+  --border-gold: var(--fs-border);
+  --border-gold-hover: #bedaff;
+  --text-primary: var(--fs-text);
+  --text-body: var(--fs-text-secondary);
+  --text-muted: var(--fs-text-muted);
+  --shadow-card: var(--fs-shadow);
+  color: var(--fs-text-secondary);
+  background: var(--fs-bg) !important;
+}
+
+.main-layout .content-area * {
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+}
+
+.main-layout .content-area :is(
+  .page-header,
+  .cockpit-header,
+  .module-header,
+  .header-card,
+  .hero-card,
+  .hero-panel,
+  .workbench-hero,
+  .business-header,
+  .dashboard-hero,
+  .section-header
+) {
+  color: var(--fs-text) !important;
+  background: var(--fs-card) !important;
+  border: 1px solid var(--fs-border) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--fs-shadow) !important;
+}
+
+.main-layout .content-area :is(
+  .page-header,
+  .cockpit-header,
+  .module-header,
+  .header-card,
+  .hero-card,
+  .hero-panel,
+  .workbench-hero,
+  .business-header,
+  .dashboard-hero,
+  .section-header
+)::before,
+.main-layout .content-area :is(
+  .page-header,
+  .cockpit-header,
+  .module-header,
+  .header-card,
+  .hero-card,
+  .hero-panel,
+  .workbench-hero,
+  .business-header,
+  .dashboard-hero,
+  .section-header
+)::after {
+  opacity: 0 !important;
+}
+
+.main-layout .content-area :is(
+  .card,
+  .card-premium,
+  .glass,
+  .page-section,
+  .overview-card,
+  .stat-card,
+  .stats-card,
+  .metric-card,
+  .metric-strip,
+  .grid-widget,
+  .table-card,
+  .content-card,
+  .panel-card,
+  .config-card,
+  .rule-card,
+  .rules-card,
+  .info-card,
+  .todo-card,
+  .risk-card,
+  .section-card,
+  .filter-card,
+  .fs-card,
+  .list-card,
+  .placeholder-card,
+  .timeline-card,
+  .summary-card,
+  .data-card
+) {
+  color: var(--fs-text-secondary) !important;
+  background: var(--fs-card) !important;
+  border: 1px solid var(--fs-border) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--fs-shadow) !important;
+}
+
+.main-layout .content-area :is(
+  .stat-card,
+  .rules-card,
+  .fs-card,
+  .metric-card,
+  .overview-card
+)::after {
+  opacity: 0.05 !important;
+}
+
+.main-layout .content-area :is(
+  .title-cn,
+  .page-title,
+  .header-title,
+  .section-title,
+  .panel-title,
+  .card-title,
+  .module-title,
+  .widget-title,
+  .rc-title,
+  .dh-cn,
+  h1,
+  h2,
+  h3
+) {
+  color: var(--fs-text) !important;
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  background-clip: initial !important;
+  -webkit-background-clip: initial !important;
+  font-family: inherit !important;
+}
+
+.main-layout .content-area :is(
+  .title-en,
+  .page-desc,
+  .header-subtitle,
+  .section-sub,
+  .meta-time,
+  .metric-label,
+  .stat-label,
+  .muted,
+  .sub-text,
+  .dh-source,
+  .rc-sub
+) {
+  color: var(--fs-text-muted) !important;
+  font-family: inherit !important;
+}
+
+.main-layout .content-area :is(
+  .metric-value,
+  .metric-value *,
+  .stat-num,
+  .stat-value .num,
+  .score-num,
+  .bar-value,
+  .pie-value,
+  .link-text,
+  .data-number,
+  .kpi-value
+) {
+  color: var(--fs-primary) !important;
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.main-layout .content-area :is(
+  .filter-bar,
+  .toolbar,
+  .table-toolbar,
+  .search-panel,
+  .query-panel,
+  .operation-bar,
+  .action-bar,
+  .tab-strip
+) {
+  color: var(--fs-text-secondary) !important;
+  background: var(--fs-card) !important;
+  border: 1px solid var(--fs-border) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.main-layout .content-area :is(
+  .meta-tag,
+  .status-chip,
+  .filter-chip,
+  .trigger-chip,
+  .risk-badge,
+  .health-pill,
+  .tag-gold
+) {
+  color: var(--fs-primary) !important;
+  background: var(--fs-primary-soft) !important;
+  border-color: #bedaff !important;
+  border-radius: 999px !important;
+}
+
+.main-layout .content-area :is(.btn-gold, .primary-btn, .submit-btn) {
+  color: #fff !important;
+  background: var(--fs-primary) !important;
+  border-color: var(--fs-primary) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.main-layout .content-area :is(.btn-gold, .primary-btn, .submit-btn):hover {
+  background: var(--fs-primary-hover) !important;
+  border-color: var(--fs-primary-hover) !important;
+}
+
+.main-layout .content-area :is(.btn-ghost, .ghost-btn, .back-btn) {
+  color: var(--fs-primary) !important;
+  background: #fff !important;
+  border-color: #bedaff !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.main-layout .content-area :is(.progress-fill, .stat-bar-fill, .fs-progress-fill, .el-tabs__active-bar) {
+  background: var(--fs-primary) !important;
+  box-shadow: none !important;
+}
+
+.main-layout .content-area :is(.leads-pool, .collision-manage, .order-bill, .finance-check-page, .task-page) {
+  --pp-bg: var(--fs-bg);
+  --pp-card: var(--fs-card);
+  --pp-card-2: #f7f8fa;
+  --pp-color: var(--fs-primary);
+  --pp-deep: var(--fs-primary-hover);
+  --gold: var(--fs-primary);
+  --warn-green: var(--fs-success);
+  --warn-yellow: var(--fs-warning);
+  --warn-red: var(--fs-danger);
+  background: transparent !important;
+  color: var(--fs-text-secondary) !important;
+}
+
+.main-layout .content-area :is(.pool-table, .dark-table) {
+  background: #fff !important;
+  border: 1px solid var(--fs-border) !important;
+  border-radius: 8px !important;
+}
+
+.main-layout .content-area :is(.drawer-head, .drawer-foot) {
+  border-color: var(--fs-border-soft) !important;
+}
+
+.main-layout .content-area :is(.info-list li, .contact-row, .service-row, .tl-card) {
+  color: var(--fs-text-secondary) !important;
+  background: #f7f8fa !important;
+  border-color: var(--fs-border-soft) !important;
+}
+
+.main-layout .content-area :is(.info-list b, .cr-name, .sr-head strong, .freq-label, .gap-cell .gap-num) {
+  color: var(--fs-text) !important;
+}
+
+.main-layout .content-area .el-tag.el-tag--dark {
+  color: var(--fs-primary) !important;
+  background: var(--fs-primary-soft) !important;
+  border-color: #bedaff !important;
+}
+
+.main-layout .content-area .el-tag.el-tag--success.el-tag--dark {
+  color: #008a22 !important;
+  background: #e8ffea !important;
+  border-color: #b7ebbd !important;
+}
+
+.main-layout .content-area .el-tag.el-tag--warning.el-tag--dark {
+  color: #c45a00 !important;
+  background: #fff7e8 !important;
+  border-color: #ffd59e !important;
+}
+
+.main-layout .content-area .el-tag.el-tag--danger.el-tag--dark {
+  color: #d92d20 !important;
+  background: #fff0f0 !important;
+  border-color: #ffccc7 !important;
+}
+
+.main-layout .content-area .el-table {
+  border: 1px solid var(--fs-border-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.main-layout .content-area .el-table th.el-table__cell {
+  background: #f7f8fa !important;
+}
+
+.main-layout .content-area .el-dialog,
+.main-layout .content-area .el-drawer {
+  border-radius: 8px;
+}
+
+.main-layout .content-area :is(.decor-line, .meta-divider) {
+  background: #bedaff !important;
+}
+
+.main-layout .content-area :is(.decor-dot, .dot-busy) {
+  background: var(--fs-primary) !important;
+  box-shadow: none !important;
+}
+
+.main-layout .content-area :is(.corner, .corner-lt, .corner-rb, .scan-line, .grid-bg) {
+  opacity: 0 !important;
+}
+

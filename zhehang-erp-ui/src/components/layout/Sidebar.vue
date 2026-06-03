@@ -14,8 +14,8 @@
         :collapse-transition="false"
         unique-opened
         background-color="transparent"
-        text-color="#CBD5E1"
-        active-text-color="#FFFFFF"
+        text-color="#4E5969"
+        active-text-color="#3370FF"
         @select="handleSelect"
       >
         <template v-for="route in menuRoutes" :key="route.path">
@@ -109,13 +109,13 @@ function handleSelect(index: string) {
   left: 0;
   bottom: 0;
   width: 220px;
-  background: linear-gradient(180deg, #0f172a 0%, #111827 56%, #0b1220 100%);
-  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  background: #ffffff;
+  border-right: 1px solid var(--border-soft);
   transition: width 0.3s ease;
   z-index: 1001;
   display: flex;
   flex-direction: column;
-  box-shadow: 12px 0 28px rgba(15, 23, 42, 0.08);
+  box-shadow: 8px 0 20px rgba(31, 35, 41, 0.04);
 
   &.collapsed {
     width: 64px;
@@ -130,7 +130,7 @@ function handleSelect(index: string) {
   align-items: center;
   gap: 10px;
   padding: 0 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid var(--border-soft);
 
   .logo-icon {
     width: 34px;
@@ -141,9 +141,9 @@ function handleSelect(index: string) {
     color: #fff;
     font-size: 12px;
     font-weight: 800;
-    background: linear-gradient(135deg, #2563eb 0%, #0f766e 100%);
+    background: #3370ff;
     border-radius: 8px;
-    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.26);
+    box-shadow: 0 8px 18px rgba(51, 112, 255, 0.22);
   }
 
   .logo-copy {
@@ -156,13 +156,13 @@ function handleSelect(index: string) {
   .logo-text {
     font-size: 16px;
     font-weight: 700;
-    color: #f8fafc;
+    color: var(--text-primary);
     letter-spacing: 0;
     white-space: nowrap;
   }
 
   .logo-sub {
-    color: #94a3b8;
+    color: var(--text-muted);
     font-size: 11px;
     line-height: 1;
     white-space: nowrap;
@@ -183,8 +183,8 @@ function handleSelect(index: string) {
   transition: color 0.2s ease, background 0.2s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: #fff !important;
+    background: #f2f7ff !important;
+    color: var(--brand-primary) !important;
   }
 
   .el-icon {
@@ -193,14 +193,15 @@ function handleSelect(index: string) {
 }
 
 :deep(.el-menu-item.is-active) {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(15, 118, 110, 0.82)) !important;
-  color: #fff !important;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+  background: #e8f3ff !important;
+  color: var(--brand-primary) !important;
+  box-shadow: none;
+  font-weight: 600;
 }
 
 :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--brand-primary) !important;
+  background: #f2f7ff !important;
 }
 
 :deep(.el-sub-menu .el-menu-item) {
@@ -208,7 +209,7 @@ function handleSelect(index: string) {
   margin: 2px 10px 2px 18px;
   padding-left: 36px !important;
   font-size: 13px;
-  color: #cbd5e1;
+  color: var(--text-body);
 }
 
 .sidebar.collapsed :deep(.el-menu-item) {

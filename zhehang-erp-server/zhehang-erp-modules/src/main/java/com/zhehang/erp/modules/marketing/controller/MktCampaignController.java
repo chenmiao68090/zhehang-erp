@@ -53,4 +53,10 @@ public class MktCampaignController {
         campaignService.removeById(id);
         return R.ok();
     }
+
+    /** 各营销活动获客 ROI/CAC 统计 */
+    @GetMapping("/roi")
+    public R<java.util.List<java.util.Map<String, Object>>> roi() {
+        return R.ok(campaignService.roi());
+    }
 }

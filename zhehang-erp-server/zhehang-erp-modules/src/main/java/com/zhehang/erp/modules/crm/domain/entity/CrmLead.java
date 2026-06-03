@@ -93,4 +93,10 @@ public class CrmLead extends BaseEntity {
     private Integer recycleCount;
     /** 上次回收时间 */
     private LocalDateTime lastRecycleTime;
+    /** 渠道明细（营销活动归因） */
+    private String channel;
+    /** 获客成本（分摊） */
+    private BigDecimal acquireCost;
+    /** 关联营销活动ID */
+    private Long campaignId;
 }

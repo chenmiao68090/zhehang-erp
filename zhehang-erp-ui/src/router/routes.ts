@@ -111,6 +111,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'OnlineRoi',
         component: () => import('@/views/supply/channel-cost.vue'),
         meta: { title: '网销投产比', icon: 'TrendCharts' }
+      },
+      {
+        path: 'campaign',
+        name: 'MktCampaign',
+        component: () => import('@/views/marketing/campaign.vue'),
+        meta: { title: '营销活动', icon: 'Histogram' }
       }
     ]
   },

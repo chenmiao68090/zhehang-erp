@@ -228,9 +228,36 @@
       </template>
     </el-dialog>
 
-    <!-- 详情 Drawer -->
-    <el-drawer v-model="dlg.detail" :title="current?.taskName" size="540px">
-      <div v-if="current" class="detail-block">
+    <BusinessDetailDrawer
+      v-if="current"
+      v-model="dlg.detail"
+      :title="current.taskName || '任务详情'"
+      :subtitle="`${current.customerName || '—'} · ${current._subType || '一次性任务'}`"
+      eyebrow="一次性业务"
+      :avatar="current._subType?.slice(0, 2) || '任'"
+      :avatar-class="taskAvatarClass(current.status)"
+      :status-text="statusMap[current.status]?.label || current.status"
+      :status-type="statusMap[current.status]?.type || 'info'"
+      size="620px"
+    >
+      <template #actions>
+        <el-tag :type="priorityMap[current.priority]?.type || 'info'" effect="plain">{{ priorityMap[current.priority]?.label || current.priority }}</el-tag>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>任务编号</span><b>{{ current.taskNo }}</b></div>
+          <div class="bd-kv"><span>子类型</span><b>{{ current._subType || '—' }}</b></div>
+          <div class="bd-kv"><span>指派人</span><b>{{ current.assignerName || '—' }}</b></div>
+          <div class="bd-kv"><span>执行人</span><b>{{ current.assigneeName || '—' }}</b></div>
+          <div class="bd-kv"><span>计划开始</span><b>{{ current.planStartDate || '—' }}</b></div>
+          <div class="bd-kv"><span>计划完成</span><b>{{ current.planEndDate || '—' }}</b></div>
+          <div class="bd-kv wide"><span>任务描述</span><b>{{ current.taskContent || '—' }}</b></div>
+        </div>
+      </template>
+
+      <div class="bd-section-title">任务进度</div>
+      <div class="task-step-wrap">
         <el-steps :active="stepActive(current.status)" finish-status="success" simple>
           <el-step title="待分配" />
           <el-step title="已分配" />
@@ -238,21 +265,55 @@
           <el-step title="待验收" />
           <el-step title="已完成" />
         </el-steps>
-        <el-descriptions :column="2" border style="margin-top: 18px">
-          <el-descriptions-item label="任务编号">{{ current.taskNo }}</el-descriptions-item>
-          <el-descriptions-item label="子类型">{{ current._subType || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="客户">{{ current.customerName }}</el-descriptions-item>
-          <el-descriptions-item label="执行人">{{ current.assigneeName || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="指派人">{{ current.assignerName }}</el-descriptions-item>
-          <el-descriptions-item label="优先级">{{ priorityMap[current.priority]?.label }}</el-descriptions-item>
-          <el-descriptions-item label="计划开始">{{ current.planStartDate }}</el-descriptions-item>
-          <el-descriptions-item label="计划完成">{{ current.planEndDate }}</el-descriptions-item>
-          <el-descriptions-item label="任务描述" :span="2">{{ current.taskContent }}</el-descriptions-item>
-          <el-descriptions-item v-if="current.deliverable" label="交付物" :span="2">{{ current.deliverable }}</el-descriptions-item>
-          <el-descriptions-item v-if="current.reviewOpinion" label="验收意见" :span="2">{{ current.reviewOpinion }}</el-descriptions-item>
-        </el-descriptions>
       </div>
-    </el-drawer>
+
+      <div class="task-detail-grid">
+        <div v-if="current.deliverable" class="wide">
+          <span>交付物</span>
+          <b>{{ current.deliverable }}</b>
+        </div>
+        <div v-if="current.reviewOpinion" class="wide">
+          <span>验收意见</span>
+          <b>{{ current.reviewOpinion }}</b>
+        </div>
+        <div v-if="!current.deliverable && !current.reviewOpinion" class="wide">
+          <span>交付与验收</span>
+          <b>任务完成后会展示交付物与验收意见。</b>
+        </div>
+      </div>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>任务创建</strong>
+            <p>{{ current.assignerName || '未填写指派人' }} 创建 / 指派，客户：{{ current.customerName || '—' }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: ['in_progress', 'reviewing', 'completed'].includes(current.status) }" />
+          <div>
+            <strong>执行节点</strong>
+            <p>{{ current.assigneeName || '待指派' }} · {{ statusMap[current.status]?.label || current.status }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: current.status === 'completed' }" />
+          <div>
+            <strong>验收闭环</strong>
+            <p>{{ current.reviewOpinion || '等待提交完成后验收' }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="dlg.detail = false">关闭</el-button>
+        <el-button v-if="current.status === 'pending'" type="primary" @click="openAssign(current)">指派</el-button>
+        <el-button v-if="current.status === 'assigned'" type="success" @click="doStart(current)">开始执行</el-button>
+        <el-button v-if="current.status === 'in_progress'" type="warning" @click="openComplete(current)">提交完成</el-button>
+        <el-button v-if="current.status === 'reviewing'" type="primary" @click="openReview(current)">验收</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -262,6 +323,7 @@ import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { TASK_ASSIGNEES, TASK_CONTRACT_OPTIONS, taskApi, type BizTask } from '@/api/task-center'
 import { onAllTasksCompleted } from '@/utils/biz-linkage'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const CAT = 'A'
 const SUB_TYPES = ['客户资料收集', '建账初始化', '税务报到', '银行签约', '工商变更', '公司注册', '资质申请', '注销公司', '异常解除']
@@ -370,6 +432,18 @@ function overdueDays(row: BizTask) {
 
 function stepActive(s: string) {
   return ['pending', 'assigned', 'in_progress', 'reviewing', 'completed'].indexOf(s)
+}
+
+function taskAvatarClass(status: string) {
+  return ({
+    pending: 'company',
+    assigned: 'warning',
+    in_progress: 'channel',
+    reviewing: 'warning',
+    completed: 'success',
+    overdue: 'danger',
+    closed: 'company'
+  } as Record<string, string>)[status] || 'company'
 }
 
 const metrics = computed(() => {
@@ -619,6 +693,40 @@ onMounted(async () => {
 .form-row { display: flex; gap: 12px; }
 .readonly-text { color: var(--text-primary); font-weight: 500; }
 .detail-block { padding: 10px 6px; }
+.task-step-wrap {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.task-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.task-detail-grid div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.task-detail-grid .wide {
+  grid-column: 1 / -1;
+}
+.task-detail-grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.task-detail-grid b {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
 
 /* 统一为浅色运营后台风格 */
 .task-page {
@@ -738,5 +846,10 @@ onMounted(async () => {
 @media (max-width: 1100px) {
   .metric-strip { grid-template-columns: repeat(2, 1fr); }
   .metric-item { border-right: none; }
+}
+@media (max-width: 760px) {
+  .task-detail-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

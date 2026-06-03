@@ -7,8 +7,8 @@
         <p>围绕财税服务场景沉淀新企、税务异常、工商异常、年报、电商合规等高价值商机。</p>
       </div>
       <div class="head-actions">
-        <el-button type="primary" @click="batchCall">加入电销队列</el-button>
-        <el-button @click="batchPool">加入公海</el-button>
+        <el-button type="primary" :disabled="!selected.length" @click="batchCall">加入电销队列</el-button>
+        <el-button :disabled="!selected.length" @click="batchPool">加入公海</el-button>
       </div>
     </section>
 
@@ -66,6 +66,22 @@
         </el-select>
         <el-button type="primary" :icon="Search" @click="load">查询</el-button>
         <el-button :icon="Refresh" @click="reset">重置</el-button>
+      </div>
+
+      <div class="selection-strip" :class="{ active: selected.length > 0 }">
+        <div class="selection-copy">
+          <span>{{ activeScenario.label }}</span>
+          <strong v-if="selected.length">
+            已选 {{ selected.length }} 条 · A 级 {{ selectedHigh }} 条 · 预计 {{ money(selectedAmount) }}
+          </strong>
+          <strong v-else>选择情报后统一加入电销、公海或生成提单</strong>
+          <em v-if="selected.length">累计联系方式 {{ selectedContacts }} 个，建议先由电销领取再进入客户防撞单。</em>
+          <em v-else>建议优先筛选 A/B 级，并按企业主体归并，避免重复触达。</em>
+        </div>
+        <div class="selection-actions">
+          <el-button size="small" type="primary" :disabled="!selected.length" @click="batchCall">入电销</el-button>
+          <el-button size="small" :disabled="!selected.length" @click="batchPool">入公海</el-button>
+        </div>
       </div>
 
       <el-table
@@ -138,35 +154,128 @@
       </div>
     </section>
 
-    <el-drawer v-model="drawer.visible" title="情报勾稽详情" size="560px">
-      <template v-if="drawer.row">
-        <div class="drawer-title">
-          <div>
-            <h2>{{ drawer.row.entity?.name }}</h2>
-            <p>{{ drawer.row.title }}</p>
+    <BusinessDetailDrawer
+      v-if="drawer.row"
+      v-model="drawer.visible"
+      :title="drawer.row.entity?.name || '未知企业'"
+      :subtitle="drawer.row.title"
+      eyebrow="拓客情报"
+      :avatar="entityAvatar(drawer.row)"
+      :avatar-class="signalAvatarClass(drawer.row.level)"
+      :status-text="statusLabel(drawer.row.status)"
+      :status-type="statusTag(drawer.row.status)"
+      size="620px"
+    >
+      <template #actions>
+        <div class="score big" :class="`level-${drawer.row.level}`">{{ drawer.row.score }}</div>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv">
+            <span>情报类型</span>
+            <b>{{ drawer.row.typeLabel }}</b>
           </div>
-          <div class="score big" :class="`level-${drawer.row.level}`">{{ drawer.row.score }}</div>
-        </div>
-        <div class="timeline">
-          <div><span>市场情报</span><b>{{ drawer.row.typeLabel }} · {{ drawer.row.reason }}</b></div>
-          <div><span>企业主体</span><b>{{ drawer.row.entity?.creditCode }} · {{ drawer.row.entity?.legalPerson }}</b></div>
-          <div><span>推荐服务</span><b>{{ serviceLabel(drawer.row.expectedService) }} · {{ money(drawer.row.estimatedAmount) }}</b></div>
-          <div><span>下一环节</span><b>加入公海 / 加入电销 / 生成提单，均按 entityId 归并防撞单</b></div>
-        </div>
-        <div class="drawer-actions">
-          <el-button type="primary" @click="callOne(drawer.row)">加入电销队列</el-button>
-          <el-button type="warning" @click="createOrder(drawer.row)">生成提单</el-button>
+          <div class="bd-kv">
+            <span>推荐服务</span>
+            <b>{{ serviceLabel(drawer.row.expectedService) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>预计金额</span>
+            <b>{{ money(drawer.row.estimatedAmount) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>联系方式</span>
+            <b>{{ drawer.row.contactCount || 0 }} 个</b>
+          </div>
+          <div class="bd-kv wide">
+            <span>异常/商机原因</span>
+            <b>{{ drawer.row.reason }}</b>
+          </div>
+          <div class="bd-kv wide">
+            <span>决策机关</span>
+            <b>{{ drawer.row.authority || '—' }}</b>
+          </div>
         </div>
       </template>
-    </el-drawer>
+
+      <div class="bd-section-title">工商税务摘要</div>
+      <div class="intel-summary-list">
+        <div>
+          <span>统一社会信用代码</span>
+          <b>{{ drawer.row.entity?.creditCode || '—' }}</b>
+        </div>
+        <div>
+          <span>法人</span>
+          <b>{{ drawer.row.entity?.legalPerson || '—' }}</b>
+        </div>
+        <div>
+          <span>注册资本</span>
+          <b>{{ drawer.row.entity?.registeredCapital || '—' }}</b>
+        </div>
+        <div>
+          <span>税务资质</span>
+          <b>{{ drawer.row.entity?.taxQualification || '—' }}</b>
+        </div>
+        <div class="wide">
+          <span>注册地址</span>
+          <b>{{ drawer.row.entity?.address || '—' }}</b>
+        </div>
+      </div>
+
+      <div class="bd-section-title">勾稽提示</div>
+      <div class="linkage-note">
+        <strong>{{ drawer.row.scenario }}</strong>
+        <span>按企业主体、联系方式和历史客户统一防撞，避免公海、电销、提单多头推进。</span>
+      </div>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>{{ drawer.row.eventDate }} · 捕捉到{{ drawer.row.typeLabel }}</strong>
+            <p>{{ drawer.row.reason }}，来源机关：{{ drawer.row.authority || '—' }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>企业主体归并</strong>
+            <p>{{ drawer.row.entity?.creditCode || '未登记统一社会信用代码' }} · {{ drawer.row.entity?.legalPerson || '法人待补充' }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>推荐服务：{{ serviceLabel(drawer.row.expectedService) }}</strong>
+            <p>预计金额 {{ money(drawer.row.estimatedAmount) }}，建议由电销先触达并沉淀外呼记录。</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>下一环节</strong>
+            <p>加入公海 / 加入电销 / 生成提单，均按 entityId 归并防撞单。</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="drawer.visible = false">关闭</el-button>
+        <el-button type="success" @click="poolOne(drawer.row)">加入公海</el-button>
+        <el-button type="primary" @click="callOne(drawer.row)">加入电销队列</el-button>
+        <el-button type="warning" @click="createOrder(drawer.row)">生成提单</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { growthLinkageApi, marketApi, type SignalType } from '@/api/growth'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const scenarioTabs: Array<{ value: SignalType | ''; label: string; desc: string }> = [
   { value: '', label: '全部情报', desc: '跨场景统一看' },
@@ -192,6 +301,10 @@ const query = reactive<{ type: SignalType | ''; keyword: string; status: any; le
   pageSize: 10
 })
 const drawer = reactive<{ visible: boolean; row: any | null }>({ visible: false, row: null })
+const activeScenario = computed(() => scenarioTabs.find(item => item.value === query.type) || scenarioTabs[0])
+const selectedHigh = computed(() => selected.value.filter(row => row.level === 'A').length)
+const selectedAmount = computed(() => selected.value.reduce((sum, row) => sum + Number(row.estimatedAmount || 0), 0))
+const selectedContacts = computed(() => selected.value.reduce((sum, row) => sum + Number(row.contactCount || 0), 0))
 
 function money(n: number) {
   if (!n) return '¥0'
@@ -232,6 +345,20 @@ function serviceLabel(type: string) {
     cancellation: '注销清算',
     other: '综合财税'
   } as Record<string, string>)[type] || '综合财税'
+}
+
+function entityAvatar(row: any) {
+  const name = row?.entity?.shortName || row?.entity?.name || '情报'
+  return String(name).slice(0, 2)
+}
+
+function signalAvatarClass(level: string) {
+  return ({
+    A: 'danger',
+    B: 'warning',
+    C: 'channel',
+    D: 'company'
+  } as Record<string, string>)[level] || 'company'
 }
 
 function changeType(type: SignalType | '') {
@@ -396,6 +523,42 @@ p {
   gap: 10px;
   margin-bottom: 12px;
 }
+.selection-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.selection-strip.active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+.selection-copy {
+  min-width: 0;
+}
+.selection-copy span,
+.selection-copy em {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+}
+.selection-copy strong {
+  display: block;
+  margin: 3px 0;
+  color: #1f2937;
+  font-size: 14px;
+}
+.selection-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
 .company-line {
   display: flex;
   align-items: center;
@@ -458,37 +621,49 @@ p {
   justify-content: flex-end;
   padding-top: 12px;
 }
-.drawer-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.drawer-title h2 {
-  margin: 0 0 6px;
-  font-size: 20px;
-}
-.timeline {
+.intel-summary-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  margin-bottom: 14px;
 }
-.timeline div {
-  border: 1px solid #e5e7eb;
+.intel-summary-list div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #edf1f5;
   border-radius: 8px;
-  padding: 12px;
+  background: #fbfcfd;
 }
-.timeline span {
+.intel-summary-list .wide {
+  grid-column: 1 / -1;
+}
+.intel-summary-list span {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
   color: #64748b;
   font-size: 12px;
 }
-.drawer-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 18px;
+.intel-summary-list b {
+  overflow-wrap: anywhere;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 650;
+}
+.linkage-note {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+.linkage-note strong {
+  color: #1d4ed8;
+  font-size: 14px;
+}
+.linkage-note span {
+  color: #64748b;
+  font-size: 13px;
 }
 @media (max-width: 1100px) {
   .metric-grid,
@@ -496,6 +671,13 @@ p {
     grid-template-columns: repeat(2, 1fr);
   }
   .filters {
+    grid-template-columns: 1fr;
+  }
+  .selection-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .intel-summary-list {
     grid-template-columns: 1fr;
   }
 }

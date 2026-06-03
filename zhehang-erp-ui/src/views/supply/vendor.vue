@@ -213,35 +213,82 @@
       </template>
     </el-dialog>
 
-    <!-- 详情 Drawer -->
-    <el-drawer v-model="detailVisible" :title="detail?.supplierName" size="640px" class="vendor-drawer">
-      <div v-if="detail" class="detail-body">
-        <div class="detail-hero">
-          <div>
-            <div class="hero-no">{{ detail.supplierNo }}</div>
-            <div class="hero-name">{{ detail.supplierName }}</div>
-            <div class="hero-sub">对接人 · {{ detail.contactName }} · {{ detail.contactPhone }}</div>
+    <BusinessDetailDrawer
+      v-if="detail"
+      v-model="detailVisible"
+      :title="detail.supplierName"
+      :subtitle="`对接人 · ${detail.contactName || '—'} · ${detail.contactPhone || '—'}`"
+      eyebrow="地址供应商"
+      :avatar="(detail.shortName || detail.supplierName || '供').slice(0, 2)"
+      :avatar-class="supplierAvatarClass(detail)"
+      :status-text="statusLabel(detail.status)"
+      :status-type="statusType(detail.status)"
+      size="660px"
+    >
+      <template #actions>
+        <span :class="['expiry-pill', expiryClass(detail)]">{{ expiryText(detail) }}</span>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv">
+            <span>供应商编号</span>
+            <b>{{ detail.supplierNo }}</b>
           </div>
-          <div :class="['count-down', expiryClass(detail)]">
-            <div class="cd-num">{{ daysToExpiry(detail) }}</div>
-            <div class="cd-label">天后到期</div>
+          <div class="bd-kv">
+            <span>合作等级</span>
+            <b>{{ detail.cooperateLevel }} 级</b>
+          </div>
+          <div class="bd-kv">
+            <span>可用地址</span>
+            <b>{{ addrCountOf(detail.id).available }} / {{ addrCountOf(detail.id).total }} 个</b>
+          </div>
+          <div class="bd-kv">
+            <span>年付底价</span>
+            <b>¥{{ formatNum(detail.totalProcurement || detail.yearlyPrice || 0) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>累计资源成本</span>
+            <b>¥{{ formatNum(detail.totalProcurement) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>累计返点</span>
+            <b>¥{{ formatNum(detail.totalCommission) }}</b>
+          </div>
+          <div class="bd-kv wide">
+            <span>可供区域</span>
+            <b>{{ regionOf(detail) }}</b>
+          </div>
+          <div class="bd-kv wide">
+            <span>备注</span>
+            <b>{{ detail.remark || '—' }}</b>
           </div>
         </div>
+      </template>
 
-        <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="合作状态"><el-tag :type="statusType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag></el-descriptions-item>
-          <el-descriptions-item label="等级">{{ detail.cooperateLevel }}</el-descriptions-item>
-          <el-descriptions-item label="开始日">{{ detail.cooperateStartDate }}</el-descriptions-item>
-          <el-descriptions-item label="到期日">{{ expiryOf(detail) }}</el-descriptions-item>
-          <el-descriptions-item label="开户行">{{ detail.bankName || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="账号">{{ detail.bankAccount || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="累计资源成本">¥{{ formatNum(detail.totalProcurement) }}</el-descriptions-item>
-          <el-descriptions-item label="累计返点">¥{{ formatNum(detail.totalCommission) }}</el-descriptions-item>
-          <el-descriptions-item :span="2" label="备注">{{ detail.remark || '—' }}</el-descriptions-item>
-        </el-descriptions>
+      <div class="bd-section-title">合作信息</div>
+      <div class="supplier-summary-list">
+        <div>
+          <span>合作开始日</span>
+          <b>{{ detail.cooperateStartDate || '—' }}</b>
+        </div>
+        <div>
+          <span>合作到期日</span>
+          <b>{{ expiryOf(detail) }}</b>
+        </div>
+        <div>
+          <span>开户行</span>
+          <b>{{ detail.bankName || '—' }}</b>
+        </div>
+        <div>
+          <span>收款账号</span>
+          <b>{{ detail.bankAccount || '—' }}</b>
+        </div>
+      </div>
 
-        <h4 class="section-title">关联挂靠地址 ({{ relatedAddresses.length }})</h4>
-        <el-table :data="relatedAddresses" size="small" stripe>
+      <div class="supplier-tables">
+        <div class="bd-section-title">关联挂靠地址 ({{ relatedAddresses.length }})</div>
+        <el-table :data="relatedAddresses" size="small" stripe class="drawer-table">
           <el-table-column prop="resourceNo" label="编号" width="100" />
           <el-table-column prop="district" label="区域" width="80" />
           <el-table-column prop="detailAddress" label="地址" show-overflow-tooltip />
@@ -251,20 +298,40 @@
             </template>
           </el-table-column>
         </el-table>
-
-        <h4 class="section-title">资源补充历史 ({{ relatedProcurements.length }})</h4>
-        <el-table :data="relatedProcurements" size="small" stripe>
-          <el-table-column prop="procurementNo" label="补充单号" width="150" />
-          <el-table-column prop="quantity" label="数量" width="70" align="center" />
-          <el-table-column label="金额" width="110" align="right">
-            <template #default="{ row }"><span class="num">¥{{ formatNum(row.totalAmount) }}</span></template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态" width="100">
-            <template #default="{ row }"><el-tag size="small">{{ row.status }}</el-tag></template>
-          </el-table-column>
-        </el-table>
       </div>
-    </el-drawer>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>合作建档</strong>
+            <p>{{ detail.cooperateStartDate || '—' }} · {{ detail.supplierNo }} · {{ regionOf(detail) }}</p>
+          </div>
+        </div>
+        <div v-for="item in relatedProcurements.slice(0, 4)" :key="item.id" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>{{ item.procurementNo }} · 补充 {{ item.quantity }} 个资源</strong>
+            <p>金额 ¥{{ formatNum(item.totalAmount) }} · 当前状态 {{ procurementStatusLabel(item.status) }}</p>
+          </div>
+        </div>
+        <div v-if="!relatedProcurements.length" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>暂无资源补充历史</strong>
+            <p>后续创建资源补充单后，会在这里形成合作履约记录。</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button @click="openEdit(detail)">编辑</el-button>
+        <el-button v-if="detail.status === 'active'" type="warning" @click="changeStatus(detail, 'paused')">暂停合作</el-button>
+        <el-button v-if="detail.status === 'paused'" type="success" @click="changeStatus(detail, 'active')">恢复合作</el-button>
+        <el-button type="danger" @click="changeStatus(detail, 'blacklist')">终止合作</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -272,6 +339,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { supplierApi, addressApi, procurementApi, type BizSupplier, type BizAddressResource, type BizProcurement } from '@/api/channel'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const regionOptions = ['上城区', '拱墅区', '西湖区', '滨江区', '萧山区', '余杭区', '临平区', '钱塘区', '富阳区', '临安区', '桐庐县', '淳安县', '建德市', '全杭州']
 
@@ -330,6 +398,18 @@ function expiryClass (s: any) {
   if (d <= 90) return 'caution'
   return 'normal'
 }
+function expiryText (s: any) {
+  const d = daysToExpiry(s)
+  if (d < 0) return `已逾期 ${Math.abs(d)} 天`
+  if (d === 0) return '今日到期'
+  return `${d} 天后到期`
+}
+function supplierAvatarClass (s: any) {
+  if (s.status === 'blacklist') return 'danger'
+  if (expiryClass(s) === 'warning' || expiryClass(s) === 'expired') return 'warning'
+  if (s.status === 'active') return 'success'
+  return 'company'
+}
 
 const stats = computed(() => {
   const active = list.value.filter(s => s.status === 'active').length
@@ -341,6 +421,17 @@ const stats = computed(() => {
 
 function statusType (s: string): any { return s === 'active' ? 'success' : s === 'paused' ? 'warning' : 'danger' }
 function statusLabel (s: string) { return s === 'active' ? '合作中' : s === 'paused' ? '已暂停' : '黑名单' }
+function procurementStatusLabel (s: string) {
+  return ({
+    draft: '草稿',
+    pending_approval: '主管待审',
+    pending_boss: '老板待审',
+    approved: '已审批',
+    paid: '已付款',
+    stocked: '已上架',
+    rejected: '已驳回'
+  } as Record<string, string>)[s] || s
+}
 function addrStatusType (s: string): any { return ({ available: 'success', reserved: 'warning', sold: 'primary', expired: 'info' } as any)[s] || 'info' }
 function addrStatusLabel (s: string) { return ({ available: '可用', reserved: '已预留', sold: '已使用', expired: '已到期' } as any)[s] || s }
 function formatNum (n: number) { return (n || 0).toLocaleString('zh-CN') }
@@ -469,13 +560,54 @@ onMounted(loadData)
 .expiry.caution { color: #d97706; background: #fef3c7; }
 .expiry.warning { color: #b91c1c; background: #fee2e2; font-weight: 600; }
 .expiry.expired { color: #fff; background: #b91c1c; font-weight: 600; }
-.detail-hero { display: flex; justify-content: space-between; align-items: center; padding: 18px; background: linear-gradient(135deg, #134e4a, #0d7e7a); color: #fff; border-radius: 10px; margin-bottom: 16px; }
-.hero-no { font-family: 'JetBrains Mono', monospace; opacity: .75; font-size: 12px; letter-spacing: 1px; }
-.hero-name { font-size: 18px; font-weight: 700; margin: 4px 0; }
-.hero-sub { font-size: 12px; opacity: .85; }
-.count-down { text-align: center; padding: 8px 18px; border-radius: 8px; background: rgba(255,255,255,.15); }
-.cd-num { font-size: 28px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
-.cd-label { font-size: 11px; opacity: .85; margin-top: 4px; }
+.expiry-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 650;
+}
+.expiry-pill.normal { background: #ecfdf5; color: #047857; }
+.expiry-pill.caution { background: #fff7ed; color: #c2410c; }
+.expiry-pill.warning,
+.expiry-pill.expired { background: #fef2f2; color: #b91c1c; }
+.supplier-summary-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.supplier-summary-list div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.supplier-summary-list span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.supplier-summary-list b {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+.supplier-tables {
+  margin-top: 14px;
+}
+.drawer-table {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
 .section-title { margin: 20px 0 10px; font-size: 14px; color: #0f172a; padding-left: 10px; border-left: 3px solid #0d7e7a; }
 :deep(.vendor-dialog .el-dialog__body) { padding-top: 10px; }
 :deep(.el-divider__text) { font-weight: 600; color: #0d7e7a; }
@@ -485,5 +617,6 @@ onMounted(loadData)
 @media (max-width: 760px) {
   .page-head { align-items: flex-start; flex-direction: column; }
   .stat-grid { grid-template-columns: 1fr; }
+  .supplier-summary-list { grid-template-columns: 1fr; }
 }
 </style>

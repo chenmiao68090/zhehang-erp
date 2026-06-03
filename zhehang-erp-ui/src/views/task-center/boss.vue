@@ -140,42 +140,72 @@
       </template>
     </el-dialog>
 
-    <!-- 详情 Drawer 含汇报时间线 -->
-    <el-drawer v-model="dlg.detail" :title="current?.taskName || '任务详情'" size="560px">
-      <div v-if="current" class="detail-block">
-        <div class="urgent-banner">
-          <span class="dot"></span>
-          <span>紧急 · 向老板汇报</span>
-        </div>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="任务编号">{{ current.taskNo }}</el-descriptions-item>
-          <el-descriptions-item label="子类型">{{ current._subType }}</el-descriptions-item>
-          <el-descriptions-item label="下达人">{{ current.assignerName }}</el-descriptions-item>
-          <el-descriptions-item label="执行人">{{ current.assigneeName || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="statusMap[current.status]?.type" size="small">{{ statusMap[current.status]?.label }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="计划完成">{{ current.planEndDate }}</el-descriptions-item>
-          <el-descriptions-item label="任务描述" :span="2">{{ current.taskContent }}</el-descriptions-item>
-        </el-descriptions>
+    <BusinessDetailDrawer
+      v-if="current"
+      v-model="dlg.detail"
+      :title="current.taskName || '任务详情'"
+      :subtitle="`${current.assigneeName || '待指派'} · ${current._subType || '特殊任务'}`"
+      eyebrow="老板特殊安排"
+      :avatar="current._subType?.slice(0, 2) || '急'"
+      :avatar-class="bossTaskAvatarClass(current.status)"
+      :status-text="statusMap[current.status]?.label || current.status"
+      :status-type="statusMap[current.status]?.type || 'info'"
+      size="620px"
+    >
+      <template #actions>
+        <el-tag type="danger" effect="plain">紧急</el-tag>
+      </template>
 
-        <div class="report-block">
-          <div class="report-head">
-            <h3>汇报历史</h3>
-            <el-button v-if="current.status === 'in_progress'" class="btn-ghost" size="small" @click="openReport(current)">+ 新增汇报</el-button>
-          </div>
-          <el-timeline v-if="reports.length">
-            <el-timeline-item v-for="r in reports" :key="r.time" :timestamp="r.time" placement="top" :color="'#D4AF37'">
-              <div class="report-card">
-                <div class="reporter">{{ r.reporter }}</div>
-                <div class="report-content">{{ r.content }}</div>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
-          <el-empty v-else description="暂无汇报记录" :image-size="80" />
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>任务编号</span><b>{{ current.taskNo }}</b></div>
+          <div class="bd-kv"><span>子类型</span><b>{{ current._subType || '—' }}</b></div>
+          <div class="bd-kv"><span>下达人</span><b>{{ current.assignerName || '老板' }}</b></div>
+          <div class="bd-kv"><span>执行人</span><b>{{ current.assigneeName || '—' }}</b></div>
+          <div class="bd-kv"><span>优先级</span><b>紧急</b></div>
+          <div class="bd-kv"><span>计划完成</span><b>{{ current.planEndDate || '—' }}</b></div>
+          <div class="bd-kv wide"><span>任务描述</span><b>{{ current.taskContent || '—' }}</b></div>
         </div>
+      </template>
+
+      <div class="bd-section-title">汇报要求</div>
+      <div class="urgent-note">
+        <strong>紧急任务需要持续汇报</strong>
+        <span>执行中任务建议按关键节点沉淀进度，老板验收前保持最新汇报可追溯。</span>
       </div>
-    </el-drawer>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>任务下达</strong>
+            <p>{{ current.assignerName || '老板' }} 下达 · {{ current.planEndDate || '—' }} 前完成</p>
+          </div>
+        </div>
+        <div v-for="r in reports" :key="r.time" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>{{ r.reporter }} 汇报进度</strong>
+            <p>{{ r.time }} · {{ r.content }}</p>
+          </div>
+        </div>
+        <div v-if="!reports.length" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>暂无汇报记录</strong>
+            <p>任务进入执行中后，可以在底部操作区新增汇报。</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="dlg.detail = false">关闭</el-button>
+        <el-button v-if="current.status === 'assigned'" type="success" @click="doStart(current)">开始执行</el-button>
+        <el-button v-if="current.status === 'in_progress'" type="primary" @click="openReport(current)">新增汇报</el-button>
+        <el-button v-if="current.status === 'in_progress'" type="warning" @click="doFinish(current)">提交完成</el-button>
+        <el-button v-if="current.status === 'reviewing'" type="success" @click="doApprove(current)">老板验收</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -183,6 +213,7 @@
 import { reactive, ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { taskApi, type BizTask } from '@/api/task-center'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const SUB_TYPES = ['VIP客户专属服务', '紧急事务处理', '客户投诉处理', '内部审计检查', '特殊关系客户接待', '新业务试点']
 const PEOPLE: string[] = []
@@ -195,6 +226,18 @@ const statusMap: Record<string, { label: string; type: 'info' | 'warning' | 'pri
   completed: { label: '已完成', type: 'success' },
   overdue: { label: '已逾期', type: 'danger' },
   closed: { label: '已暂停', type: 'info' }
+}
+
+function bossTaskAvatarClass(status: string) {
+  return ({
+    pending: 'company',
+    assigned: 'warning',
+    in_progress: 'danger',
+    reviewing: 'warning',
+    completed: 'success',
+    overdue: 'danger',
+    closed: 'company'
+  } as Record<string, string>)[status] || 'danger'
 }
 
 const REPORT_KEY = 'biz_d_reports'
@@ -454,6 +497,22 @@ onMounted(() => { ensureSeed(); loadList() })
 }
 
 .detail-block { padding: 4px 6px; }
+.urgent-note {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+}
+.urgent-note strong {
+  color: #b91c1c;
+  font-size: 14px;
+}
+.urgent-note span {
+  color: #64748b;
+  font-size: 13px;
+}
 .report-block { margin-top: 22px; }
 .report-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
   h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }

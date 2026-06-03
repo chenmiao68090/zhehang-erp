@@ -59,22 +59,40 @@
       />
     </div>
 
-    <!-- 客户详情抽屉 -->
-    <el-drawer v-model="drawerVisible" :title="currentCustomer?.name" size="60%" destroy-on-close>
-      <el-tabs v-model="activeTab">
+    <BusinessDetailDrawer
+      v-if="currentCustomer"
+      v-model="drawerVisible"
+      :title="currentCustomer.name || $t('crm.customer.name')"
+      :subtitle="`${currentCustomer.industry || '—'} · ${currentCustomer.scale || '—'}`"
+      eyebrow="CRM CUSTOMER"
+      :avatar="customerAvatar(currentCustomer)"
+      :avatar-class="customerAvatarClass(currentCustomer.level)"
+      :status-text="`${currentCustomer.level || 'C'} 级客户`"
+      :status-type="customerLevelType(currentCustomer.level)"
+      size="72%"
+    >
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>{{ $t('crm.customer.shortName') }}</span><b>{{ currentCustomer.shortName || '—' }}</b></div>
+          <div class="bd-kv"><span>{{ $t('crm.customer.taxpayerType') }}</span><b>{{ taxpayerTypeLabel(currentCustomer.taxpayerType) }}</b></div>
+          <div class="bd-kv"><span>{{ $t('crm.customer.servicePackage') }}</span><b>{{ currentCustomer.servicePackage || '—' }}</b></div>
+          <div class="bd-kv"><span>{{ $t('crm.customer.billingCycle') }}</span><b>{{ currentCustomer.billingCycle || '—' }}</b></div>
+          <div class="bd-kv wide"><span>{{ $t('crm.customer.creditCode') }}</span><b>{{ currentCustomer.creditCode || '—' }}</b></div>
+          <div class="bd-kv wide"><span>{{ $t('crm.customer.address') }}</span><b>{{ currentCustomer.address || '—' }}</b></div>
+        </div>
+      </template>
+
+      <el-tabs v-model="activeTab" class="customer-detail-tabs">
         <el-tab-pane :label="$t('crm.customer.tabs.basic')" name="basic">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item :label="$t('crm.customer.name')">{{ currentCustomer?.name }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.shortName')">{{ currentCustomer?.shortName || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.industry')">{{ currentCustomer?.industry || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.scale')">{{ currentCustomer?.scale || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.level')">{{ currentCustomer?.level }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.taxpayerType')">{{ currentCustomer?.taxpayerType === 1 ? $t('crm.customer.taxpayerOptions.general') : $t('crm.customer.taxpayerOptions.small') }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.creditCode')">{{ currentCustomer?.creditCode || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.address')">{{ currentCustomer?.address || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.servicePackage')">{{ currentCustomer?.servicePackage || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('crm.customer.billingCycle')">{{ currentCustomer?.billingCycle || '-' }}</el-descriptions-item>
-          </el-descriptions>
+          <div class="customer-info-grid">
+            <div><span>{{ $t('crm.customer.name') }}</span><b>{{ currentCustomer.name || '—' }}</b></div>
+            <div><span>{{ $t('crm.customer.level') }}</span><b>{{ currentCustomer.level || '—' }}</b></div>
+            <div><span>{{ $t('crm.customer.industry') }}</span><b>{{ currentCustomer.industry || '—' }}</b></div>
+            <div><span>{{ $t('crm.customer.scale') }}</span><b>{{ currentCustomer.scale || '—' }}</b></div>
+            <div><span>{{ $t('crm.customer.website') }}</span><b>{{ currentCustomer.website || '—' }}</b></div>
+            <div><span>{{ $t('crm.customer.createTime') }}</span><b>{{ currentCustomer.createTime || '—' }}</b></div>
+            <div class="wide"><span>{{ $t('crm.customer.remark') }}</span><b>{{ currentCustomer.remark || '—' }}</b></div>
+          </div>
         </el-tab-pane>
         <el-tab-pane :label="$t('crm.customer.tabs.contacts')" name="contacts">
           <el-button type="primary" size="small" style="margin-bottom: 12px" @click="showContactDialog">{{ $t('common.add') }}</el-button>
@@ -129,7 +147,30 @@
           </el-table>
         </el-tab-pane>
       </el-tabs>
-    </el-drawer>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>客户建档</strong>
+            <p>{{ currentCustomer.createTime || '—' }} · {{ currentCustomer.level || 'C' }} 级 · {{ currentCustomer.industry || '行业待补充' }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>关联数据</strong>
+            <p>{{ contacts.length }} 个联系人 · {{ follows.length }} 条跟进 · {{ opportunities.length }} 个商机 · {{ contracts.length }} 份合同</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="drawerVisible = false">{{ $t('common.close') }}</el-button>
+        <el-button @click="handleEdit(currentCustomer); drawerVisible = false">{{ $t('common.edit') }}</el-button>
+        <el-button type="warning" @click="handleToPool(currentCustomer)">{{ $t('crm.customer.toPool') }}</el-button>
+      </template>
+    </BusinessDetailDrawer>
 
     <!-- 新增/编辑客户弹窗 -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? $t('common.edit') : $t('common.add')" width="650px" destroy-on-close>
@@ -270,6 +311,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { customerApi, contactApi, followApi, opportunityApi, contractApi } from '@/api/crm'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -312,6 +354,17 @@ const levelTagType = (val: string) => {
   const map: Record<string, string> = { A: 'danger', B: 'warning', C: '', D: 'info' }
   return map[val] || ''
 }
+
+const customerLevelType = (val: string) => (levelTagType(val) || 'info') as any
+
+const customerAvatar = (row: any) => String(row?.shortName || row?.name || '客').slice(0, 2)
+
+const customerAvatarClass = (level: string) => {
+  const map: Record<string, string> = { A: 'danger', B: 'warning', C: 'channel', D: 'company' }
+  return map[level] || 'company'
+}
+
+const taxpayerTypeLabel = (val: number) => val === 1 ? t('crm.customer.taxpayerOptions.general') : t('crm.customer.taxpayerOptions.small')
 
 const followTypeLabel = (val: number) => {
   const map: Record<number, string> = { 1: t('crm.follow.typeOptions.phone'), 2: t('crm.follow.typeOptions.visit'), 3: t('crm.follow.typeOptions.wechat'), 4: t('crm.follow.typeOptions.email') }
@@ -427,4 +480,42 @@ onMounted(() => loadData())
 .customer-page { padding: 20px; }
 .search-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
 .pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 16px; }
+.customer-detail-tabs {
+  min-height: 260px;
+}
+.customer-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.customer-info-grid div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.customer-info-grid .wide {
+  grid-column: 1 / -1;
+}
+.customer-info-grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.customer-info-grid b {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+@media (max-width: 760px) {
+  .search-bar {
+    flex-direction: column;
+  }
+  .customer-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

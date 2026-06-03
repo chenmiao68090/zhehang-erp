@@ -231,32 +231,83 @@
       </template>
     </el-dialog>
 
-    <!-- 员工详情抽屉 -->
-    <el-drawer v-model="drawerVisible" :title="$t('org.empDetail')" size="500px">
-      <template v-if="detailData">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item :label="$t('org.empCode')">{{ detailData.empCode }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.empName')">{{ detailData.name }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.gender')">{{ detailData.gender === 0 ? $t('org.male') : $t('org.female') }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.birthDate')">{{ detailData.birthDate || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.idCard')">{{ detailData.idCard || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.phone')">{{ detailData.phone || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.email')">{{ detailData.email || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.address')">{{ detailData.address || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.deptName')">{{ detailData.deptName || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.postName')">{{ detailData.postName || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.hireDate')">{{ detailData.hireDate || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.regularDate')">{{ detailData.regularDate || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.contractStart')">{{ detailData.contractStart || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.contractEnd')">{{ detailData.contractEnd || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.education')">{{ detailData.education || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.university')">{{ detailData.university || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.major')">{{ detailData.major || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.emergencyContact')">{{ detailData.emergencyContact || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="$t('org.emergencyPhone')">{{ detailData.emergencyPhone || '-' }}</el-descriptions-item>
-        </el-descriptions>
+    <BusinessDetailDrawer
+      v-if="detailData"
+      v-model="drawerVisible"
+      :title="detailData.name || $t('org.empDetail')"
+      :subtitle="`${detailData.deptName || '—'} · ${detailData.postName || '—'}`"
+      :eyebrow="$t('org.empDetail')"
+      :avatar="employeeAvatar(detailData)"
+      :avatar-class="employeeAvatarClass(detailData.status)"
+      :status-text="empStatusText(detailData.status)"
+      :status-type="empStatusType(detailData.status)"
+      size="560px"
+    >
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>{{ $t('org.empCode') }}</span><b>{{ detailData.empCode || '—' }}</b></div>
+          <div class="bd-kv"><span>{{ $t('org.status') }}</span><b>{{ empStatusText(detailData.status) }}</b></div>
+          <div class="bd-kv"><span>{{ $t('org.hireDate') }}</span><b>{{ detailData.hireDate || '—' }}</b></div>
+          <div class="bd-kv"><span>{{ $t('org.regularDate') }}</span><b>{{ detailData.regularDate || '—' }}</b></div>
+          <div class="bd-kv wide"><span>{{ $t('org.phone') }}</span><b>{{ detailData.phone || '—' }}</b></div>
+        </div>
       </template>
-    </el-drawer>
+
+      <div class="bd-section-title">个人信息</div>
+      <div class="employee-info-grid">
+        <div><span>{{ $t('org.gender') }}</span><b>{{ genderText(detailData.gender) }}</b></div>
+        <div><span>{{ $t('org.birthDate') }}</span><b>{{ detailData.birthDate || '—' }}</b></div>
+        <div><span>{{ $t('org.email') }}</span><b>{{ detailData.email || '—' }}</b></div>
+        <div><span>{{ $t('org.idCard') }}</span><b>{{ detailData.idCard || '—' }}</b></div>
+        <div class="wide"><span>{{ $t('org.address') }}</span><b>{{ detailData.address || '—' }}</b></div>
+      </div>
+
+      <div class="bd-section-title">任职与合同</div>
+      <div class="employee-info-grid">
+        <div><span>{{ $t('org.deptName') }}</span><b>{{ detailData.deptName || '—' }}</b></div>
+        <div><span>{{ $t('org.postName') }}</span><b>{{ detailData.postName || '—' }}</b></div>
+        <div><span>{{ $t('org.contractStart') }}</span><b>{{ detailData.contractStart || '—' }}</b></div>
+        <div><span>{{ $t('org.contractEnd') }}</span><b>{{ detailData.contractEnd || '—' }}</b></div>
+        <div><span>{{ $t('org.education') }}</span><b>{{ detailData.education || '—' }}</b></div>
+        <div><span>{{ $t('org.major') }}</span><b>{{ detailData.major || '—' }}</b></div>
+        <div class="wide"><span>{{ $t('org.university') }}</span><b>{{ detailData.university || '—' }}</b></div>
+      </div>
+
+      <div class="bd-section-title">紧急联系人</div>
+      <div class="employee-info-grid compact">
+        <div><span>{{ $t('org.emergencyContact') }}</span><b>{{ detailData.emergencyContact || '—' }}</b></div>
+        <div><span>{{ $t('org.emergencyPhone') }}</span><b>{{ detailData.emergencyPhone || '—' }}</b></div>
+      </div>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>{{ $t('org.hireDate') }}</strong>
+            <p>{{ detailData.hireDate || '—' }} · {{ detailData.deptName || '—' }} / {{ detailData.postName || '—' }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>{{ $t('org.regularDate') }}</strong>
+            <p>{{ detailData.regularDate || '—' }} · 当前状态 {{ empStatusText(detailData.status) }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>{{ $t('org.tabContract') }}</strong>
+            <p>{{ detailData.contractStart || '—' }} 至 {{ detailData.contractEnd || '—' }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="drawerVisible = false">{{ $t('common.close') }}</el-button>
+        <el-button type="primary" @click="handleEdit(detailData); drawerVisible = false">{{ $t('common.edit') }}</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -266,6 +317,7 @@ import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { employeeApi, deptApi, postApi } from '@/api/org'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const { t } = useI18n()
 const formRef = ref<FormInstance>()
@@ -331,6 +383,15 @@ const empStatusType = (status: number) => {
 const empStatusText = (status: number) => {
   const map: Record<number, string> = { 1: t('org.empStatusActive'), 2: t('org.empStatusTrial'), 3: t('org.empStatusLeft') }
   return map[status] || '-'
+}
+
+const genderText = (gender: number) => gender === 0 ? t('org.male') : t('org.female')
+
+const employeeAvatar = (row: any) => String(row?.name || '员').slice(0, 2)
+
+const employeeAvatarClass = (status: number) => {
+  const map: Record<number, string> = { 1: 'success', 2: 'warning', 3: 'company' }
+  return map[status] || 'company'
 }
 
 const loadData = async () => {
@@ -443,5 +504,38 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+.employee-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.employee-info-grid div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.employee-info-grid .wide {
+  grid-column: 1 / -1;
+}
+.employee-info-grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.employee-info-grid b {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+@media (max-width: 760px) {
+  .employee-info-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

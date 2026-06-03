@@ -60,54 +60,102 @@
       </div>
     </section>
 
-    <!-- 项目详情 Drawer -->
-    <el-drawer v-model="dlg.detail" size="640px" :title="current?.name || '项目详情'">
-      <div v-if="current" class="detail-block">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="项目类型">{{ current.subType }}</el-descriptions-item>
-          <el-descriptions-item label="客户">{{ current.customer }}</el-descriptions-item>
-          <el-descriptions-item label="项目经理">{{ current.manager }}</el-descriptions-item>
-          <el-descriptions-item label="项目状态">
-            <el-tag :type="projStatusMap[current.status]?.type" size="small">{{ projStatusMap[current.status]?.label }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="计划开始">{{ current.startDate }}</el-descriptions-item>
-          <el-descriptions-item label="计划结束">{{ current.endDate }}</el-descriptions-item>
-          <el-descriptions-item label="项目团队" :span="2">
-            <el-tag v-for="m in current.team" :key="m" style="margin-right:6px" effect="plain">{{ m }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="项目描述" :span="2">{{ current.desc }}</el-descriptions-item>
-        </el-descriptions>
+    <BusinessDetailDrawer
+      v-if="current"
+      v-model="dlg.detail"
+      :title="current.name || '项目详情'"
+      :subtitle="`${current.customer || '—'} · ${current.subType || '—'}`"
+      eyebrow="项目部业务"
+      :avatar="current.subType?.slice(0, 2) || '项'"
+      :avatar-class="projectAvatarClass(current.status)"
+      :status-text="projStatusMap[current.status]?.label"
+      :status-type="projStatusMap[current.status]?.type"
+      size="680px"
+    >
+      <template #actions>
+        <span class="progress-pill">{{ progress(current) }}%</span>
+      </template>
 
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>项目类型</span><b>{{ current.subType }}</b></div>
+          <div class="bd-kv"><span>项目经理</span><b>{{ current.manager || '—' }}</b></div>
+          <div class="bd-kv"><span>计划开始</span><b>{{ current.startDate || '—' }}</b></div>
+          <div class="bd-kv"><span>计划结束</span><b>{{ current.endDate || '—' }}</b></div>
+          <div class="bd-kv wide"><span>客户</span><b>{{ current.customer || '—' }}</b></div>
+          <div class="bd-kv wide"><span>项目描述</span><b>{{ current.desc || '—' }}</b></div>
+        </div>
+      </template>
+
+      <div class="bd-section-title">总体进度</div>
+      <div class="project-progress-card">
         <div class="prog-block">
-          <div class="prog-label">总体进度</div>
           <div class="progress-bar large"><div class="progress-fill" :style="{ width: progress(current) + '%' }"></div></div>
           <div class="prog-num">{{ progress(current) }}%</div>
         </div>
-
-        <div class="sub-head">
-          <h3>子任务列表</h3>
-          <el-button class="btn-ghost" size="small" @click="openSubCreate">+ 添加子任务</el-button>
+        <div class="progress-copy">
+          已完成 {{ current.subTasks.filter(s => s.status === 'completed').length }} / {{ current.subTasks.length }} 个子任务
         </div>
-
-        <el-table :data="current.subTasks" size="small" :row-class-name="subRowClass">
-          <el-table-column prop="name" label="子任务名" min-width="180" />
-          <el-table-column prop="assignee" label="执行人" width="110" />
-          <el-table-column prop="planEnd" label="计划完成" width="120" />
-          <el-table-column label="状态" width="100">
-            <template #default="{ row }">
-              <el-tag :type="subStatusMap[row.status]?.type" size="small">{{ subStatusMap[row.status]?.label }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="160">
-            <template #default="{ row, $index }">
-              <el-button v-if="row.status === 'pending'" link type="primary" @click="setSubStatus($index, 'in_progress')">开始</el-button>
-              <el-button v-if="row.status === 'in_progress'" link type="success" @click="setSubStatus($index, 'completed')">完成</el-button>
-              <el-button link type="danger" @click="removeSub($index)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
       </div>
-    </el-drawer>
+
+      <div class="bd-section-title">项目团队</div>
+      <div class="project-team">
+        <el-tag v-for="m in current.team" :key="m" effect="plain">{{ m }}</el-tag>
+        <span v-if="!current.team.length">暂无团队成员</span>
+      </div>
+
+      <div class="sub-head">
+        <h3>子任务列表</h3>
+        <el-button class="btn-ghost" size="small" @click="openSubCreate">+ 添加子任务</el-button>
+      </div>
+
+      <el-table :data="current.subTasks" size="small" :row-class-name="subRowClass" class="drawer-table">
+        <el-table-column prop="name" label="子任务名" min-width="180" />
+        <el-table-column prop="assignee" label="执行人" width="110" />
+        <el-table-column prop="planEnd" label="计划完成" width="120" />
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="subStatusMap[row.status]?.type" size="small">{{ subStatusMap[row.status]?.label }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160">
+          <template #default="{ row, $index }">
+            <el-button v-if="row.status === 'pending'" link type="primary" @click="setSubStatus($index, 'in_progress')">开始</el-button>
+            <el-button v-if="row.status === 'in_progress'" link type="success" @click="setSubStatus($index, 'completed')">完成</el-button>
+            <el-button link type="danger" @click="removeSub($index)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>项目创建</strong>
+            <p>{{ current.startDate || '—' }} · {{ current.manager || '项目经理待定' }} 负责</p>
+          </div>
+        </div>
+        <div v-for="item in current.subTasks.slice(0, 5)" :key="item.id" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: item.status === 'completed' }" />
+          <div>
+            <strong>{{ item.name }} · {{ subStatusMap[item.status]?.label }}</strong>
+            <p>{{ item.assignee || '未指派' }} · 计划完成 {{ item.planEnd || '—' }}</p>
+          </div>
+        </div>
+        <div v-if="!current.subTasks.length" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>待拆解子任务</strong>
+            <p>项目经理可在详情页直接添加子任务并指派执行人。</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="dlg.detail = false">关闭</el-button>
+        <el-button type="primary" @click="openSubCreate">添加子任务</el-button>
+      </template>
+    </BusinessDetailDrawer>
 
     <!-- 创建项目 Dialog -->
     <el-dialog v-model="dlg.create" title="新建 C 类项目" width="640px">
@@ -179,6 +227,7 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const SUB_TYPES = ['企业财税合规', '多公司账务合并', '上市审计配合', '大型资质代办', '企业内训', '专项税务筹划']
 const CUSTOMERS: string[] = []
@@ -201,6 +250,15 @@ const subStatusMap: Record<string, { label: string; type: 'info' | 'warning' | '
   pending: { label: '待开始', type: 'info' },
   in_progress: { label: '进行中', type: 'primary' },
   completed: { label: '已完成', type: 'success' }
+}
+
+function projectAvatarClass(status: string) {
+  return ({
+    planning: 'company',
+    in_progress: 'channel',
+    completed: 'success',
+    paused: 'warning'
+  } as Record<string, string>)[status] || 'company'
 }
 
 const PROJECT_KEY = 'biz_c_projects'
@@ -404,12 +462,55 @@ onMounted(() => {
 }
 
 .detail-block { padding: 6px 4px; }
+.progress-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+.project-progress-card {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
 .prog-block { margin: 22px 0 18px; display: flex; align-items: center; gap: 14px;
   .prog-label { font-size: 13px; color: var(--text-body); width: 80px; }
   .prog-num { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--gold-primary); }
 }
+.project-progress-card .prog-block { margin: 0 0 8px; }
+.progress-copy {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.project-team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.project-team span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
 .sub-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 10px;
   h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+}
+.drawer-table {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
 }
 
 .form-row { display: flex; gap: 12px; }

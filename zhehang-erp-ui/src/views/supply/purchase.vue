@@ -140,10 +140,65 @@
       </template>
     </el-dialog>
 
-    <!-- 详情 Drawer -->
-    <el-drawer v-model="detailVisible" :title="'资源补充单 · ' + (detail?.procurementNo || '')" size="640px">
-      <div v-if="detail" class="detail-body">
-        <!-- 状态步骤条 -->
+    <BusinessDetailDrawer
+      v-if="detail"
+      v-model="detailVisible"
+      :title="`资源补充单 · ${detail.procurementNo || ''}`"
+      :subtitle="`${detail.supplierName} · ${procurementTypeLabel(detail.procurementType)}`"
+      eyebrow="资源补充"
+      :avatar="procurementAvatar(detail)"
+      :avatar-class="procurementAvatarClass(detail.status)"
+      :status-text="statusLabel(detail.status)"
+      :status-type="statusType(detail.status)"
+      size="680px"
+    >
+      <template #actions>
+        <span v-if="detail.totalAmount > 3000" class="big-tag inline">需老板二级审批</span>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv">
+            <span>地址供应商</span>
+            <b>{{ detail.supplierName }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>资源类型</span>
+            <b>{{ procurementTypeLabel(detail.procurementType) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>资源数量</span>
+            <b>{{ detail.quantity }} 个</b>
+          </div>
+          <div class="bd-kv">
+            <span>付款周期</span>
+            <b>{{ payCycleLabel(detail.payCycle) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>资源单价</span>
+            <b>¥{{ formatNum(detail.unitPrice) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>资源总成本</span>
+            <b>¥{{ formatNum(detail.totalAmount) }}</b>
+          </div>
+          <div class="bd-kv">
+            <span>返点比例</span>
+            <b>{{ detail.rebateRate || 0 }}%</b>
+          </div>
+          <div class="bd-kv">
+            <span>实际付款</span>
+            <b>¥{{ formatNum(detail.payAmount || detail.totalAmount) }}</b>
+          </div>
+          <div class="bd-kv wide">
+            <span>补充说明</span>
+            <b>{{ detail.remark || '—' }}</b>
+          </div>
+        </div>
+      </template>
+
+      <div class="bd-section-title">审批与上架进度</div>
+      <div class="procurement-step-wrap">
         <el-steps :active="stepIndex(detail.status)" finish-status="success" align-center class="status-steps">
           <el-step title="草稿" />
           <el-step title="主管审批" />
@@ -151,63 +206,77 @@
           <el-step title="付款" />
           <el-step title="上架" />
         </el-steps>
+      </div>
 
-        <el-descriptions :column="2" border size="small" style="margin-top:16px">
-          <el-descriptions-item label="地址供应商">{{ detail.supplierName }}</el-descriptions-item>
-          <el-descriptions-item label="状态"><el-tag size="small" :type="statusType(detail.status)">{{ statusLabel(detail.status) }}</el-tag></el-descriptions-item>
-          <el-descriptions-item label="数量">{{ detail.quantity }}</el-descriptions-item>
-          <el-descriptions-item label="单价">¥{{ formatNum(detail.unitPrice) }}</el-descriptions-item>
-          <el-descriptions-item label="总额" :span="2">
-            <span class="num amount big">¥{{ formatNum(detail.totalAmount) }}</span>
-            <span v-if="detail.totalAmount > 3000" class="big-tag inline">需老板二级审批</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="申请人">{{ detail.applicantName }}</el-descriptions-item>
-          <el-descriptions-item label="申请时间">{{ detail.applyTime }}</el-descriptions-item>
-          <el-descriptions-item :span="2" label="备注">{{ detail.remark || '—' }}</el-descriptions-item>
-        </el-descriptions>
-
-        <h4 class="section-title">审批记录</h4>
-        <el-timeline class="approval-timeline">
-          <el-timeline-item :timestamp="detail.applyTime" type="primary">
-            <strong>{{ detail.applicantName }}</strong> 提交申请
-          </el-timeline-item>
-          <el-timeline-item v-for="(a, i) in (detail.approvals || [])" :key="i" :timestamp="a.approvalTime" :type="a.pass ? 'success' : 'danger'">
-            <strong>{{ a.approverName }}</strong>
-            <span class="level-chip" :data-lv="a.level">{{ a.level === 'boss' ? '老板' : '主管' }}</span>
-            {{ a.pass ? '审批通过' : '驳回' }}
-            <div class="opinion">{{ a.opinion }}</div>
-          </el-timeline-item>
-          <el-timeline-item v-if="detail.paymentTime" :timestamp="detail.paymentTime" type="warning">
-            <strong>财务</strong> 已付款
-          </el-timeline-item>
-          <el-timeline-item v-if="detail.stockInTime" :timestamp="detail.stockInTime" type="success">
-            <strong>系统</strong> 已上架 ({{ stockedAddrs.length }} 个地址资源已加入资源池)
-          </el-timeline-item>
-        </el-timeline>
-
-        <template v-if="detail.addressLines">
-          <h4 class="section-title">地址资源明细</h4>
+      <template v-if="detail.addressLines">
+        <div class="bd-section-title">地址资源明细</div>
+        <div class="resource-lines-card">
           <div class="addr-list">
             <div v-for="(line, i) in (detail.addressLines || '').split('\n').filter(Boolean)" :key="i" class="addr-line">
               <span class="addr-no">#{{ String(i + 1).padStart(2, '0') }}</span>
               <span>{{ line }}</span>
             </div>
           </div>
-        </template>
+        </div>
+      </template>
 
-        <template v-if="detail.status === 'stocked' && stockedAddrs.length">
-          <h4 class="section-title">已生成地址资源 ({{ stockedAddrs.length }})</h4>
-          <el-table :data="stockedAddrs" size="small" stripe>
-            <el-table-column prop="resourceNo" label="编号" width="110" />
-            <el-table-column prop="district" label="区域" width="90" />
-            <el-table-column prop="detailAddress" label="地址" show-overflow-tooltip />
-            <el-table-column label="年付价" width="100" align="right">
-              <template #default="{ row }"><span class="num">¥{{ formatNum(row.yearlyCost) }}</span></template>
-            </el-table-column>
-          </el-table>
-        </template>
-      </div>
-    </el-drawer>
+      <template v-if="detail.status === 'stocked' && stockedAddrs.length">
+        <div class="bd-section-title">已生成地址资源 ({{ stockedAddrs.length }})</div>
+        <el-table :data="stockedAddrs" size="small" stripe class="drawer-table">
+          <el-table-column prop="resourceNo" label="编号" width="110" />
+          <el-table-column prop="district" label="区域" width="90" />
+          <el-table-column prop="detailAddress" label="地址" show-overflow-tooltip />
+          <el-table-column label="年付价" width="100" align="right">
+            <template #default="{ row }"><span class="num">¥{{ formatNum(row.yearlyCost) }}</span></template>
+          </el-table-column>
+        </el-table>
+      </template>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>{{ detail.applicantName }} 提交申请</strong>
+            <p>{{ detail.applyTime || '—' }} · {{ detail.procurementContent || '资源补充申请' }}</p>
+          </div>
+        </div>
+        <div v-for="(a, i) in (detail.approvals || [])" :key="i" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: a.pass }" />
+          <div>
+            <strong>
+              {{ a.approverName }}
+              <span class="level-chip" :data-lv="a.level">{{ a.level === 'boss' ? '老板' : '主管' }}</span>
+              {{ a.pass ? '审批通过' : '驳回' }}
+            </strong>
+            <p>{{ a.approvalTime || '—' }} · {{ a.opinion || '无审批意见' }}</p>
+          </div>
+        </div>
+        <div v-if="detail.paymentTime" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>财务确认付款</strong>
+            <p>{{ detail.paymentTime }} · 实付 ¥{{ formatNum(detail.payAmount || detail.totalAmount) }}</p>
+          </div>
+        </div>
+        <div v-if="detail.stockInTime" class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>资源已上架</strong>
+            <p>{{ detail.stockInTime }} · {{ stockedAddrs.length }} 个地址资源已加入资源池</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button v-if="detail.status === 'pending_approval'" v-hasRole="['admin','boss','manager']" type="success" @click="approveDoc(detail, true, 'manager')">主管通过</el-button>
+        <el-button v-if="detail.status === 'pending_approval'" v-hasRole="['admin','boss','manager']" type="danger" @click="approveDoc(detail, false, 'manager')">驳回</el-button>
+        <el-button v-if="detail.status === 'pending_boss'" v-hasRole="['admin','boss','manager']" type="success" @click="approveDoc(detail, true, 'boss')">老板通过</el-button>
+        <el-button v-if="detail.status === 'pending_boss'" v-hasRole="['admin','boss','manager']" type="danger" @click="approveDoc(detail, false, 'boss')">驳回</el-button>
+        <el-button v-if="detail.status === 'approved'" type="warning" @click="payDoc(detail)">付款</el-button>
+        <el-button v-if="detail.status === 'paid'" type="primary" @click="stockDoc(detail)">上架</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -215,6 +284,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { procurementApi, supplierApi, type BizProcurement, type BizSupplier, type BizAddressResource } from '@/api/channel'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const loading = ref(false)
 const list = ref<BizProcurement[]>([])
@@ -248,6 +318,22 @@ function statusType (s: string): any { return ({ draft: 'info', pending_approval
 function statusLabel (s: string) { return ({ draft: '草稿', pending_approval: '主管待审', pending_boss: '老板待审', approved: '已审批', paid: '已付款', stocked: '已上架', rejected: '已驳回' } as any)[s] || s }
 function stepIndex (s: string) { return ({ draft: 0, pending_approval: 1, pending_boss: 2, approved: 3, paid: 4, stocked: 5, rejected: 0 } as any)[s] || 0 }
 function formatNum (n: number) { return (n || 0).toLocaleString('zh-CN') }
+function procurementTypeLabel (s: string) { return ({ address: '挂靠地址', service: '服务', tool: '工具', data: '数据' } as Record<string, string>)[s] || '挂靠地址' }
+function payCycleLabel (s: string) { return ({ yearly: '年付', half: '半年付', quarter: '季付' } as Record<string, string>)[s] || '年付' }
+function procurementAvatar (row: BizProcurement) {
+  return row.procurementNo?.slice(-2) || '补'
+}
+function procurementAvatarClass (status: string) {
+  return ({
+    draft: 'company',
+    pending_approval: 'warning',
+    pending_boss: 'warning',
+    approved: 'channel',
+    paid: 'success',
+    stocked: 'success',
+    rejected: 'danger'
+  } as Record<string, string>)[status] || 'company'
+}
 
 // form
 const formVisible = ref(false)
@@ -353,7 +439,7 @@ onMounted(loadData)
 .stat-stocked { background: linear-gradient(135deg, #047857, #10b981); }
 .stat-amount { background: linear-gradient(135deg, #581c87, #9333ea); }
 .stat-label { font-size: 13px; opacity: .85; letter-spacing: 1px; }
-.stat-value { font-size: 30px; font-weight: 700; margin: 6px 0 4px; font-family: 'JetBrains Mono', Consolas, monospace; letter-spacing: -1px; }
+.stat-value { font-size: 30px; font-weight: 700; margin: 6px 0 4px; font-family: 'JetBrains Mono', Consolas, monospace; letter-spacing: 0; }
 .stat-foot { font-size: 12px; opacity: .8; }
 
 .table-card { border-radius: 10px; }
@@ -374,12 +460,31 @@ onMounted(loadData)
 .rebate-tip { font-size: 11px; color: #059669; background: #d1fae5; padding: 2px 8px; border-radius: 999px; }
 
 .section-title { margin: 24px 0 12px; font-size: 14px; color: #0f172a; padding-left: 10px; border-left: 3px solid #0d7e7a; }
-.status-steps { padding: 16px 0; background: #f8fafc; border-radius: 8px; }
+.procurement-step-wrap {
+  margin-bottom: 14px;
+  padding: 14px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.status-steps { padding: 4px 0; }
 .approval-timeline { padding-left: 8px; }
 .opinion { color: #64748b; font-size: 12px; margin-top: 4px; }
+.resource-lines-card {
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
 .addr-list { display: flex; flex-direction: column; gap: 6px; }
-.addr-line { display: flex; gap: 10px; padding: 8px 12px; background: #f8fafc; border-radius: 6px; font-size: 13px; color: #334155; }
+.addr-line { display: flex; gap: 10px; padding: 8px 12px; background: #fff; border: 1px solid #edf1f5; border-radius: 6px; font-size: 13px; color: #334155; }
 .addr-no { font-family: 'JetBrains Mono', monospace; color: #0d7e7a; font-weight: 600; }
+.drawer-table {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
 .big-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #fff; background: linear-gradient(135deg, #b91c1c, #ef4444); border-radius: 3px; vertical-align: middle; letter-spacing: .5px; }
 .big-tag.inline { background: linear-gradient(135deg, #d97706, #f59e0b); font-size: 11px; padding: 2px 8px; }
 .level-chip { display: inline-block; margin: 0 6px; padding: 1px 6px; border-radius: 3px; font-size: 11px; color: #fff; font-weight: 500; }

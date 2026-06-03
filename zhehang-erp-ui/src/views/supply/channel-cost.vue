@@ -24,6 +24,7 @@
       </div>
       <div class="head-actions">
         <el-date-picker v-model="month" type="month" placeholder="选择月份" value-format="YYYY-MM" style="width:170px" />
+        <el-button @click="router.push('/leads/campaign')">营销活动</el-button>
         <el-button type="primary" @click="openCreate">+ 录入投放数据</el-button>
       </div>
     </div>
@@ -175,8 +176,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { channelCostApi, type BizChannelCost } from '@/api/channel'
+const router = useRouter()
 const channelOptions = [
   { value: 'baidu', label: '百度推广', color: '#2932e1' },
   { value: 'douyin', label: '抖音', color: '#000000' },
@@ -343,27 +346,27 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.cc-page { padding: 16px; background: #f5f7f9; min-height: 100%; }
-.streak-warn { display: flex; gap: 14px; padding: 14px 18px; margin-bottom: 14px; background: linear-gradient(90deg, #7f1d1d, #b91c1c); border-radius: 10px; color: #fff; box-shadow: 0 4px 14px -6px rgba(127, 29, 29, .5); }
+.cc-page { padding: 16px; background: var(--bg-page); min-height: 100%; }
+.streak-warn { display: flex; gap: 14px; padding: 14px 18px; margin-bottom: 14px; background: #fff0f0; border: 1px solid #ffd0d0; border-radius: 8px; color: var(--text-primary); box-shadow: none; }
 .streak-warn .sw-icon { font-size: 28px; flex-shrink: 0; }
 .streak-warn .sw-body { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.streak-warn .sw-title { font-size: 13px; font-weight: 600; letter-spacing: .5px; }
+.streak-warn .sw-title { font-size: 13px; font-weight: 600; letter-spacing: 0; color: #f53f3f; }
 .streak-warn .sw-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.streak-warn .sw-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255, 255, 255, .15); border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
-.streak-warn .sc-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, .25); }
+.streak-warn .sw-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #fff; border: 1px solid #ffd0d0; border-radius: 999px; font-size: 12px; color: var(--text-body); }
+.streak-warn .sc-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(245, 63, 63, .12); }
 .slide-down-enter-active, .slide-down-leave-active { transition: all .35s ease; }
 .slide-down-enter-from, .slide-down-leave-to { opacity: 0; transform: translateY(-12px); }
 .streak-tag { margin-left: 8px; }
 :deep(.roi-row-streak) { background: #fef2f2 !important; box-shadow: inset 4px 0 0 #b91c1c; }
-.page-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding: 20px 24px; background: linear-gradient(120deg, #0f172a 0%, #1e293b 60%, #0d7e7a 100%); border-radius: 12px; color: #fff; }
-.head-title h2 { margin: 0; font-size: 20px; letter-spacing: 1px; font-weight: 600; }
-.head-title p { margin: 6px 0 0; font-size: 13px; opacity: .75; }
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding: 18px; background: #fff; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); }
+.head-title h2 { margin: 0; font-size: 20px; letter-spacing: 0; font-weight: 700; }
+.head-title p { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); opacity: 1; }
 .head-actions { display: flex; gap: 10px; align-items: center; }
-:deep(.head-actions .el-input__wrapper) { background: rgba(255,255,255,.1); border: none; box-shadow: 0 0 0 1px rgba(255,255,255,.2) inset; }
-:deep(.head-actions .el-input__inner) { color: #fff; }
+:deep(.head-actions .el-input__wrapper) { background: #fff; border: 1px solid var(--border-color); box-shadow: none; }
+:deep(.head-actions .el-input__inner) { color: var(--text-primary); }
 
 .overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
-.ov-card { padding: 18px 20px; border-radius: 10px; background: #fff; border: 1px solid #e5e7eb; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.ov-card { padding: 18px 20px; border-radius: 8px; background: #fff; border: 1px solid var(--border-color); display: flex; flex-direction: column; position: relative; overflow: hidden; }
 .ov-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
 .ov-1::before { background: #6366f1; } .ov-2::before { background: #f59e0b; } .ov-3::before { background: #14b8a6; }
 .ov-4.success::before { background: #10b981; } .ov-4.primary::before { background: #3b82f6; }
@@ -372,7 +375,7 @@ onMounted(loadData)
 .ov-value { font-size: 30px; font-weight: 700; font-family: 'JetBrains Mono', Consolas, monospace; color: #0f172a; margin: 4px 0 4px; letter-spacing: -.5px; }
 .ov-foot { font-size: 12px; color: #94a3b8; }
 
-.block-card { border-radius: 10px; margin-bottom: 14px; }
+.block-card { border-radius: 8px; margin-bottom: 14px; border-color: var(--border-color); }
 .block-header { display: flex; justify-content: space-between; align-items: baseline; }
 .block-title { font-weight: 600; color: #0f172a; }
 .block-sub { font-size: 12px; color: #94a3b8; }

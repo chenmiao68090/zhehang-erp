@@ -29,4 +29,11 @@ public class CrmTaxProfileController {
     public R<CrmTaxProfile> save(@RequestBody CrmTaxProfile profile) {
         return R.ok(taxProfileService.saveOrUpdateByCreditCode(profile));
     }
+
+    /** 报税日历：某月各客户应申报的税种与截止日（month 形如 2026-06，缺省取当月） */
+    @GetMapping("/calendar")
+    public R<java.util.List<java.util.Map<String, Object>>> calendar(
+            @RequestParam(required = false) String month) {
+        return R.ok(taxProfileService.taxCalendar(month));
+    }
 }

@@ -21,6 +21,18 @@
       </button>
     </header>
 
+    <section class="rule-overview">
+      <div
+        v-for="item in overviewCards"
+        :key="item.label"
+        class="overview-card"
+      >
+        <div class="overview-label">{{ item.label }}</div>
+        <div class="overview-value">{{ item.value }}</div>
+        <div class="overview-sub">{{ item.sub }}</div>
+      </div>
+    </section>
+
     <!-- ========= Tabs ========= -->
     <el-tabs v-model="activeTab" class="cfg-tabs">
       <!-- =========================================== -->
@@ -247,16 +259,38 @@
             <div class="card-sub">Channel Routing · 入库时自动按渠道路由到目标池</div>
           </header>
 
+          <div class="flow-strip">
+            <div
+              v-for="(step, index) in routeFlow"
+              :key="step.title"
+              class="flow-step"
+            >
+              <span class="flow-index">{{ index + 1 }}</span>
+              <div>
+                <strong>{{ step.title }}</strong>
+                <p>{{ step.desc }}</p>
+              </div>
+            </div>
+          </div>
+
           <el-table
             :data="channelRoutes"
             class="dark-table"
             stripe
             border
-          >
+            >
             <el-table-column type="index" label="#" width="60" align="center" />
+            <el-table-column label="启用" width="90" align="center">
+              <template #default="{ row }">
+                <el-switch v-model="row.enabled" />
+              </template>
+            </el-table-column>
             <el-table-column prop="source" label="客户来源" min-width="160">
               <template #default="{ row }">
-                <span class="src-pill">{{ row.source }}</span>
+                <div class="source-cell">
+                  <span class="src-pill">{{ row.source }}</span>
+                  <small>{{ row.sourceType }}</small>
+                </div>
               </template>
             </el-table-column>
             <el-table-column prop="targetPool" label="默认路由目标" min-width="180">
@@ -271,6 +305,7 @@
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column prop="ownerTeam" label="承接团队" min-width="130" />
             <el-table-column prop="distributeMode" label="分配方式" min-width="160">
               <template #default="{ row }">
                 <el-select v-model="row.distributeMode" size="small" style="width: 100%">
@@ -281,12 +316,37 @@
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column label="今日入库" width="110" align="center">
+              <template #default="{ row }">
+                <span class="metric-number">{{ row.dailyLeads }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="CRM / 成交" width="150" align="center">
+              <template #default="{ row }">
+                <div class="conversion-mini">
+                  <b>{{ row.crmCount }}</b>
+                  <span>/</span>
+                  <b>{{ row.dealCount }}</b>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="avgResponse" label="响应 SLA" width="120" align="center" />
+            <el-table-column prop="priority" label="优先级" width="110" align="center">
+              <template #default="{ row }">
+                <el-tag size="small" :type="priorityTagType(row.priority)">{{ row.priority }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="remark" label="说明" min-width="220">
               <template #default="{ row }">
                 <el-input v-model="row.remark" size="small" placeholder="备注说明" />
               </template>
             </el-table-column>
           </el-table>
+
+          <div class="linkage-note">
+            <el-icon><InfoFilled /></el-icon>
+            <span>分配配置是唯一主配置:线索入库先做主体防撞,再按来源进入目标池,最后按权重、负载、能力和提成差异分配给承接团队。</span>
+          </div>
         </section>
       </el-tab-pane>
 
@@ -517,21 +577,34 @@ const sumInvalid = computed(() => weightSum.value !== 100)
 
 // ============ 1.2 职级基础权重 ============
 interface RoleWeightRow { role: string; label: string; weight: number; hint: string }
-const roleWeightList = ref<RoleWeightRow[]>([])
+const defaultRoleWeightList = (): RoleWeightRow[] => [
+  { role: 'sales_junior', label: '销售顾问', weight: 1, hint: '承接新注册、低客单价、需培育线索' },
+  { role: 'sales_senior', label: '高级顾问', weight: 3, hint: '承接税务异常、经营异常、代理记账续费等高价值线索' },
+  { role: 'sales_manager', label: '销售主管', weight: 4, hint: '承接争议线索、同行渠道、重点客户和人工审核线索' },
+  { role: 'channel_manager', label: '渠道经理', weight: 3, hint: '承接同行地址挂靠、渠道分销和供应商转介绍线索' }
+]
+const roleWeightList = ref<RoleWeightRow[]>(defaultRoleWeightList())
 interface PoolModeRow {
   poolKey: string
   poolName: string
   distributeMode: 'auto' | 'manual' | 'grab' | 'approval'
   description: string
 }
-const poolModeList = reactive<PoolModeRow[]>([])
+const defaultPoolModeList = (): PoolModeRow[] => [
+  { poolKey: 'online', poolName: '线上获客公海池', distributeMode: 'auto', description: '承接抖音、百度、小红书、探迹等网销线索,按 SLA 与转化能力自动分配' },
+  { poolKey: 'telemarketing', poolName: '电销公海池', distributeMode: 'auto', description: '承接新注册、税务异常、经营异常等批量名单,按坐席负载轮询' },
+  { poolKey: 'collaboration', poolName: '协作公海池', distributeMode: 'manual', description: '跨部门、跨团队或需老板/主管判断的线索进入协作池' },
+  { poolKey: 'new_leads', poolName: '新线索池', distributeMode: 'approval', description: '工商自动带出后先做主体去重和质量校验,再进入目标池' },
+  { poolKey: 'recycle', poolName: '回收公海池', distributeMode: 'grab', description: '超期未跟进、无效跟进和未转化线索回收后允许抢单' }
+]
+const poolModeList = reactive<PoolModeRow[]>(defaultPoolModeList())
 
 // ============ 3. 抢单规则 ============
 const grabRules = reactive({
-  dailyLimit: 0,
-  cooldownDays: 0,
-  priorityWindow: 0,
-  firstFollowDays: 0
+  dailyLimit: 30,
+  cooldownDays: 7,
+  priorityWindow: 180,
+  firstFollowDays: 1
 })
 
 // ============ 4. 渠道路由 ============
@@ -545,14 +618,158 @@ const poolOptions = [
 
 interface ChannelRoute {
   source: string
+  sourceType: string
   targetPool: string
   distributeMode: 'auto' | 'manual' | 'grab' | 'approval'
+  ownerTeam: string
+  dailyLeads: number
+  crmCount: number
+  dealCount: number
+  avgResponse: string
+  priority: '高' | '中' | '低'
+  enabled: boolean
   remark: string
 }
 const defaultChannelRoutes = (): ChannelRoute[] => {
-  return []
+  return [
+    {
+      source: '探迹 T+1 新设企业',
+      sourceType: '工商新增',
+      targetPool: 'telemarketing',
+      distributeMode: 'auto',
+      ownerTeam: '电销一组',
+      dailyLeads: 186,
+      crmCount: 52,
+      dealCount: 7,
+      avgResponse: '6 分钟',
+      priority: '高',
+      enabled: true,
+      remark: '新注册企业先做行业、注册资本、地区过滤,当天完成首呼'
+    },
+    {
+      source: '探迹经营异常解除',
+      sourceType: '风险商机',
+      targetPool: 'telemarketing',
+      distributeMode: 'auto',
+      ownerTeam: '电销二组',
+      dailyLeads: 93,
+      crmCount: 31,
+      dealCount: 6,
+      avgResponse: '9 分钟',
+      priority: '高',
+      enabled: true,
+      remark: '适合异常解除、地址挂靠、代理记账套餐组合销售'
+    },
+    {
+      source: '百度/抖音表单',
+      sourceType: '网销投放',
+      targetPool: 'online',
+      distributeMode: 'auto',
+      ownerTeam: '网销一组',
+      dailyLeads: 74,
+      crmCount: 46,
+      dealCount: 5,
+      avgResponse: '3 分钟',
+      priority: '高',
+      enabled: true,
+      remark: '按投放计划、关键词和落地页归因,同步到网销 ROI'
+    },
+    {
+      source: '小红书/视频号私域',
+      sourceType: '私域咨询',
+      targetPool: 'online',
+      distributeMode: 'manual',
+      ownerTeam: '网销二组',
+      dailyLeads: 38,
+      crmCount: 21,
+      dealCount: 3,
+      avgResponse: '12 分钟',
+      priority: '中',
+      enabled: true,
+      remark: '先由主管判断服务类型,再转给擅长行业的顾问'
+    },
+    {
+      source: '同行渠道地址挂靠',
+      sourceType: '渠道业务',
+      targetPool: 'collaboration',
+      distributeMode: 'approval',
+      ownerTeam: '渠道部',
+      dailyLeads: 27,
+      crmCount: 19,
+      dealCount: 9,
+      avgResponse: '30 分钟',
+      priority: '高',
+      enabled: true,
+      remark: '统一给渠道经理,后续与供应商、地址库存、账期应收勾稽'
+    },
+    {
+      source: '代理记账断新开',
+      sourceType: '财税信号',
+      targetPool: 'telemarketing',
+      distributeMode: 'auto',
+      ownerTeam: '财税顾问组',
+      dailyLeads: 41,
+      crmCount: 18,
+      dealCount: 4,
+      avgResponse: '15 分钟',
+      priority: '中',
+      enabled: true,
+      remark: '按所属税局、纳税人类型和近期开票状态识别服务需求'
+    },
+    {
+      source: '老客户转介绍',
+      sourceType: '存量增长',
+      targetPool: 'collaboration',
+      distributeMode: 'manual',
+      ownerTeam: '客户成功',
+      dailyLeads: 16,
+      crmCount: 14,
+      dealCount: 5,
+      avgResponse: '20 分钟',
+      priority: '中',
+      enabled: true,
+      remark: '优先关联原客户经理,避免重复撞单和归属争议'
+    },
+    {
+      source: '回收池再激活',
+      sourceType: '二次转化',
+      targetPool: 'recycle',
+      distributeMode: 'grab',
+      ownerTeam: '销售全员',
+      dailyLeads: 68,
+      crmCount: 17,
+      dealCount: 2,
+      avgResponse: '2 小时',
+      priority: '低',
+      enabled: true,
+      remark: '超期未跟进或已释放线索,按抢单规则和冷却期重新流转'
+    }
+  ]
 }
 const channelRoutes = ref<ChannelRoute[]>(defaultChannelRoutes())
+
+const routeFlow = [
+  { title: '工商/表单入库', desc: '公司名称自动带出工商信息,统一生成企业主体' },
+  { title: '主体防撞', desc: '按名称、信用代码、手机号和联系人做撞单校验' },
+  { title: '渠道路由', desc: '按来源、业务类型和风险信号进入目标公海池' },
+  { title: '权重分配', desc: '按职级、负载、能力和提成差异计算销售得分' },
+  { title: '回收预警', desc: '按 SLA、跟进质量和成交状态自动回收或提醒' }
+]
+
+const overviewCards = computed(() => {
+  const enabledRoutes = channelRoutes.value.filter(item => item.enabled)
+  const dailyLeads = enabledRoutes.reduce((sum, item) => sum + item.dailyLeads, 0)
+  const crmCount = enabledRoutes.reduce((sum, item) => sum + item.crmCount, 0)
+  const dealCount = enabledRoutes.reduce((sum, item) => sum + item.dealCount, 0)
+  const autoCount = enabledRoutes.filter(item => item.distributeMode === 'auto').length
+
+  return [
+    { label: '启用来源', value: `${enabledRoutes.length}`, sub: `共 ${channelRoutes.value.length} 条渠道规则` },
+    { label: '今日入库', value: `${dailyLeads}`, sub: '探迹/投放/私域/渠道合计' },
+    { label: '入 CRM', value: `${crmCount}`, sub: '已通过防撞并进入客户池' },
+    { label: '成交线索', value: `${dealCount}`, sub: `自动规则 ${autoCount} 条,其余人工确认` }
+  ]
+})
 
 // ============ 5. 分配日志 ============
 const logQuery = reactive({
@@ -578,7 +795,60 @@ interface LogRow extends Partial<DistributeLog> {
 const mockLogs = ref<LogRow[]>(buildMockLogs())
 
 function buildMockLogs(): LogRow[] {
-  return []
+  return [
+    {
+      id: 1001,
+      createTime: '2026-06-04 14:18:22',
+      leadName: '杭州启辰企业管理有限公司',
+      fromPoolName: '探迹 T+1 新设企业',
+      toUserName: '张星',
+      distributeType: 'auto',
+      weightDetailJson: JSON.stringify({ base: 3, load: 0.78, ability: 3, commission: 2, final: 86 }),
+      remark: '新设企业,注册资本 100 万,命中代理记账开办套餐'
+    },
+    {
+      id: 1002,
+      createTime: '2026-06-04 13:47:09',
+      leadName: '浙江朗和装饰工程有限公司',
+      fromPoolName: '经营异常解除',
+      toUserName: '陈思旭',
+      fromUserName: '系统',
+      distributeType: 'auto',
+      weightDetailJson: JSON.stringify({ base: 3, load: 0.62, ability: 3, commission: 3, final: 91 }),
+      remark: '地址异常,优先给擅长地址挂靠和异常解除的顾问'
+    },
+    {
+      id: 1003,
+      createTime: '2026-06-04 11:36:51',
+      leadName: '杭州麦田电子商务有限公司',
+      fromPoolName: '百度/抖音表单',
+      toUserName: '何海琳',
+      distributeType: 'manual',
+      weightDetailJson: JSON.stringify({ base: 2, load: 0.48, ability: 2, commission: 2, final: 72 }),
+      remark: '网销主管确认服务类型后转派'
+    },
+    {
+      id: 1004,
+      createTime: '2026-06-04 10:22:18',
+      leadName: '义乌市诚达财税服务部',
+      fromPoolName: '同行渠道地址挂靠',
+      toUserName: '王舟',
+      distributeType: 'transfer',
+      weightDetailJson: JSON.stringify({ base: 4, load: 0.52, ability: 3, commission: 3, final: 88 }),
+      remark: '同行批量采购地址,转渠道部跟进库存和账期'
+    },
+    {
+      id: 1005,
+      createTime: '2026-06-03 17:41:33',
+      leadName: '杭州栖木文化传媒有限公司',
+      fromPoolName: '回收公海池',
+      toUserName: '刘洋',
+      fromUserName: '周宁',
+      distributeType: 'grab',
+      weightDetailJson: JSON.stringify({ base: 1, load: 0.84, ability: 2, commission: 1, final: 64 }),
+      remark: '原负责人 7 天未有效跟进,释放后被抢单'
+    }
+  ]
 }
 
 const filteredLogs = computed(() => {
@@ -621,6 +891,9 @@ function distTagType(t: LogRow['distributeType']) {
 }
 function distTagText(t: LogRow['distributeType']) {
   return { auto: '自动', manual: '手动', grab: '抢单', transfer: '转移', recycle: '回收' }[t] || t
+}
+function priorityTagType(priority: ChannelRoute['priority']) {
+  return priority === '高' ? 'danger' : priority === '中' ? 'warning' : 'info'
 }
 function parseWeight(row: LogRow) {
   try {
@@ -672,11 +945,12 @@ function resetCurrentTab() {
     weightForm.loadWeightRatio = 35
     weightForm.abilityWeightRatio = 25
     weightForm.commissionWeightRatio = 10
-    grabRules.dailyLimit = 0
-    grabRules.cooldownDays = 0
-    grabRules.priorityWindow = 0
-    grabRules.firstFollowDays = 0
-    roleWeightList.value = []
+    grabRules.dailyLimit = 30
+    grabRules.cooldownDays = 7
+    grabRules.priorityWindow = 180
+    grabRules.firstFollowDays = 1
+    roleWeightList.value = defaultRoleWeightList()
+    poolModeList.splice(0, poolModeList.length, ...defaultPoolModeList())
     ElMessage.info('权重配置已重置为默认值')
   } else if (activeTab.value === 'channel') {
     channelRoutes.value = defaultChannelRoutes()
@@ -697,6 +971,23 @@ onMounted(async () => {
     }
   } catch {
     // 静默使用默认值
+  }
+  try {
+    const pools = await poolConfigApi.list()
+    if (Array.isArray(pools) && pools.length) {
+      poolModeList.splice(
+        0,
+        poolModeList.length,
+        ...pools.map(item => ({
+          poolKey: item.poolType,
+          poolName: item.poolName,
+          distributeMode: item.distributeMode,
+          description: item.description || `${item.poolName} 暂无说明`
+        }))
+      )
+    }
+  } catch {
+    // 静默使用默认池配置
   }
 })
 </script>
@@ -1268,6 +1559,554 @@ onMounted(async () => {
     font-size: 12px;
     color: #B8B8C0;
     line-height: 1.5;
+  }
+}
+
+/* ===== Feishu office style override ===== */
+.distribute-config {
+  gap: 16px;
+  padding: 16px 20px 96px;
+  color: #1f2937;
+}
+
+.page-header {
+  min-height: 118px;
+  padding: 22px 28px;
+  background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(31, 47, 70, 0.06);
+
+  &::before,
+  &::after {
+    display: none;
+  }
+}
+
+.header-meta {
+  color: #3370ff;
+  letter-spacing: 0;
+  margin-bottom: 10px;
+}
+
+.meta-tag {
+  color: #245bdb;
+  background: #eef4ff;
+  border-color: #c7d9ff;
+  border-radius: 4px;
+}
+
+.meta-divider {
+  background: #c7d9ff;
+}
+
+.meta-time {
+  color: #6b7280;
+}
+
+.page-title {
+  margin-bottom: 6px;
+
+  .title-cn {
+    color: #111827;
+    font-size: 26px;
+    letter-spacing: 0;
+  }
+
+  .title-en {
+    color: #6b7280;
+    font-family: inherit;
+    font-size: 14px;
+    font-style: normal;
+  }
+}
+
+.page-desc {
+  color: #4b5563;
+}
+
+.back-btn {
+  top: 22px;
+  right: 28px;
+  background: #ffffff;
+  border-color: #d8dee8;
+  border-radius: 6px;
+  color: #245bdb;
+
+  &:hover {
+    background: #eef4ff;
+    border-color: #9dbbff;
+    transform: none;
+  }
+}
+
+.rule-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-card {
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(31, 47, 70, 0.04);
+}
+
+.overview-label {
+  color: #6b7280;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.overview-value {
+  color: #111827;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.overview-sub {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.cfg-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 14px;
+    border-bottom-color: #dbe5f2;
+  }
+
+  :deep(.el-tabs__item) {
+    color: #4b5563;
+
+    &.is-active,
+    &:hover {
+      color: #245bdb;
+    }
+  }
+
+  :deep(.el-tabs__active-bar) {
+    background-color: #3370ff;
+  }
+}
+
+.tab-label .tab-num {
+  color: #8aa8f8;
+  letter-spacing: 0;
+}
+
+.cfg-card {
+  background: #ffffff;
+  border-color: #dbe5f2;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(31, 47, 70, 0.04);
+}
+
+.card-head {
+  border-bottom-color: #edf2f7;
+}
+
+.card-title {
+  color: #111827;
+
+  &::before {
+    background: #3370ff;
+  }
+}
+
+.card-sub {
+  color: #64748b;
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+.sum-badge {
+  background: #eef4ff;
+  border-color: #c7d9ff;
+  border-radius: 6px;
+
+  .sum-label,
+  .sum-unit {
+    color: #4f6fbd;
+  }
+
+  .sum-num {
+    color: #245bdb;
+  }
+}
+
+.slider-row,
+.rule-item,
+.log-filter {
+  background: #f8fafc;
+  border-color: #e5edf7;
+  border-radius: 8px;
+}
+
+.slider-name {
+  .name-cn {
+    color: #111827;
+  }
+
+  .name-pct {
+    color: #245bdb;
+  }
+}
+
+.slider-desc,
+.rule-item .rule-tip,
+.mode-desc {
+  color: #64748b;
+}
+
+.slider-track {
+  :deep(.el-slider__runway) {
+    background: #e5edf7;
+  }
+
+  :deep(.el-slider__bar) {
+    background: #3370ff;
+  }
+
+  :deep(.el-slider__button) {
+    background: #ffffff;
+    border-color: #3370ff;
+    box-shadow: 0 0 0 4px rgba(51, 112, 255, 0.14);
+  }
+}
+
+.mode-table {
+  border-color: #e5edf7;
+}
+
+.mode-thead {
+  background: #f3f7ff;
+  color: #245bdb;
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+.mode-row {
+  border-top-color: #edf2f7;
+
+  &:hover {
+    background: #f8fbff;
+  }
+}
+
+.pool-name,
+.rule-item .rule-label {
+  color: #111827;
+}
+
+.pool-idx {
+  color: #245bdb;
+  border-color: #c7d9ff;
+  background: #eef4ff;
+}
+
+.flow-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.flow-step {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5edf7;
+  border-radius: 8px;
+
+  strong {
+    display: block;
+    color: #111827;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.flow-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  color: #245bdb;
+  background: #eef4ff;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dark-table {
+  --el-table-bg-color: #ffffff;
+  --el-table-tr-bg-color: #ffffff;
+  --el-table-row-hover-bg-color: #f8fbff;
+  --el-table-border-color: #e5edf7;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-text-color: #475569;
+  --el-table-text-color: #1f2937;
+
+  :deep(th.el-table__cell) {
+    font-family: inherit;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+
+.source-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  small {
+    color: #94a3b8;
+    font-size: 12px;
+  }
+}
+
+.src-pill {
+  color: #245bdb;
+  background: #eef4ff;
+  border-color: #c7d9ff;
+  border-radius: 4px;
+}
+
+.user-pill {
+  color: #0f766e;
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  border-radius: 4px;
+
+  &.is-muted {
+    background: #f8fafc;
+    border-color: #e5edf7;
+    color: #64748b;
+  }
+}
+
+.metric-number {
+  color: #111827;
+  font-weight: 700;
+}
+
+.conversion-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #64748b;
+
+  b {
+    color: #245bdb;
+  }
+}
+
+.linkage-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e5edf7;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.weight-detail {
+  background: #f8fafc;
+
+  .wd-title {
+    color: #111827;
+
+    .wd-formula {
+      color: #64748b;
+    }
+  }
+
+  .wd-item {
+    background: #ffffff;
+    border-color: #e5edf7;
+
+    .wd-key {
+      color: #64748b;
+      letter-spacing: 0;
+    }
+
+    .wd-val {
+      color: #111827;
+    }
+
+    &.is-final {
+      background: #eef4ff;
+      border-color: #9dbbff;
+
+      .wd-val {
+        color: #245bdb;
+      }
+    }
+  }
+}
+
+.weight-tag {
+  color: #245bdb;
+  background: #eef4ff;
+  border-color: #c7d9ff;
+}
+
+.save-bar {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: #dbe5f2;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(31, 47, 70, 0.12);
+
+  .save-hint {
+    color: #64748b;
+
+    b {
+      color: #245bdb;
+    }
+  }
+}
+
+.formula-card {
+  .formula-block {
+    background: #f8fafc;
+    border-color: #e5edf7;
+    color: #111827;
+
+    .f-var,
+    .f-num {
+      color: #111827;
+    }
+
+    .f-eq,
+    .f-op {
+      color: #3370ff;
+    }
+
+    .f-frac {
+      .f-top,
+      .f-bot {
+        color: #64748b;
+      }
+
+      .f-line {
+        background: #3370ff;
+      }
+    }
+  }
+
+  .fe-item {
+    background: #ffffff;
+    border-color: #e5edf7;
+    border-left-color: #3370ff;
+
+    .fe-label {
+      color: #64748b;
+      letter-spacing: 0;
+    }
+
+    .fe-val {
+      color: #475569;
+
+      b {
+        color: #245bdb;
+      }
+    }
+  }
+}
+
+.weight-bar {
+  background: #e5edf7;
+
+  i {
+    background: #3370ff;
+  }
+}
+
+.ab-card {
+  background: #ffffff;
+  border-color: #e5edf7;
+
+  &::before {
+    display: none;
+  }
+
+  &.top,
+  &.mid,
+  &.low {
+    border-color: #e5edf7;
+  }
+
+  &.top .ab-rank,
+  &.top .ab-score {
+    color: #dc2626;
+  }
+
+  &.mid .ab-rank,
+  &.mid .ab-score {
+    color: #d97706;
+  }
+
+  &.low .ab-rank,
+  &.low .ab-score {
+    color: #475569;
+  }
+
+  .ab-rank {
+    letter-spacing: 0;
+  }
+
+  .ab-desc {
+    color: #64748b;
+  }
+}
+
+@media (max-width: 1280px) {
+  .flow-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .distribute-config {
+    padding: 12px 12px 96px;
+  }
+
+  .page-header {
+    padding: 18px;
+  }
+
+  .back-btn {
+    position: static;
+    margin-top: 14px;
+  }
+
+  .page-title {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .rule-overview,
+  .flow-strip {
+    grid-template-columns: 1fr;
   }
 }
 </style>

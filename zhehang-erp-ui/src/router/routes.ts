@@ -24,6 +24,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   },
   { path: '/crm/customer', redirect: '/leads/workbench', meta: { hidden: true } },
   { path: '/crm/follow', redirect: '/leads/workbench', meta: { hidden: true } },
+  { path: '/crm/lead', redirect: '/customer/company-pool', meta: { hidden: true } },
   { path: '/crm/contract', redirect: '/order/contract', meta: { hidden: true } },
   { path: '/sales/order', redirect: '/order/bill', meta: { hidden: true } },
   { path: '/finance/voucher', redirect: '/finance/journal', meta: { hidden: true } },

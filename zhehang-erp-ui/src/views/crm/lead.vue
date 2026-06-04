@@ -252,6 +252,13 @@
 
     <!-- 公海规则设置弹窗 -->
     <el-dialog v-model="rulesDialog.visible" title="公海规则设置" width="800px" top="6vh">
+      <div class="rule-source-tip">
+        <div>
+          <strong>主分配规则统一在系统配置维护</strong>
+          <p>这里保留公海局部规则编辑；来源路由、权重算法、承接团队和分配日志请到「分配配置」统一查看。</p>
+        </div>
+        <el-button type="primary" plain size="small" @click="openGlobalDistributeConfig">去分配配置</el-button>
+      </div>
       <el-tabs v-model="rulesDialog.activeTab" class="rules-inner-tabs">
         <el-tab-pane label="分配规则" name="distribute">
           <el-table :data="rulesDialog.distributeRules" border>
@@ -700,6 +707,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Search, Plus, ArrowDown, Upload, Download, Setting, InfoFilled, UploadFilled, Phone } from '@element-plus/icons-vue'
 import { leadApi } from '@/api/crm'
@@ -771,6 +779,7 @@ const mockUsers = [
 ]
 
 const activeTab = ref<'pool' | 'my'>('pool')
+const router = useRouter()
 const loading = ref(false)
 const tableRef = ref()
 const allLeads = ref<Lead[]>([])
@@ -1666,6 +1675,10 @@ const openRules = async () => {
   }
   rulesDialog.visible = true
 }
+const openGlobalDistributeConfig = () => {
+  rulesDialog.visible = false
+  router.push('/system/distribute-config')
+}
 
 const savePoolRules = async () => {
   const payload = {
@@ -1911,6 +1924,29 @@ const handleCall = (phone: string) => {
 
 .rules-inner-tabs :deep(.el-tabs__item.is-active) { color: var(--gold-primary); }
 .rules-inner-tabs :deep(.el-tabs__active-bar) { background: var(--gold-primary); }
+.rule-source-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: #f8fafc;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+}
+.rule-source-tip strong {
+  display: block;
+  color: #111827;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.rule-source-tip p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .rule-add-bar {
   margin-top: 12px;
   padding-top: 8px;

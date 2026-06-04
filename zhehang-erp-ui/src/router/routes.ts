@@ -258,6 +258,22 @@ export const asyncRoutes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/call-center',
+    component: Layout,
+    redirect: '/call-center/monitor',
+    meta: { title: '呼叫中心', icon: 'Phone', roles: ['admin', 'boss', 'manager', 'sales'] },
+    children: [
+      { path: 'monitor', name: 'CallCenterMonitor', component: () => import('@/views/call-center/monitor.vue'), meta: { title: '实时监控', icon: 'Monitor' } },
+      { path: 'call-record', name: 'CallCenterRecord', component: () => import('@/views/call-center/call-record.vue'), meta: { title: '通话记录', icon: 'Document' } },
+      { path: 'outbound', name: 'CallCenterOutbound', component: () => import('@/views/call-center/outbound.vue'), meta: { title: '外呼任务', icon: 'Promotion' } },
+      { path: 'agent', name: 'CallCenterAgent', component: () => import('@/views/call-center/agent.vue'), meta: { title: '坐席管理', icon: 'Avatar' } },
+      { path: 'skill', name: 'CallCenterSkill', component: () => import('@/views/call-center/skill.vue'), meta: { title: '技能组', icon: 'Connection' } },
+      { path: 'number', name: 'CallCenterNumber', component: () => import('@/views/call-center/number.vue'), meta: { title: '号码与线路', icon: 'PhoneFilled' } },
+      { path: 'ivr', name: 'CallCenterIvr', component: () => import('@/views/call-center/ivr.vue'), meta: { title: 'IVR 流程', icon: 'Share' } },
+      { path: 'report', name: 'CallCenterReport', component: () => import('@/views/call-center/report.vue'), meta: { title: '通话报表', icon: 'TrendCharts' } }
+    ]
+  },
+  {
     path: '/collaboration',
     component: Layout,
     redirect: '/collaboration/chat',

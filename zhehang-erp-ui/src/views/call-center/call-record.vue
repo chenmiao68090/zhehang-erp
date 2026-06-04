@@ -194,202 +194,156 @@
     </div>
 
     <!-- 详情抽屉 -->
-    <el-drawer v-model="drawerVisible" :size="760" class="record-drawer" :with-header="false" destroy-on-close>
-      <div v-if="current" class="drawer-content">
-        <div class="drawer-head">
-          <div class="drawer-head-left">
-            <div class="drawer-eyebrow">CALL DOSSIER · {{ t('cc.callRecord.detail.title') }}</div>
-            <div class="drawer-id">{{ current.callId }}</div>
-            <div class="drawer-meta">
-              <span class="dir-icon sm" :class="'dir-' + current.direction">
-                <el-icon :size="12"><component :is="dirIcon(current.direction)" /></el-icon>
-              </span>
-              <span class="meta-text">{{ dirLabel(current.direction) }} · {{ current.startTime }}</span>
-            </div>
-          </div>
-          <el-tag :type="resultTagType(current.result)" effect="dark" round class="result-tag big">
-            {{ resultLabel(current.result) }}
-          </el-tag>
+    <BusinessDetailDrawer
+      v-if="current"
+      v-model="drawerVisible"
+      :title="current.callId"
+      :subtitle="`${dirLabel(current.direction)} · ${current.startTime}`"
+      :eyebrow="t('cc.callRecord.detail.title')"
+      :avatar="current.agentName ? current.agentName.slice(-2) : '通话'"
+      :avatar-class="recordAvatarClass(current)"
+      :status-text="resultLabel(current.result)"
+      :status-type="resultTagType(current.result)"
+      size="760px"
+    >
+      <template #actions>
+        <span class="record-duration-pill">{{ fmtDur(current.talkDuration) }}</span>
+        <el-button v-if="current.recordingUrl" size="small" :icon="Headset" @click="quickPlay(current)">
+          {{ t('cc.callRecord.action.play') }}
+        </el-button>
+      </template>
+
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.direction') }}</span><b>{{ dirLabel(current.direction) }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.filter.caller') }}</span><b>{{ current.caller }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.filter.callee') }}</span><b>{{ current.callee }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.agent') }}</span><b>{{ current.agentName || '-' }}{{ current.agentNo ? ` / ${current.agentNo}` : '' }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.skillGroup') }}</span><b>{{ current.skillGroup || '-' }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.hangupBy') }}</span><b>{{ hangupLabel(current.hangupBy) }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.startTime') }}</span><b>{{ current.startTime }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.endTime') }}</span><b>{{ current.endTime }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.ringDuration') }}</span><b>{{ fmtDur(current.ringDuration) }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.callRecord.column.talkDuration') }}</span><b>{{ fmtDur(current.talkDuration) }}</b></div>
         </div>
+      </template>
 
-        <!-- 基本信息 -->
-        <section class="info-section">
-          <div class="section-title"><span class="bar"></span>{{ t('cc.callRecord.detail.basic') }}</div>
-          <div class="info-grid">
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.direction') }}</div>
-              <div class="info-value">
-                <span class="dir-icon sm" :class="'dir-' + current.direction">
-                  <el-icon :size="12"><component :is="dirIcon(current.direction)" /></el-icon>
-                </span>
-                {{ dirLabel(current.direction) }}
+      <div class="bd-section-title">{{ t('cc.callRecord.detail.recording') }}</div>
+      <div v-if="current.recordingUrl" class="audio-stage unified">
+        <div class="waveform" @click="seekByWave">
+          <span
+            v-for="(h, i) in waveBars"
+            :key="i"
+            class="wave-bar"
+            :class="{ active: i / waveBars.length <= progress, beating: playing }"
+            :style="{ height: h + '%', animationDelay: (i * 0.03) + 's' }"
+          ></span>
+          <div class="wave-cursor" :style="{ left: (progress * 100) + '%' }"></div>
+        </div>
+        <div class="audio-controls">
+          <button class="play-btn" @click="togglePlay" :class="{ playing }">
+            <el-icon :size="22">
+              <VideoPlay v-if="!playing" />
+              <VideoPause v-else />
+            </el-icon>
+          </button>
+          <div class="time-display">
+            <span class="time-cur">{{ fmtTime(currentTime) }}</span>
+            <span class="time-sep">/</span>
+            <span class="time-total">{{ fmtTime(totalTime) }}</span>
+          </div>
+          <div class="progress-track" @click="seekByTrack">
+            <div class="progress-bar" :style="{ width: (progress * 100) + '%' }"></div>
+            <div class="progress-thumb" :style="{ left: (progress * 100) + '%' }"></div>
+          </div>
+          <div class="audio-extra">
+            <el-popover placement="top" :width="180" trigger="click">
+              <template #reference>
+                <button class="icon-btn" :title="t('cc.callRecord.detail.volumeTip', { value: volume })">
+                  <el-icon :size="16"><Microphone /></el-icon>
+                </button>
+              </template>
+              <div class="vol-popover">
+                <el-icon :size="14"><Mute /></el-icon>
+                <el-slider v-model="volume" :min="0" :max="100" />
+                <span class="vol-num">{{ volume }}</span>
               </div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.filter.caller') }}</div>
-              <div class="info-value phone">{{ current.caller }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.filter.callee') }}</div>
-              <div class="info-value phone">{{ current.callee }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.agent') }}</div>
-              <div class="info-value">
-                {{ current.agentName || '-' }}
-                <span class="muted" v-if="current.agentNo">/ {{ current.agentNo }}</span>
-              </div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.skillGroup') }}</div>
-              <div class="info-value">{{ current.skillGroup || '-' }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.hangupBy') }}</div>
-              <div class="info-value">{{ hangupLabel(current.hangupBy) }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.startTime') }}</div>
-              <div class="info-value time">{{ current.startTime }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.endTime') }}</div>
-              <div class="info-value time">{{ current.endTime }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.ringDuration') }}</div>
-              <div class="info-value duration">{{ fmtDur(current.ringDuration) }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">{{ t('cc.callRecord.column.talkDuration') }}</div>
-              <div class="info-value duration emph">{{ fmtDur(current.talkDuration) }}</div>
-            </div>
+            </el-popover>
+            <el-select v-model="rate" size="small" class="rate-select">
+              <el-option v-for="r in [0.5, 0.75, 1, 1.25, 1.5, 2]" :key="r" :label="r + 'x'" :value="r" />
+            </el-select>
+            <el-button :icon="Download" circle plain @click="downloadRec(current)" />
           </div>
-        </section>
-
-        <!-- 录音播放器 -->
-        <section class="info-section">
-          <div class="section-title"><span class="bar"></span>{{ t('cc.callRecord.detail.recording') }}</div>
-          <div v-if="current.recordingUrl" class="audio-stage">
-            <div class="waveform" @click="seekByWave">
-              <span
-                v-for="(h, i) in waveBars"
-                :key="i"
-                class="wave-bar"
-                :class="{ active: i / waveBars.length <= progress, beating: playing }"
-                :style="{ height: h + '%', animationDelay: (i * 0.03) + 's' }"
-              ></span>
-              <div class="wave-cursor" :style="{ left: (progress * 100) + '%' }"></div>
-            </div>
-            <div class="audio-controls">
-              <button class="play-btn" @click="togglePlay" :class="{ playing }">
-                <el-icon :size="22">
-                  <VideoPlay v-if="!playing" />
-                  <VideoPause v-else />
-                </el-icon>
-              </button>
-              <div class="time-display">
-                <span class="time-cur">{{ fmtTime(currentTime) }}</span>
-                <span class="time-sep">/</span>
-                <span class="time-total">{{ fmtTime(totalTime) }}</span>
-              </div>
-              <div class="progress-track" @click="seekByTrack">
-                <div class="progress-bar" :style="{ width: (progress * 100) + '%' }"></div>
-                <div class="progress-thumb" :style="{ left: (progress * 100) + '%' }"></div>
-              </div>
-              <div class="audio-extra">
-                <el-popover placement="top" :width="180" trigger="click">
-                  <template #reference>
-                    <button class="icon-btn" :title="t('cc.callRecord.detail.volumeTip', { value: volume })">
-                      <el-icon :size="16"><Microphone /></el-icon>
-                    </button>
-                  </template>
-                  <div class="vol-popover">
-                    <el-icon :size="14"><Mute /></el-icon>
-                    <el-slider v-model="volume" :min="0" :max="100" />
-                    <span class="vol-num">{{ volume }}</span>
-                  </div>
-                </el-popover>
-                <el-select v-model="rate" size="small" class="rate-select">
-                  <el-option v-for="r in [0.5, 0.75, 1, 1.25, 1.5, 2]" :key="r" :label="r + 'x'" :value="r" />
-                </el-select>
-                <el-button :icon="Download" circle plain @click="downloadRec(current)" />
-              </div>
-            </div>
-            <audio ref="audioEl" :src="current.recordingUrl" preload="metadata" style="display:none"></audio>
-          </div>
-          <div v-else class="no-record">
-            <el-icon :size="36"><Microphone /></el-icon>
-            <div class="no-record-text">{{ t('cc.callRecord.detail.noRecording') }}</div>
-          </div>
-        </section>
-
-        <!-- 事件时间轴 -->
-        <section class="info-section">
-          <div class="section-title">
-            <span class="bar"></span>{{ t('cc.callRecord.detail.timeline') }}
-            <span class="section-sub">{{ t('cc.callRecord.detail.eventCount', { n: events.length }) }}</span>
-          </div>
-          <el-timeline class="event-timeline">
-            <el-timeline-item
-              v-for="(ev, i) in events"
-              :key="i"
-              :type="(ev.type as any) || 'primary'"
-              :timestamp="ev.time"
-              placement="top"
-              :hollow="i !== events.length - 1"
-            >
-              <div class="event-card">
-                <div class="event-title">{{ ev.event }}</div>
-                <div class="event-detail" v-if="ev.detail">{{ ev.detail }}</div>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
-        </section>
-
-        <!-- 质检评分 -->
-        <section class="info-section">
-          <div class="section-title">
-            <span class="bar"></span>{{ t('cc.callRecord.qa.title') }}
-            <span class="section-sub">QC Scoring · {{ t('cc.callRecord.qa.scoreTitle') }}</span>
-          </div>
-          <div class="rate-grid">
-            <div class="rate-item" v-for="dim in qcDims" :key="dim.key">
-              <div class="rate-label">
-                <el-icon :size="14"><component :is="dim.icon" /></el-icon>
-                <span>{{ dim.label }}</span>
-              </div>
-              <el-rate
-                v-model="qc[dim.key]"
-                :colors="rateColors"
-                allow-half
-                show-score
-                :score-template="t('cc.callRecord.qa.scoreTemplate')"
-                class="qc-rate"
-              />
-            </div>
-          </div>
-          <div class="rate-summary">
-            <div class="rate-overall">
-              <div class="rate-overall-label">{{ t('cc.callRecord.qa.totalScore') }}</div>
-              <div class="rate-overall-num">{{ qcOverall }}</div>
-              <div class="rate-overall-unit">/ 5.00</div>
-            </div>
-            <el-input
-              v-model="qc.remark"
-              type="textarea"
-              :rows="3"
-              :placeholder="t('cc.callRecord.qa.commentPlaceholder')"
-              class="qc-remark"
-            />
-          </div>
-          <div class="rate-actions">
-            <el-button :icon="RefreshLeft" @click="resetQc">{{ t('cc.callRecord.qa.reset') }}</el-button>
-            <el-button type="primary" :icon="Promotion" @click="submitQc">{{ t('cc.callRecord.qa.submit') }}</el-button>
-          </div>
-        </section>
+        </div>
+        <audio ref="audioEl" :src="current.recordingUrl" preload="metadata" style="display:none"></audio>
       </div>
-    </el-drawer>
+      <div v-else class="no-record unified-empty">
+        <el-icon :size="36"><Microphone /></el-icon>
+        <div class="no-record-text">{{ t('cc.callRecord.detail.noRecording') }}</div>
+      </div>
+
+      <div class="bd-section-title section-gap">
+        {{ t('cc.callRecord.qa.title') }}
+        <span class="section-sub">QC Scoring · {{ t('cc.callRecord.qa.scoreTitle') }}</span>
+      </div>
+      <div class="rate-grid unified">
+        <div class="rate-item" v-for="dim in qcDims" :key="dim.key">
+          <div class="rate-label">
+            <el-icon :size="14"><component :is="dim.icon" /></el-icon>
+            <span>{{ dim.label }}</span>
+          </div>
+          <el-rate
+            v-model="qc[dim.key]"
+            :colors="rateColors"
+            allow-half
+            show-score
+            :score-template="t('cc.callRecord.qa.scoreTemplate')"
+            class="qc-rate"
+          />
+        </div>
+      </div>
+      <div class="rate-summary unified">
+        <div class="rate-overall">
+          <div class="rate-overall-label">{{ t('cc.callRecord.qa.totalScore') }}</div>
+          <div class="rate-overall-num">{{ qcOverall }}</div>
+          <div class="rate-overall-unit">/ 5.00</div>
+        </div>
+        <el-input
+          v-model="qc.remark"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('cc.callRecord.qa.commentPlaceholder')"
+          class="qc-remark"
+        />
+      </div>
+
+      <template #timeline>
+        <div v-for="(ev, i) in events" :key="i" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: ev.type === 'success' }" />
+          <div>
+            <strong>{{ ev.event }}</strong>
+            <p>{{ ev.time }}{{ ev.detail ? ` · ${ev.detail}` : '' }}</p>
+          </div>
+        </div>
+        <div v-if="!events.length" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>{{ t('cc.callRecord.detail.timeline') }}</strong>
+            <p>{{ t('cc.callRecord.detail.eventCount', { n: 0 }) }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="record-footer-summary">
+          <span>{{ t('cc.callRecord.column.talkDuration') }} <b>{{ fmtDur(current.talkDuration) }}</b></span>
+          <span>{{ t('cc.callRecord.detail.eventCount', { n: events.length }) }}</span>
+        </div>
+        <el-button @click="drawerVisible = false">关闭</el-button>
+        <el-button :icon="RefreshLeft" @click="resetQc">{{ t('cc.callRecord.qa.reset') }}</el-button>
+        <el-button type="primary" :icon="Promotion" @click="submitQc">{{ t('cc.callRecord.qa.submit') }}</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -406,6 +360,7 @@ import {
   type CallRecord, type CallEvent, type CallDirection, type CallResult, type Agent
 } from '@/api/call-center'
 import { useI18n } from 'vue-i18n'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const { t } = useI18n()
 
@@ -746,6 +701,12 @@ function resultTagType(r: CallResult): 'success' | 'danger' | 'warning' | 'info'
   if (r === 'no-answer' || r === 'abandoned') return 'danger'
   if (r === 'busy') return 'warning'
   return 'info'
+}
+function recordAvatarClass(row: CallRecord): string {
+  if (row.result === 'answered') return 'success'
+  if (row.result === 'busy') return 'warning'
+  if (row.result === 'no-answer' || row.result === 'abandoned' || row.result === 'failed') return 'danger'
+  return 'company'
 }
 function hangupLabel(by?: string) {
   return ({
@@ -1514,6 +1475,139 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* ============== 统一详情抽屉内容 ============== */
+.section-gap {
+  margin-top: 18px !important;
+}
+
+.record-duration-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.audio-stage.unified {
+  background: #fbfcfd;
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+.audio-stage.unified::before {
+  color: #cbd5e1;
+}
+
+.audio-stage.unified .wave-bar {
+  background: #dbeafe;
+}
+
+.audio-stage.unified .wave-bar.active {
+  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+  box-shadow: none;
+}
+
+.audio-stage.unified .wave-cursor,
+.audio-stage.unified .progress-thumb {
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.audio-stage.unified .progress-track {
+  background: #e2e8f0;
+}
+
+.audio-stage.unified .progress-bar {
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+}
+
+.audio-stage.unified .play-btn {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.audio-stage.unified .play-btn.playing {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.audio-stage.unified .time-cur,
+.audio-stage.unified .vol-num {
+  color: #2563eb;
+}
+
+.audio-stage.unified .time-total,
+.audio-stage.unified .time-sep {
+  color: #64748b;
+}
+
+.audio-stage.unified .icon-btn {
+  border-color: #dbe3ef;
+  color: #64748b;
+}
+
+.unified-empty {
+  background: #fbfcfd;
+  border-color: #dbe3ef;
+  color: #64748b;
+}
+
+.rate-grid.unified,
+.rate-summary.unified .rate-overall {
+  background: #fbfcfd;
+  border-color: #e2e8f0;
+}
+
+.rate-grid.unified .rate-label {
+  color: #475569;
+}
+
+.rate-summary.unified .rate-overall-label,
+.rate-summary.unified .rate-overall-unit {
+  color: #64748b;
+}
+
+.rate-summary.unified .rate-overall-num {
+  background: none;
+  color: #2563eb;
+  -webkit-text-fill-color: #2563eb;
+}
+
+.rate-summary.unified :deep(.qc-remark .el-textarea__inner) {
+  background: #fff !important;
+  border-color: #dbe3ef !important;
+  color: #334155 !important;
+}
+
+.rate-summary.unified :deep(.qc-remark .el-textarea__inner:focus) {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.16) !important;
+}
+
+.record-footer-summary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.record-footer-summary b {
+  color: #2563eb;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
 }
 
 /* ============== 表单/弹层覆盖 ============== */

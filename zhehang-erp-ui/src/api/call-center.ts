@@ -240,23 +240,475 @@ export interface CurrentCall {
 const delay = <T>(data: T, ms = 240): Promise<{ code: number; data: T; message: string }> =>
   new Promise(resolve => setTimeout(() => resolve({ code: 200, data, message: 'ok' }), ms))
 
-const _agents: Agent[] = []
+const fmtDateTime = (date: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
 
-const _trunks: SipTrunk[] = []
+const nowMinus = (minutes: number): string => fmtDateTime(new Date(Date.now() - minutes * 60 * 1000))
+const todayAt = (hour: number, minute: number, second = 0): string => {
+  const date = new Date()
+  date.setHours(hour, minute, second, 0)
+  return fmtDateTime(date)
+}
 
-const _numbers: PhoneNumber[] = []
+const SILENT_RECORDING =
+  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA='
 
-const _skillGroups: SkillGroup[] = []
+const _skillGroups: SkillGroup[] = [
+  {
+    id: 1,
+    name: '财税获客组',
+    code: 'TAX-SALES',
+    strategy: 'least-busy',
+    agentCount: 4,
+    maxQueue: 18,
+    timeoutSec: 45,
+    description: '承接新设公司、异常解除、代理记账咨询等电销线索',
+    enabled: true,
+    createdAt: nowMinus(60 * 24 * 80)
+  },
+  {
+    id: 2,
+    name: '客户续费组',
+    code: 'RENEWAL',
+    strategy: 'longest-idle',
+    agentCount: 3,
+    maxQueue: 12,
+    timeoutSec: 60,
+    description: '负责老客户续费、账期提醒、服务满意度回访',
+    enabled: true,
+    createdAt: nowMinus(60 * 24 * 70)
+  },
+  {
+    id: 3,
+    name: '渠道同行组',
+    code: 'CHANNEL',
+    strategy: 'skill-based',
+    agentCount: 2,
+    maxQueue: 10,
+    timeoutSec: 50,
+    description: '处理同行渠道、地址挂靠资源采购与转售咨询',
+    enabled: true,
+    createdAt: nowMinus(60 * 24 * 66)
+  },
+  {
+    id: 4,
+    name: '售后服务组',
+    code: 'SERVICE',
+    strategy: 'round-robin',
+    agentCount: 2,
+    maxQueue: 16,
+    timeoutSec: 55,
+    description: '接入客户资料补交、工商变更进度、开票问题',
+    enabled: true,
+    createdAt: nowMinus(60 * 24 * 62)
+  }
+]
 
-const _ivrFlows: IvrFlow[] = []
+const _agents: Agent[] = [
+  {
+    id: 1,
+    agentNo: 'A001',
+    name: '陈思旭',
+    extension: '8001',
+    sipAccount: 'sip-a001',
+    skillGroupIds: [1, 2],
+    skillGroupNames: ['财税获客组', '客户续费组'],
+    status: 'idle',
+    deptName: '网销电销一部',
+    phone: '13800138001',
+    email: 'a001@zhehang.cn',
+    maxConcurrent: 1,
+    enabled: true,
+    loginAt: todayAt(8, 52),
+    createdAt: nowMinus(60 * 24 * 120)
+  },
+  {
+    id: 2,
+    agentNo: 'A002',
+    name: '何海琳',
+    extension: '8002',
+    sipAccount: 'sip-a002',
+    skillGroupIds: [1],
+    skillGroupNames: ['财税获客组'],
+    status: 'busy',
+    deptName: '网销电销一部',
+    phone: '13800138002',
+    email: 'a002@zhehang.cn',
+    maxConcurrent: 1,
+    enabled: true,
+    loginAt: todayAt(8, 48),
+    createdAt: nowMinus(60 * 24 * 118)
+  },
+  {
+    id: 3,
+    agentNo: 'A003',
+    name: '张东辉',
+    extension: '8003',
+    sipAccount: 'sip-a003',
+    skillGroupIds: [2, 4],
+    skillGroupNames: ['客户续费组', '售后服务组'],
+    status: 'afterwork',
+    deptName: '客户成功部',
+    phone: '13800138003',
+    email: 'a003@zhehang.cn',
+    maxConcurrent: 1,
+    enabled: true,
+    loginAt: todayAt(8, 55),
+    createdAt: nowMinus(60 * 24 * 110)
+  },
+  {
+    id: 4,
+    agentNo: 'A004',
+    name: '邹金芳',
+    extension: '8004',
+    sipAccount: 'sip-a004',
+    skillGroupIds: [3],
+    skillGroupNames: ['渠道同行组'],
+    status: 'idle',
+    deptName: '渠道事业部',
+    phone: '13800138004',
+    email: 'a004@zhehang.cn',
+    maxConcurrent: 1,
+    enabled: true,
+    loginAt: todayAt(9, 2),
+    createdAt: nowMinus(60 * 24 * 94)
+  },
+  {
+    id: 5,
+    agentNo: 'A005',
+    name: '王文杰',
+    extension: '8005',
+    sipAccount: 'sip-a005',
+    skillGroupIds: [1, 4],
+    skillGroupNames: ['财税获客组', '售后服务组'],
+    status: 'break',
+    deptName: '网销电销二部',
+    phone: '13800138005',
+    email: 'a005@zhehang.cn',
+    maxConcurrent: 1,
+    enabled: true,
+    loginAt: todayAt(8, 59),
+    createdAt: nowMinus(60 * 24 * 88)
+  }
+]
 
-const _ivrTemplates: IvrTemplate[] = []
+const _trunks: SipTrunk[] = [
+  { id: 1, name: '杭州电销主线路', protocol: 'SIP', host: 'sip-hz-main.zhehang.local', port: 5060, username: 'zh-hz-main', status: 'online', channels: 60, remark: '网销电销主叫池' },
+  { id: 2, name: '客户服务接入线', protocol: 'SIP', host: 'sip-service.zhehang.local', port: 5060, username: 'zh-service', status: 'online', channels: 30, remark: '400 与售后服务接入' },
+  { id: 3, name: '渠道同行备用线', protocol: 'SIP', host: 'sip-channel.zhehang.local', port: 5070, username: 'zh-channel', status: 'error', channels: 20, remark: '同行渠道外呼备用线路' }
+]
 
-const _callRecords: CallRecord[] = []
+const _numbers: PhoneNumber[] = [
+  { id: 1, number: '0571-88010001', type: 'both', trunkId: 1, trunkName: '杭州电销主线路', callerIdName: '浙杭集团财税顾问', province: '浙江', city: '杭州', enabled: true, remark: '新客首呼', createdAt: nowMinus(60 * 24 * 40) },
+  { id: 2, number: '0571-88010002', type: 'outbound', trunkId: 1, trunkName: '杭州电销主线路', callerIdName: '浙杭集团企服', province: '浙江', city: '杭州', enabled: true, remark: '异常解除拓客', createdAt: nowMinus(60 * 24 * 38) },
+  { id: 3, number: '400-0571-889', type: 'inbound', trunkId: 2, trunkName: '客户服务接入线', callerIdName: '浙杭集团客服', province: '浙江', city: '杭州', enabled: true, remark: '客户服务热线', createdAt: nowMinus(60 * 24 * 36) },
+  { id: 4, number: '0571-88010008', type: 'both', trunkId: 3, trunkName: '渠道同行备用线', callerIdName: '浙杭集团渠道', province: '浙江', city: '杭州', enabled: false, remark: '同行地址挂靠业务备用', createdAt: nowMinus(60 * 24 * 32) }
+]
 
-const _outboundTasks: OutboundTask[] = []
+const _ivrFlows: IvrFlow[] = [
+  {
+    id: 1,
+    name: '财税咨询欢迎语',
+    description: '新客来电后先播报品牌与业务入口，再按服务类型分流',
+    version: 3,
+    enabled: true,
+    bindNumbers: ['400-0571-889', '0571-88010001'],
+    updatedAt: nowMinus(36),
+    nodes: [
+      { id: 'start', type: 'start', name: '来电开始', x: 80, y: 120 },
+      { id: 'welcome', type: 'play', name: '欢迎语', x: 260, y: 120, config: { text: '欢迎致电浙杭集团' } },
+      { id: 'menu', type: 'menu', name: '业务分流', x: 450, y: 120, config: { keys: ['1 新设公司', '2 代理记账', '3 异常解除'] } },
+      { id: 'queue', type: 'queue', name: '进入财税获客组', x: 640, y: 120, config: { skillGroupId: 1 } }
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'welcome' },
+      { id: 'e2', source: 'welcome', target: 'menu' },
+      { id: 'e3', source: 'menu', target: 'queue', label: '按键 1/2/3' }
+    ]
+  },
+  {
+    id: 2,
+    name: '老客户续费提醒',
+    description: '续费客户来电优先进入客户续费组，并保留转售后入口',
+    version: 2,
+    enabled: true,
+    bindNumbers: ['0571-88010001'],
+    updatedAt: nowMinus(280),
+    nodes: [
+      { id: 'start', type: 'start', name: '来电开始', x: 80, y: 140 },
+      { id: 'identify', type: 'condition', name: '识别客户', x: 260, y: 140 },
+      { id: 'renewal', type: 'queue', name: '续费组', x: 450, y: 90, config: { skillGroupId: 2 } },
+      { id: 'service', type: 'queue', name: '售后组', x: 450, y: 190, config: { skillGroupId: 4 } }
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'identify' },
+      { id: 'e2', source: 'identify', target: 'renewal', label: '已到期' },
+      { id: 'e3', source: 'identify', target: 'service', label: '服务咨询' }
+    ]
+  }
+]
 
-const _monitorTrend: { time: string; inbound: number; outbound: number }[] = []
+const _ivrTemplates: IvrTemplate[] = [
+  { id: 1, name: '财税咨询标准分流', category: '销售', description: '新设公司、代理记账、异常解除三类入口' },
+  { id: 2, name: '续费客户优先接入', category: '客服', description: '续费提醒、账期咨询、售后转接' },
+  { id: 3, name: '渠道同行地址业务', category: '通用', description: '同行渠道接待、地址资源咨询、合作登记' }
+]
+
+const _callRecords: CallRecord[] = [
+  {
+    id: 1,
+    callId: 'CALL-20260604-0001',
+    direction: 'outbound',
+    caller: '0571-88010002',
+    callee: '18668973330',
+    agentNo: 'A001',
+    agentName: '陈思旭',
+    skillGroup: '财税获客组',
+    startTime: todayAt(10, 22, 15),
+    answerTime: todayAt(10, 22, 24),
+    endTime: todayAt(10, 25, 52),
+    ringDuration: 9,
+    talkDuration: 208,
+    totalDuration: 217,
+    result: 'answered',
+    hangupBy: 'callee',
+    recordingUrl: SILENT_RECORDING,
+    satisfaction: 5,
+    remark: '新设公司咨询，已进入商机跟进'
+  },
+  {
+    id: 2,
+    callId: 'CALL-20260604-0002',
+    direction: 'inbound',
+    caller: '13957118888',
+    callee: '400-0571-889',
+    agentNo: 'A003',
+    agentName: '张东辉',
+    skillGroup: '客户续费组',
+    startTime: todayAt(10, 14, 6),
+    answerTime: todayAt(10, 14, 12),
+    endTime: todayAt(10, 18, 38),
+    ringDuration: 6,
+    talkDuration: 266,
+    totalDuration: 272,
+    result: 'answered',
+    hangupBy: 'caller',
+    recordingUrl: SILENT_RECORDING,
+    satisfaction: 4,
+    remark: '代理记账续费确认，需财务开票'
+  },
+  {
+    id: 3,
+    callId: 'CALL-20260604-0003',
+    direction: 'outbound',
+    caller: '0571-88010008',
+    callee: '17767120066',
+    agentNo: 'A004',
+    agentName: '邹金芳',
+    skillGroup: '渠道同行组',
+    startTime: todayAt(9, 58, 42),
+    answerTime: todayAt(9, 58, 51),
+    endTime: todayAt(10, 1, 4),
+    ringDuration: 9,
+    talkDuration: 133,
+    totalDuration: 142,
+    result: 'answered',
+    hangupBy: 'callee',
+    recordingUrl: SILENT_RECORDING,
+    satisfaction: 5,
+    remark: '同行渠道咨询地址挂靠价格'
+  },
+  {
+    id: 4,
+    callId: 'CALL-20260604-0004',
+    direction: 'outbound',
+    caller: '0571-88010001',
+    callee: '15800331118',
+    agentNo: 'A002',
+    agentName: '何海琳',
+    skillGroup: '财税获客组',
+    startTime: todayAt(9, 41, 10),
+    endTime: todayAt(9, 41, 42),
+    ringDuration: 32,
+    talkDuration: 0,
+    totalDuration: 32,
+    result: 'no-answer',
+    hangupBy: 'system',
+    remark: 'T+1 新设公司线索未接，下午二次触达'
+  },
+  {
+    id: 5,
+    callId: 'CALL-20260604-0005',
+    direction: 'inbound',
+    caller: '18072880011',
+    callee: '400-0571-889',
+    agentNo: 'A005',
+    agentName: '王文杰',
+    skillGroup: '售后服务组',
+    startTime: todayAt(9, 26, 3),
+    answerTime: todayAt(9, 26, 11),
+    endTime: todayAt(9, 28, 56),
+    ringDuration: 8,
+    talkDuration: 165,
+    totalDuration: 173,
+    result: 'answered',
+    hangupBy: 'caller',
+    recordingUrl: SILENT_RECORDING,
+    satisfaction: 4,
+    remark: '资料补交提醒，客户已确认今天上传'
+  },
+  {
+    id: 6,
+    callId: 'CALL-20260603-0038',
+    direction: 'outbound',
+    caller: '0571-88010002',
+    callee: '13011143334',
+    agentNo: 'A001',
+    agentName: '陈思旭',
+    skillGroup: '财税获客组',
+    startTime: nowMinus(60 * 18),
+    answerTime: nowMinus(60 * 18 - 1),
+    endTime: nowMinus(60 * 18 - 4),
+    ringDuration: 7,
+    talkDuration: 182,
+    totalDuration: 189,
+    result: 'answered',
+    hangupBy: 'callee',
+    recordingUrl: SILENT_RECORDING,
+    satisfaction: 5,
+    remark: '经营异常解除咨询，已添加到 CRM'
+  },
+  {
+    id: 7,
+    callId: 'CALL-20260603-0039',
+    direction: 'outbound',
+    caller: '0571-88010001',
+    callee: '18505277788',
+    agentNo: 'A002',
+    agentName: '何海琳',
+    skillGroup: '财税获客组',
+    startTime: nowMinus(60 * 19),
+    endTime: nowMinus(60 * 19 - 1),
+    ringDuration: 18,
+    talkDuration: 0,
+    totalDuration: 18,
+    result: 'busy',
+    hangupBy: 'system',
+    remark: '税务异常解除批次线索占线'
+  },
+  {
+    id: 8,
+    callId: 'CALL-20260603-0040',
+    direction: 'internal',
+    caller: '8003',
+    callee: '8004',
+    agentNo: 'A003',
+    agentName: '张东辉',
+    skillGroup: '客户续费组',
+    startTime: nowMinus(60 * 21),
+    answerTime: nowMinus(60 * 21 - 1),
+    endTime: nowMinus(60 * 21 - 3),
+    ringDuration: 4,
+    talkDuration: 128,
+    totalDuration: 132,
+    result: 'answered',
+    hangupBy: 'caller',
+    recordingUrl: SILENT_RECORDING,
+    remark: '续费客户移交渠道地址业务'
+  }
+]
+
+const _outboundTasks: OutboundTask[] = [
+  {
+    id: 1,
+    name: 'T+1 新设公司财税包首呼',
+    type: 'predictive',
+    status: 'running',
+    totalCount: 320,
+    completedCount: 186,
+    successCount: 74,
+    failedCount: 112,
+    skillGroupId: 1,
+    skillGroupName: '财税获客组',
+    callerNumber: '0571-88010001',
+    startTime: todayAt(9, 0),
+    scriptId: 1,
+    createdBy: '运营主管',
+    createdAt: nowMinus(150)
+  },
+  {
+    id: 2,
+    name: '经营异常解除高意向回访',
+    type: 'progressive',
+    status: 'paused',
+    totalCount: 128,
+    completedCount: 69,
+    successCount: 31,
+    failedCount: 38,
+    skillGroupId: 1,
+    skillGroupName: '财税获客组',
+    callerNumber: '0571-88010002',
+    startTime: todayAt(9, 30),
+    scriptId: 2,
+    createdBy: '网销组长',
+    createdAt: nowMinus(96)
+  },
+  {
+    id: 3,
+    name: '代理记账续费到期提醒',
+    type: 'preview',
+    status: 'completed',
+    totalCount: 96,
+    completedCount: 96,
+    successCount: 68,
+    failedCount: 28,
+    skillGroupId: 2,
+    skillGroupName: '客户续费组',
+    callerNumber: '400-0571-889',
+    startTime: todayAt(8, 50),
+    endTime: todayAt(10, 5),
+    scriptId: 3,
+    createdBy: '客户成功部',
+    createdAt: nowMinus(230)
+  },
+  {
+    id: 4,
+    name: '同行渠道地址挂靠资源确认',
+    type: 'manual',
+    status: 'draft',
+    totalCount: 48,
+    completedCount: 0,
+    successCount: 0,
+    failedCount: 0,
+    skillGroupId: 3,
+    skillGroupName: '渠道同行组',
+    callerNumber: '0571-88010008',
+    scriptId: 4,
+    createdBy: '渠道事业部',
+    createdAt: nowMinus(42)
+  }
+]
+
+const _monitorTrend: { time: string; inbound: number; outbound: number }[] = [
+  { time: '08:30', inbound: 12, outbound: 18 },
+  { time: '09:00', inbound: 24, outbound: 42 },
+  { time: '09:30', inbound: 31, outbound: 66 },
+  { time: '10:00', inbound: 28, outbound: 73 },
+  { time: '10:30', inbound: 35, outbound: 81 },
+  { time: '11:00', inbound: 29, outbound: 69 },
+  { time: '11:30', inbound: 22, outbound: 54 },
+  { time: '12:00', inbound: 13, outbound: 26 },
+  { time: '13:30', inbound: 18, outbound: 44 },
+  { time: '14:00', inbound: 27, outbound: 71 },
+  { time: '14:30', inbound: 33, outbound: 88 },
+  { time: '15:00', inbound: 30, outbound: 84 },
+  { time: '15:30', inbound: 26, outbound: 75 },
+  { time: '16:00', inbound: 21, outbound: 62 },
+  { time: '16:30', inbound: 18, outbound: 47 },
+  { time: '17:00', inbound: 15, outbound: 32 }
+]
 
 // ============================================================
 // API 函数

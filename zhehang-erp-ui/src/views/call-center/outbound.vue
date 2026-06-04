@@ -333,121 +333,157 @@
     </el-dialog>
 
     <!-- 任务详情抽屉 -->
-    <el-drawer v-model="drawerVisible" size="640px" :with-header="false" class="ob-drawer">
-      <div v-if="currentTask" class="drawer-content">
-        <div class="drawer-header">
-          <div>
-            <div class="d-eyebrow">{{ t('cc.outbound.detail.eyebrow') }}</div>
-            <div class="d-title">{{ currentTask.name }}</div>
-            <div class="d-meta">
-              <el-tag :type="typeTag(currentTask.type)" effect="plain" size="small">
-                {{ typeLabel(currentTask.type) }}
-              </el-tag>
-              <el-tag :type="statusTag(currentTask.status)" effect="dark" size="small" class="status-tag">
-                <span class="status-dot" :style="{ background: statusColor(currentTask.status) }"></span>
-                {{ statusLabel(currentTask.status) }}
-              </el-tag>
-              <span class="d-meta-text">{{ t('cc.outbound.detail.createdPrefix') }} {{ currentTask.createdAt }}</span>
-            </div>
-          </div>
-          <div class="drawer-actions">
-            <el-button
-              v-if="currentTask.status === 'draft' || currentTask.status === 'paused'"
-              type="success"
-              size="small"
-              :icon="VideoPlay"
-              @click="handleControl(currentTask, currentTask.status === 'paused' ? 'resume' : 'start')"
-            >{{ currentTask.status === 'paused' ? t('cc.outbound.action.resume') : t('cc.outbound.action.start') }}</el-button>
-            <el-button
-              v-if="currentTask.status === 'running'"
-              type="warning"
-              size="small"
-              :icon="VideoPause"
-              @click="handleControl(currentTask, 'pause')"
-            >{{ t('cc.outbound.action.pause') }}</el-button>
-            <el-button
-              v-if="currentTask.status === 'running' || currentTask.status === 'paused'"
-              type="danger"
-              size="small"
-              :icon="CircleClose"
-              @click="handleControl(currentTask, 'stop')"
-            >{{ t('cc.outbound.action.stop') }}</el-button>
-          </div>
-        </div>
+    <BusinessDetailDrawer
+      v-if="currentTask"
+      v-model="drawerVisible"
+      :title="currentTask.name"
+      :subtitle="`${typeLabel(currentTask.type)} · ${t('cc.outbound.detail.createdPrefix')} ${currentTask.createdAt}`"
+      :eyebrow="t('cc.outbound.detail.eyebrow')"
+      :avatar="typeLabel(currentTask.type).slice(0, 2)"
+      :avatar-class="outboundAvatarClass(currentTask)"
+      :status-text="statusLabel(currentTask.status)"
+      :status-type="drawerStatusType(currentTask.status)"
+      size="720px"
+    >
+      <template #actions>
+        <el-tag :type="typeTag(currentTask.type)" effect="plain" size="small">
+          {{ typeLabel(currentTask.type) }}
+        </el-tag>
+        <span class="outbound-rate-pill">{{ answerRate(currentTask) }}%</span>
+      </template>
 
-        <div class="drawer-progress">
-          <el-progress
-            type="dashboard"
-            :percentage="taskProgress(currentTask)"
-            :width="160"
-            :stroke-width="10"
-            :color="progressColors"
-          >
-            <template #default="{ percentage }">
-              <div class="progress-inner">
-                <div class="progress-num">{{ percentage }}%</div>
-                <div class="progress-lbl">{{ t('cc.outbound.detail.progress') }}</div>
-              </div>
-            </template>
-          </el-progress>
-          <div class="progress-stats">
-            <div class="ps-item">
-              <div class="ps-lbl">{{ t('cc.outbound.detail.totalNumbers') }}</div>
-              <div class="ps-val">{{ currentTask.totalCount }}</div>
-            </div>
-            <div class="ps-item">
-              <div class="ps-lbl">{{ t('cc.outbound.column.completed') }}</div>
-              <div class="ps-val">{{ currentTask.completedCount }}</div>
-            </div>
-            <div class="ps-item">
-              <div class="ps-lbl">{{ t('cc.outbound.detail.result.answered') }}</div>
-              <div class="ps-val ps-success">{{ currentTask.successCount }}</div>
-            </div>
-            <div class="ps-item">
-              <div class="ps-lbl">{{ t('cc.outbound.detail.result.failed') }}</div>
-              <div class="ps-val ps-danger">{{ currentTask.failedCount }}</div>
-            </div>
-          </div>
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>{{ t('cc.outbound.form.callerNumber') }}</span><b>{{ currentTask.callerNumber || '—' }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.outbound.column.totalCount') }}</span><b>{{ currentTask.totalCount }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.outbound.column.completed') }}</span><b>{{ currentTask.completedCount }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.outbound.column.connected') }}</span><b>{{ currentTask.successCount }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.outbound.detail.result.failed') }}</span><b>{{ currentTask.failedCount }}</b></div>
+          <div class="bd-kv"><span>{{ t('cc.outbound.column.connectRate') }}</span><b>{{ answerRate(currentTask) }}%</b></div>
+          <div class="bd-kv"><span>{{ t('cc.outbound.detail.progress') }}</span><b>{{ taskProgress(currentTask) }}%</b></div>
+          <div class="bd-kv"><span>{{ t('common.createTime') }}</span><b>{{ currentTask.createdAt }}</b></div>
         </div>
+      </template>
 
-        <div class="drawer-section">
-          <div class="section-title">{{ t('cc.outbound.detail.realtimeStats') }}</div>
-          <div class="rt-grid">
-            <div class="rt-card" v-for="rt in realtimeStats(currentTask)" :key="rt.label">
-              <div class="rt-icon" :style="{ background: rt.bg, color: rt.color }">
-                <el-icon><component :is="rt.icon" /></el-icon>
-              </div>
-              <div class="rt-body">
-                <div class="rt-lbl">{{ rt.label }}</div>
-                <div class="rt-val">{{ rt.value }}</div>
-              </div>
+      <div class="bd-section-title">{{ t('cc.outbound.detail.progress') }}</div>
+      <div class="drawer-progress unified">
+        <el-progress
+          type="dashboard"
+          :percentage="taskProgress(currentTask)"
+          :width="150"
+          :stroke-width="10"
+          :color="progressColors"
+        >
+          <template #default="{ percentage }">
+            <div class="progress-inner">
+              <div class="progress-num">{{ percentage }}%</div>
+              <div class="progress-lbl">{{ t('cc.outbound.detail.progress') }}</div>
             </div>
+          </template>
+        </el-progress>
+        <div class="progress-stats unified">
+          <div class="ps-item">
+            <div class="ps-lbl">{{ t('cc.outbound.detail.totalNumbers') }}</div>
+            <div class="ps-val">{{ currentTask.totalCount }}</div>
           </div>
-        </div>
-
-        <div class="drawer-section">
-          <div class="section-title">{{ t('cc.outbound.detail.dialDetails') }}</div>
-          <el-table :data="dialDetails" size="small" class="dial-table">
-            <el-table-column :label="t('cc.outbound.detail.contactColumn.phone')" min-width="140">
-              <template #default="{ row }"><span class="mono">{{ row.number }}</span></template>
-            </el-table-column>
-            <el-table-column :label="t('cc.outbound.detail.contactColumn.status')" width="100">
-              <template #default="{ row }">
-                <el-tag :type="dialResultTag(row.result)" effect="plain" size="small">
-                  {{ dialResultLabel(row.result) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('cc.outbound.detail.dialedAt')" width="160">
-              <template #default="{ row }"><span class="muted">{{ row.dialedAt }}</span></template>
-            </el-table-column>
-            <el-table-column :label="t('cc.outbound.detail.duration')" width="80">
-              <template #default="{ row }"><span class="mono">{{ formatDuration(row.duration) }}</span></template>
-            </el-table-column>
-          </el-table>
+          <div class="ps-item">
+            <div class="ps-lbl">{{ t('cc.outbound.column.completed') }}</div>
+            <div class="ps-val">{{ currentTask.completedCount }}</div>
+          </div>
+          <div class="ps-item">
+            <div class="ps-lbl">{{ t('cc.outbound.detail.result.answered') }}</div>
+            <div class="ps-val ps-success">{{ currentTask.successCount }}</div>
+          </div>
+          <div class="ps-item">
+            <div class="ps-lbl">{{ t('cc.outbound.detail.result.failed') }}</div>
+            <div class="ps-val ps-danger">{{ currentTask.failedCount }}</div>
+          </div>
         </div>
       </div>
-    </el-drawer>
+
+      <div class="bd-section-title section-gap">{{ t('cc.outbound.detail.realtimeStats') }}</div>
+      <div class="rt-grid unified">
+        <div class="rt-card" v-for="rt in realtimeStats(currentTask)" :key="rt.label">
+          <div class="rt-icon" :style="{ background: rt.bg, color: rt.color }">
+            <el-icon><component :is="rt.icon" /></el-icon>
+          </div>
+          <div class="rt-body">
+            <div class="rt-lbl">{{ rt.label }}</div>
+            <div class="rt-val">{{ rt.value }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bd-section-title section-gap">{{ t('cc.outbound.detail.dialDetails') }}</div>
+      <el-table :data="dialDetails" size="small" class="dial-table unified">
+        <el-table-column :label="t('cc.outbound.detail.contactColumn.phone')" min-width="140">
+          <template #default="{ row }"><span class="mono">{{ row.number }}</span></template>
+        </el-table-column>
+        <el-table-column :label="t('cc.outbound.detail.contactColumn.status')" width="100">
+          <template #default="{ row }">
+            <el-tag :type="dialResultTag(row.result)" effect="plain" size="small">
+              {{ dialResultLabel(row.result) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('cc.outbound.detail.dialedAt')" width="160">
+          <template #default="{ row }"><span class="muted">{{ row.dialedAt }}</span></template>
+        </el-table-column>
+        <el-table-column :label="t('cc.outbound.detail.duration')" width="80">
+          <template #default="{ row }"><span class="mono">{{ formatDuration(row.duration) }}</span></template>
+        </el-table-column>
+      </el-table>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>{{ t('cc.outbound.detail.createdPrefix') }}</strong>
+            <p>{{ currentTask.createdAt }} · {{ typeLabel(currentTask.type) }} · {{ currentTask.totalCount }} {{ t('cc.outbound.unitItem') }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: currentTask.completedCount > 0 }" />
+          <div>
+            <strong>{{ t('cc.outbound.detail.realtimeStats') }}</strong>
+            <p>{{ currentTask.completedCount }} / {{ currentTask.totalCount }} · {{ t('cc.outbound.column.connectRate') }} {{ answerRate(currentTask) }}%</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: currentTask.status === 'completed' }" />
+          <div>
+            <strong>{{ statusLabel(currentTask.status) }}</strong>
+            <p>{{ currentTask.status === 'completed' ? t('cc.outbound.status.completed') : t('cc.outbound.detail.progress') + ' ' + taskProgress(currentTask) + '%' }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="outbound-footer-summary">
+          <span>{{ t('cc.outbound.detail.progress') }} <b>{{ taskProgress(currentTask) }}%</b></span>
+          <span>{{ t('cc.outbound.column.connectRate') }} <b>{{ answerRate(currentTask) }}%</b></span>
+        </div>
+        <el-button @click="drawerVisible = false">关闭</el-button>
+        <el-button
+          v-if="currentTask.status === 'draft' || currentTask.status === 'paused'"
+          type="success"
+          :icon="VideoPlay"
+          @click="handleControl(currentTask, currentTask.status === 'paused' ? 'resume' : 'start')"
+        >{{ currentTask.status === 'paused' ? t('cc.outbound.action.resume') : t('cc.outbound.action.start') }}</el-button>
+        <el-button
+          v-if="currentTask.status === 'running'"
+          type="warning"
+          :icon="VideoPause"
+          @click="handleControl(currentTask, 'pause')"
+        >{{ t('cc.outbound.action.pause') }}</el-button>
+        <el-button
+          v-if="currentTask.status === 'running' || currentTask.status === 'paused'"
+          type="danger"
+          :icon="CircleClose"
+          @click="handleControl(currentTask, 'stop')"
+        >{{ t('cc.outbound.action.stop') }}</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -481,6 +517,7 @@ import {
   type OutboundTask
 } from '@/api/call-center'
 import { useI18n } from 'vue-i18n'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const { t } = useI18n()
 
@@ -525,6 +562,18 @@ const typeIcon  = (tp: TaskType) => TYPE_META[tp]?.icon || PhoneFilled
 const statusLabel = (s: TaskStatus) => STATUS_META[s] ? STATUS_META[s].label() : s
 const statusTag   = (s: TaskStatus) => STATUS_META[s]?.tag || ''
 const statusColor = (s: TaskStatus) => STATUS_META[s]?.color || '#888'
+const drawerStatusType = (s: TaskStatus): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {
+  if (s === 'running' || s === 'completed') return 'success'
+  if (s === 'paused') return 'warning'
+  if (s === 'stopped') return 'danger'
+  return 'info'
+}
+const outboundAvatarClass = (row: OutboundTask) => {
+  if (row.status === 'running' || row.status === 'completed') return 'success'
+  if (row.status === 'paused') return 'warning'
+  if (row.status === 'stopped') return 'danger'
+  return 'company'
+}
 
 // ================== 数据 ==================
 const loading = ref(false)
@@ -1303,6 +1352,91 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
   overflow: hidden;
 }
 .mono { font-family: 'DIN Alternate', 'Courier New', monospace; color: var(--text-primary, #F0E6D3); }
+
+/* ============== 统一详情抽屉内容 ============== */
+.section-gap {
+  margin-top: 18px !important;
+}
+
+.outbound-rate-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.drawer-progress.unified {
+  background: #fbfcfd;
+  border-color: #e2e8f0;
+}
+
+.progress-stats.unified .ps-item {
+  border-left-color: #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.progress-stats.unified .ps-lbl,
+.rt-grid.unified .rt-lbl {
+  color: #64748b;
+  letter-spacing: 0;
+}
+
+.progress-stats.unified .ps-val,
+.rt-grid.unified .rt-val,
+.dial-table.unified .mono {
+  color: #1f2937;
+}
+
+.rt-grid.unified {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.rt-grid.unified .rt-card {
+  background: #fbfcfd;
+  border-color: #e2e8f0;
+}
+
+.dial-table.unified {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dial-table.unified :deep(.el-table th.el-table__cell) {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  letter-spacing: 0;
+}
+
+.dial-table.unified :deep(.el-table td.el-table__cell) {
+  color: #334155;
+  border-bottom: 1px solid #edf2f7 !important;
+}
+
+.outbound-footer-summary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.outbound-footer-summary b {
+  color: #15803d;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
+}
 
 /* Element Plus 表格暗黑适配 */
 .ob-table :deep(.el-table),

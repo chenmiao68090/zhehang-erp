@@ -125,6 +125,22 @@
           </div>
         </template>
       </el-table-column>
+      <el-table-column label="转化" width="140" align="center">
+        <template #default="{ row }">
+          <div class="conversion-cell">
+            <span>CRM {{ row.crmAddedCount || 0 }}</span>
+            <b>{{ row.opportunityCount || 0 }} 商机</b>
+            <em>{{ row.customerCount || 0 }} 成交</em>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="ROI" width="110" align="center">
+        <template #default="{ row }">
+          <div class="roi-cell" :class="{ hot: roiValue(row) >= 10, warm: roiValue(row) >= 3 && roiValue(row) < 10 }">
+            {{ formatRoi(row) }}
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column :label="t('cc.outbound.column.status')" width="110" align="center">
         <template #default="{ row }">
           <el-tag :type="statusTag(row.status)" effect="dark" size="small" class="status-tag">
@@ -355,6 +371,9 @@
       <template #meta>
         <div class="bd-kv-grid">
           <div class="bd-kv"><span>{{ t('cc.outbound.form.callerNumber') }}</span><b>{{ currentTask.callerNumber || '—' }}</b></div>
+          <div class="bd-kv"><span>业务线</span><b>{{ currentTask.businessLine || '—' }}</b></div>
+          <div class="bd-kv"><span>名单批次</span><b>{{ currentTask.leadBatch || '—' }}</b></div>
+          <div class="bd-kv"><span>线索来源</span><b>{{ currentTask.sourcePool || '—' }}</b></div>
           <div class="bd-kv"><span>{{ t('cc.outbound.column.totalCount') }}</span><b>{{ currentTask.totalCount }}</b></div>
           <div class="bd-kv"><span>{{ t('cc.outbound.column.completed') }}</span><b>{{ currentTask.completedCount }}</b></div>
           <div class="bd-kv"><span>{{ t('cc.outbound.column.connected') }}</span><b>{{ currentTask.successCount }}</b></div>
@@ -397,6 +416,30 @@
           <div class="ps-item">
             <div class="ps-lbl">{{ t('cc.outbound.detail.result.failed') }}</div>
             <div class="ps-val ps-danger">{{ currentTask.failedCount }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bd-section-title section-gap">名单与转化勾稽</div>
+      <div class="linkage-panel">
+        <div class="lead-context-grid">
+          <div v-for="item in leadContext(currentTask)" :key="item.label" class="lead-context-item">
+            <span>{{ item.label }}</span>
+            <b>{{ item.value }}</b>
+          </div>
+        </div>
+        <div class="conversion-funnel">
+          <div v-for="item in conversionFunnel(currentTask)" :key="item.label" class="funnel-item" :class="item.tone">
+            <div class="funnel-value">{{ item.value }}</div>
+            <div class="funnel-label">{{ item.label }}</div>
+            <small>{{ item.rate }}</small>
+          </div>
+        </div>
+        <div class="finance-result-grid">
+          <div v-for="item in financeCards(currentTask)" :key="item.label" class="finance-result-card">
+            <span>{{ item.label }}</span>
+            <b :class="item.tone">{{ item.value }}</b>
+            <em>{{ item.hint }}</em>
           </div>
         </div>
       </div>
@@ -450,6 +493,13 @@
           </div>
         </div>
         <div class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: (currentTask.opportunityCount || 0) > 0 }" />
+          <div>
+            <strong>CRM 转化</strong>
+            <p>入 CRM {{ currentTask.crmAddedCount || 0 }} · 商机 {{ currentTask.opportunityCount || 0 }} · 成交 {{ currentTask.customerCount || 0 }} · ROI {{ formatRoi(currentTask) }}</p>
+          </div>
+        </div>
+        <div class="bd-timeline-item">
           <i class="bd-timeline-dot" :class="{ success: currentTask.status === 'completed' }" />
           <div>
             <strong>{{ statusLabel(currentTask.status) }}</strong>
@@ -462,6 +512,8 @@
         <div class="outbound-footer-summary">
           <span>{{ t('cc.outbound.detail.progress') }} <b>{{ taskProgress(currentTask) }}%</b></span>
           <span>{{ t('cc.outbound.column.connectRate') }} <b>{{ answerRate(currentTask) }}%</b></span>
+          <span>商机 <b>{{ currentTask.opportunityCount || 0 }}</b></span>
+          <span>ROI <b>{{ formatRoi(currentTask) }}</b></span>
         </div>
         <el-button @click="drawerVisible = false">关闭</el-button>
         <el-button
@@ -873,6 +925,55 @@ const formatDuration = (sec: number) => {
   const s = sec % 60
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
+
+const formatMoney = (amount?: number) => {
+  const n = Number(amount || 0)
+  if (!n) return '¥0'
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: 'CNY',
+    maximumFractionDigits: 0
+  }).format(n)
+}
+
+const roiValue = (row: OutboundTask) => {
+  const cost = Number(row.estimatedCost || 0)
+  if (!cost) return 0
+  return Number(((Number(row.expectedRevenue || 0) / cost)).toFixed(1))
+}
+
+const formatRoi = (row: OutboundTask) => {
+  const value = roiValue(row)
+  return value ? `${value}x` : '—'
+}
+
+const percentOf = (value: number, total: number) => {
+  if (!total) return '0%'
+  return `${Math.round((value / total) * 100)}%`
+}
+
+const leadContext = (row: OutboundTask) => [
+  { label: '名单批次', value: row.leadBatch || '—' },
+  { label: '目标客群', value: row.targetAudience || '—' },
+  { label: '筛选条件', value: row.filterRule || '—' },
+  { label: '负责团队', value: row.campaignOwner || row.createdBy || '—' }
+]
+
+const conversionFunnel = (row: OutboundTask) => [
+  { label: '名单', value: row.totalCount, rate: '100%', tone: 'base' },
+  { label: '已拨', value: row.completedCount, rate: percentOf(row.completedCount, row.totalCount), tone: 'base' },
+  { label: '接通', value: row.successCount, rate: percentOf(row.successCount, row.completedCount), tone: 'success' },
+  { label: '入 CRM', value: row.crmAddedCount || 0, rate: percentOf(row.crmAddedCount || 0, row.successCount), tone: 'primary' },
+  { label: '商机', value: row.opportunityCount || 0, rate: percentOf(row.opportunityCount || 0, row.crmAddedCount || 0), tone: 'warning' },
+  { label: '成交', value: row.customerCount || 0, rate: percentOf(row.customerCount || 0, row.opportunityCount || 0), tone: 'success' }
+]
+
+const financeCards = (row: OutboundTask) => [
+  { label: '名单/触达成本', value: formatMoney(row.estimatedCost), hint: `${row.totalCount || 0} 条名单`, tone: '' },
+  { label: '预计收入', value: formatMoney(row.expectedRevenue), hint: `${row.customerCount || 0} 个成交客户`, tone: 'income' },
+  { label: 'ROI', value: formatRoi(row), hint: '预计收入 / 获客成本', tone: roiValue(row) >= 10 ? 'hot' : 'income' },
+  { label: '待跟进', value: `${row.followUpCount || 0}`, hint: '需进入销售跟进池', tone: 'follow' }
+]
 
 // ================== 生命周期 ==================
 onMounted(() => {
@@ -1358,6 +1459,59 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
   margin-top: 18px !important;
 }
 
+.conversion-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 84px;
+  line-height: 1.2;
+}
+
+.conversion-cell span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.conversion-cell b {
+  color: #06d6a0;
+  font-size: 13px;
+}
+
+.conversion-cell em {
+  color: #d4af37;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.roi-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.08);
+  color: #cbd5e1;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.roi-cell.warm {
+  border-color: rgba(212, 175, 55, 0.38);
+  background: rgba(212, 175, 55, 0.1);
+  color: #d4af37;
+}
+
+.roi-cell.hot {
+  border-color: rgba(6, 214, 160, 0.42);
+  background: rgba(6, 214, 160, 0.1);
+  color: #06d6a0;
+}
+
 .outbound-rate-pill {
   display: inline-flex;
   align-items: center;
@@ -1371,6 +1525,126 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
   font-size: 12px;
   font-weight: 700;
 }
+
+.linkage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.lead-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lead-context-item {
+  min-height: 62px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.lead-context-item span {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.lead-context-item b {
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+
+.conversion-funnel {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.funnel-item {
+  position: relative;
+  min-height: 76px;
+  padding: 12px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.funnel-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #94a3b8;
+}
+
+.funnel-item.success::before { background: #10b981; }
+.funnel-item.primary::before { background: #3b82f6; }
+.funnel-item.warning::before { background: #d4af37; }
+
+.funnel-value {
+  color: #1f2937;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
+  font-size: 22px;
+  font-weight: 750;
+}
+
+.funnel-label {
+  color: #475569;
+  font-size: 12px;
+}
+
+.funnel-item small {
+  color: #94a3b8;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.finance-result-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.finance-result-card {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.finance-result-card span,
+.finance-result-card em {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.finance-result-card b {
+  display: block;
+  margin: 4px 0 2px;
+  color: #1f2937;
+  font-family: 'DIN Alternate', 'Courier New', monospace;
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.finance-result-card b.income { color: #15803d; }
+.finance-result-card b.hot { color: #047857; }
+.finance-result-card b.follow { color: #2563eb; }
 
 .drawer-progress.unified {
   background: #fbfcfd;

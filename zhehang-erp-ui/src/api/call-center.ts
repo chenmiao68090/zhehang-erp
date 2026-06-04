@@ -169,6 +169,18 @@ export interface OutboundTask {
   startTime?: string
   endTime?: string
   scriptId?: number
+  sourcePool?: string
+  leadBatch?: string
+  targetAudience?: string
+  businessLine?: string
+  filterRule?: string
+  campaignOwner?: string
+  estimatedCost?: number
+  expectedRevenue?: number
+  crmAddedCount?: number
+  opportunityCount?: number
+  customerCount?: number
+  followUpCount?: number
   createdBy: string
   createdAt: string
 }
@@ -635,6 +647,18 @@ const _outboundTasks: OutboundTask[] = [
     callerNumber: '0571-88010001',
     startTime: todayAt(9, 0),
     scriptId: 1,
+    sourcePool: '探迹新注册企业池',
+    leadBatch: 'T+1 新设企业 2026-06-04',
+    targetAudience: '杭州新注册 1 天内企业,注册资本 10 万以上',
+    businessLine: '新设公司 + 代理记账首年包',
+    filterRule: '注册地区=杭州;成立时间=T+1;排除存量客户/黑名单/重复联系人',
+    campaignOwner: '网销电销一部',
+    estimatedCost: 2680,
+    expectedRevenue: 43800,
+    crmAddedCount: 52,
+    opportunityCount: 24,
+    customerCount: 7,
+    followUpCount: 41,
     createdBy: '运营主管',
     createdAt: nowMinus(150)
   },
@@ -652,6 +676,18 @@ const _outboundTasks: OutboundTask[] = [
     callerNumber: '0571-88010002',
     startTime: todayAt(9, 30),
     scriptId: 2,
+    sourcePool: '探迹异常解除客群',
+    leadBatch: '经营异常待解除 2026-06-04',
+    targetAudience: '经营地址异常/年报异常企业,近 90 天有新增处罚或列异',
+    businessLine: '经营异常解除 + 地址挂靠',
+    filterRule: '异常原因=注册地址/年报;注册地区=杭州;联系方式数>=2;排除已成交客户',
+    campaignOwner: '网销组长',
+    estimatedCost: 1860,
+    expectedRevenue: 28600,
+    crmAddedCount: 27,
+    opportunityCount: 13,
+    customerCount: 4,
+    followUpCount: 22,
     createdBy: '网销组长',
     createdAt: nowMinus(96)
   },
@@ -670,6 +706,18 @@ const _outboundTasks: OutboundTask[] = [
     startTime: todayAt(8, 50),
     endTime: todayAt(10, 5),
     scriptId: 3,
+    sourcePool: '存量客户续费池',
+    leadBatch: '代理记账到期 30 天内',
+    targetAudience: '服务到期 30 天内且近 6 个月无重大投诉客户',
+    businessLine: '代理记账续费 + 税务顾问升级',
+    filterRule: '到期天数<=30;应收余额=0;满意度>=4;主管已确认续费名单',
+    campaignOwner: '客户成功部',
+    estimatedCost: 920,
+    expectedRevenue: 61200,
+    crmAddedCount: 68,
+    opportunityCount: 35,
+    customerCount: 19,
+    followUpCount: 16,
     createdBy: '客户成功部',
     createdAt: nowMinus(230)
   },
@@ -686,6 +734,18 @@ const _outboundTasks: OutboundTask[] = [
     skillGroupName: '渠道同行组',
     callerNumber: '0571-88010008',
     scriptId: 4,
+    sourcePool: '同行渠道资源池',
+    leadBatch: '地址挂靠合作商补采',
+    targetAudience: '近 60 天有地址挂靠成交记录的同行渠道',
+    businessLine: '地址挂靠资源采购/转售',
+    filterRule: '渠道等级=A/B;可售地址库存<10;排除履约异常渠道',
+    campaignOwner: '渠道事业部',
+    estimatedCost: 360,
+    expectedRevenue: 18000,
+    crmAddedCount: 0,
+    opportunityCount: 0,
+    customerCount: 0,
+    followUpCount: 0,
     createdBy: '渠道事业部',
     createdAt: nowMinus(42)
   }
@@ -924,6 +984,18 @@ export const createTask = (data: Partial<OutboundTask>) => {
     skillGroupName: _skillGroups.find(s => s.id === data.skillGroupId)?.name,
     callerNumber: data.callerNumber || '',
     scriptId: data.scriptId,
+    sourcePool: data.sourcePool || '手工导入名单',
+    leadBatch: data.leadBatch || '临时导入批次',
+    targetAudience: data.targetAudience || '未设置目标客群',
+    businessLine: data.businessLine || '未设置业务线',
+    filterRule: data.filterRule || '按导入号码直接拨打',
+    campaignOwner: data.campaignOwner || '当前部门',
+    estimatedCost: data.estimatedCost || 0,
+    expectedRevenue: data.expectedRevenue || 0,
+    crmAddedCount: data.crmAddedCount || 0,
+    opportunityCount: data.opportunityCount || 0,
+    customerCount: data.customerCount || 0,
+    followUpCount: data.followUpCount || 0,
     createdBy: data.createdBy || '当前用户',
     createdAt: new Date().toISOString().replace('T', ' ').slice(0, 19)
   }

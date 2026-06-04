@@ -416,194 +416,183 @@
     </el-dialog>
 
     <!-- ================== 合同详情 Drawer ================== -->
-    <el-drawer
+    <BusinessDetailDrawer
+      v-if="detailDrawer.data"
       v-model="detailDrawer.visible"
-      :with-header="false"
+      :title="detailDrawer.data.contractName"
+      :subtitle="`${detailDrawer.data.contractNo} · ${detailDrawer.data.orderNo || '未关联订单'}`"
+      eyebrow="合同详情"
+      :avatar="(detailDrawer.data.partyAName || detailDrawer.data.customerName || '合同').slice(0, 2)"
+      :avatar-class="contractAvatarClass(detailDrawer.data)"
+      :status-text="statusTag(deriveStatus(detailDrawer.data)).label"
+      :status-type="statusTag(deriveStatus(detailDrawer.data)).type"
       size="780px"
-      class="ct-drawer"
     >
-      <div v-if="detailDrawer.data" class="drawer-body">
-        <div class="drawer-head">
-          <div class="dh-top">
-            <span class="dh-tag">合同详情</span>
-            <el-tag
-              :type="statusTag(deriveStatus(detailDrawer.data)).type"
-              effect="dark"
-              size="small"
-            >
-              {{ statusTag(deriveStatus(detailDrawer.data)).label }}
-            </el-tag>
-          </div>
-          <h2 class="dh-title">{{ detailDrawer.data.contractName }}</h2>
-          <div class="dh-no mono">№ {{ detailDrawer.data.contractNo }}</div>
-        </div>
+      <template #actions>
+        <span class="contract-amount-pill">¥ {{ formatMoney(detailDrawer.data.contractAmount) }}</span>
+        <span class="contract-days-pill" :class="daysClass(daysLeft(detailDrawer.data))">
+          {{ formatDays(daysLeft(detailDrawer.data)) }}
+        </span>
+      </template>
 
-        <div class="drawer-section">
-          <div class="ds-title"><i class="ds-bar"></i>基础信息</div>
-          <ul class="ds-grid">
-            <li><span class="k">合同编号</span><span class="v mono">{{ detailDrawer.data.contractNo }}</span></li>
-            <li><span class="k">关联订单</span><span class="v mono">{{ detailDrawer.data.orderNo }}</span></li>
-            <li><span class="k">合同状态</span><span class="v">{{ statusTag(deriveStatus(detailDrawer.data)).label }}</span></li>
-            <li><span class="k">合同模板</span><span class="v">{{ detailDrawer.data.templateName }}</span></li>
-            <li><span class="k">创建时间</span><span class="v mono">{{ detailDrawer.data.createTime }}</span></li>
-            <li><span class="k">合同金额</span><span class="v amount">¥ {{ formatMoney(detailDrawer.data.contractAmount) }}</span></li>
-          </ul>
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>合同编号</span><b>{{ detailDrawer.data.contractNo }}</b></div>
+          <div class="bd-kv"><span>关联订单</span><b>{{ detailDrawer.data.orderNo || '—' }}</b></div>
+          <div class="bd-kv"><span>合同模板</span><b>{{ detailDrawer.data.templateName || '—' }}</b></div>
+          <div class="bd-kv"><span>创建时间</span><b>{{ detailDrawer.data.createTime || '—' }}</b></div>
+          <div class="bd-kv"><span>甲方客户</span><b>{{ detailDrawer.data.partyAName || detailDrawer.data.customerName || '—' }}</b></div>
+          <div class="bd-kv"><span>乙方主体</span><b>{{ detailDrawer.data.partyBName || '—' }}</b></div>
+          <div class="bd-kv"><span>签署方式</span><b>{{ signMethodLabel(detailDrawer.data.signMethod) }}</b></div>
+          <div class="bd-kv"><span>合同金额</span><b>¥ {{ formatMoney(detailDrawer.data.contractAmount) }}</b></div>
+          <div class="bd-kv"><span>开始日期</span><b>{{ detailDrawer.data.startDate || '—' }}</b></div>
+          <div class="bd-kv"><span>到期日期</span><b>{{ detailDrawer.data.endDate || '—' }}</b></div>
         </div>
+      </template>
 
-        <div class="drawer-section">
-          <div class="ds-title"><i class="ds-bar"></i>合同内容</div>
-          <div class="content-blocks">
-            <div class="cb">
-              <div class="cb-k">甲方</div>
-              <div class="cb-v">{{ detailDrawer.data.partyAName }}</div>
-            </div>
-            <div class="cb">
-              <div class="cb-k">乙方</div>
-              <div class="cb-v">{{ detailDrawer.data.partyBName }}</div>
-            </div>
-            <div class="cb">
-              <div class="cb-k">服务内容</div>
-              <div class="cb-v">{{ detailDrawer.data.contractName }}</div>
-            </div>
-            <div class="cb">
-              <div class="cb-k">服务期限</div>
-              <div class="cb-v mono">{{ detailDrawer.data.startDate }} → {{ detailDrawer.data.endDate }}</div>
-            </div>
-            <div class="cb">
-              <div class="cb-k">备注</div>
-              <div class="cb-v">{{ detailDrawer.data.remark || '—' }}</div>
-            </div>
-          </div>
+      <div class="bd-section-title">合同内容</div>
+      <div class="contract-content-grid">
+        <div class="contract-info-card wide">
+          <span>服务内容</span>
+          <b>{{ detailDrawer.data.contractName || '—' }}</b>
         </div>
-
-        <div class="drawer-section">
-          <div class="ds-title"><i class="ds-bar"></i>签署信息</div>
-          <div class="sign-grid">
-            <div class="sign-card">
-              <div class="sg-tag">甲方</div>
-              <div class="sg-signer">{{ detailDrawer.data.partyASigner || '待签署' }}</div>
-              <div class="sg-time mono">{{ detailDrawer.data.partyASignTime || '—' }}</div>
-            </div>
-            <div class="sign-card">
-              <div class="sg-tag">乙方</div>
-              <div class="sg-signer">{{ detailDrawer.data.partyBSigner || '待签署' }}</div>
-              <div class="sg-time mono">{{ detailDrawer.data.partyBSignTime || '—' }}</div>
-            </div>
-            <div class="sign-card">
-              <div class="sg-tag">签署方式</div>
-              <div class="sg-signer">{{ signMethodLabel(detailDrawer.data.signMethod) }}</div>
-              <div class="sg-time">
-                <el-link type="primary" :underline="false" @click="downloadFile(detailDrawer.data)">
-                  {{ detailDrawer.data.signedFileUrl ? '已签署 PDF' : '原始合同 PDF' }} ↓
-                </el-link>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="detailDrawer.data.signMethod === 'esign'" class="esign-tip">
-            <span class="tag-info">e签宝</span>
-            电子签署通道已预留，当前可手动上传签署完成的 PDF：
-            <el-button size="small" @click="ElMessage.info('上传文件占位 · 后续接入电子签章服务')">上传已签署合同</el-button>
-            <el-button
-              v-if="detailDrawer.data.signStatus !== 'signed'"
-              size="small"
-              type="success"
-              @click="confirmSign(detailDrawer.data)"
-            >确认签署完成</el-button>
-          </div>
+        <div class="contract-info-card">
+          <span>甲方</span>
+          <b>{{ detailDrawer.data.partyAName || '—' }}</b>
         </div>
-
-        <div class="drawer-section">
-          <div class="ds-title"><i class="ds-bar"></i>到期管理</div>
-          <div class="exp-row">
-            <div class="exp-cell">
-              <div class="exp-k">开始日</div>
-              <div class="exp-v mono">{{ detailDrawer.data.startDate }}</div>
-            </div>
-            <div class="exp-cell">
-              <div class="exp-k">到期日</div>
-              <div class="exp-v mono">{{ detailDrawer.data.endDate }}</div>
-            </div>
-            <div class="exp-cell">
-              <div class="exp-k">剩余</div>
-              <div class="exp-v" :class="daysClass(daysLeft(detailDrawer.data))">
-                {{ formatDays(daysLeft(detailDrawer.data)) }}
-              </div>
-            </div>
-            <div class="exp-cell wide">
-              <div class="exp-k">续签意向</div>
-              <el-radio-group v-model="renewIntent" size="small">
-                <el-radio-button label="未联系" />
-                <el-radio-button label="有意向" />
-                <el-radio-button label="无意向" />
-                <el-radio-button label="待定" />
-              </el-radio-group>
-            </div>
-            <div class="exp-cell">
-              <div class="exp-k">续签跟进人</div>
-              <el-select v-model="renewFollower" size="small" style="width: 140px">
-                <el-option v-for="s in signerOptions" :key="s" :label="s" :value="s" />
-              </el-select>
-            </div>
-          </div>
+        <div class="contract-info-card">
+          <span>乙方</span>
+          <b>{{ detailDrawer.data.partyBName || '—' }}</b>
         </div>
-
-        <div class="drawer-section">
-          <div class="ds-title"><i class="ds-bar"></i>操作历史</div>
-          <el-timeline class="ct-timeline">
-            <el-timeline-item
-              v-for="(h, i) in detailHistory"
-              :key="i"
-              :timestamp="h.time"
-              :color="h.color"
-              placement="top"
-            >
-              <div class="th-line">
-                <span class="th-action">{{ h.action }}</span>
-                <span class="th-by">— {{ h.by }}</span>
-              </div>
-              <div v-if="h.note" class="th-note">{{ h.note }}</div>
-            </el-timeline-item>
-          </el-timeline>
+        <div class="contract-info-card">
+          <span>服务期限</span>
+          <b>{{ detailDrawer.data.startDate }} 至 {{ detailDrawer.data.endDate }}</b>
         </div>
-        <div class="drawer-section">
-          <div class="ds-title"><i class="ds-bar"></i>联动事件时间线</div>
-          <div v-if="!linkageRecords.length" class="linkage-empty">暂无联动记录</div>
-          <ul v-else class="linkage-list">
-            <li v-for="(rec, i) in linkageRecords" :key="i" :class="['lk-item', 'lk-' + rec.type]">
-              <span class="lk-time mono">{{ rec.time }}</span>
-              <span class="lk-tag">{{ linkageTypeLabel(rec.type) }}</span>
-              <span class="lk-title">{{ rec.title }}</span>
-              <span v-if="rec.detail" class="lk-detail">— {{ rec.detail }}</span>
-              <span v-if="rec.by" class="lk-by">· {{ rec.by }}</span>
-            </li>
-          </ul>
-        </div>
-
-        <div v-if="historyVersions.length > 1" class="drawer-section">
-          <div class="ds-title"><i class="ds-bar"></i>合同版本历史 ({{ historyVersions.length }})</div>
-          <ol class="version-list">
-            <li
-              v-for="v in historyVersions"
-              :key="v.id"
-              :class="['ver-item', v.id === detailDrawer.data!.id ? 'ver-current' : '']"
-            >
-              <span class="ver-no">v{{ v.version || 1 }}</span>
-              <span class="ver-code mono">{{ v.contractNo }}</span>
-              <span class="ver-name">{{ v.contractName }}</span>
-              <span class="ver-amount amount">¥ {{ formatMoney(v.contractAmount) }}</span>
-              <span class="ver-date mono">{{ v.startDate }} → {{ v.endDate }}</span>
-              <el-tag
-                :type="statusTag(deriveStatus(v)).type"
-                effect="plain"
-                size="small"
-              >{{ statusTag(deriveStatus(v)).label }}</el-tag>
-              <el-button v-if="v.id !== detailDrawer.data!.id" link type="primary" @click="openDetail(v)">查看</el-button>
-            </li>
-          </ol>
+        <div class="contract-info-card">
+          <span>备注</span>
+          <b>{{ detailDrawer.data.remark || '暂无备注' }}</b>
         </div>
       </div>
-    </el-drawer>
+
+      <div class="bd-section-title section-gap">签署信息</div>
+      <div class="contract-sign-grid">
+        <div class="contract-sign-card">
+          <span>甲方签署</span>
+          <b>{{ detailDrawer.data.partyASigner || '待签署' }}</b>
+          <small>{{ detailDrawer.data.partyASignTime || '—' }}</small>
+        </div>
+        <div class="contract-sign-card">
+          <span>乙方签署</span>
+          <b>{{ detailDrawer.data.partyBSigner || '待签署' }}</b>
+          <small>{{ detailDrawer.data.partyBSignTime || '—' }}</small>
+        </div>
+        <div class="contract-sign-card">
+          <span>合同文件</span>
+          <b>{{ detailDrawer.data.signedFileUrl ? '已签署 PDF' : '原始合同 PDF' }}</b>
+          <el-button size="small" link type="primary" @click="downloadFile(detailDrawer.data)">下载文件</el-button>
+        </div>
+      </div>
+
+      <div v-if="detailDrawer.data.signMethod === 'esign'" class="contract-esign-note">
+        <span>电子签署</span>
+        已预留 e 签宝/法大大通道，当前可先人工确认签署并留痕。
+        <el-button size="small" @click="ElMessage.info('上传文件占位 · 后续接入电子签章服务')">上传已签合同</el-button>
+        <el-button
+          v-if="detailDrawer.data.signStatus !== 'signed'"
+          size="small"
+          type="success"
+          @click="confirmSign(detailDrawer.data)"
+        >确认签署完成</el-button>
+      </div>
+
+      <div class="bd-section-title section-gap">到期管理</div>
+      <div class="contract-expiry-grid">
+        <div class="contract-expiry-cell">
+          <span>开始日</span>
+          <b>{{ detailDrawer.data.startDate }}</b>
+        </div>
+        <div class="contract-expiry-cell">
+          <span>到期日</span>
+          <b>{{ detailDrawer.data.endDate }}</b>
+        </div>
+        <div class="contract-expiry-cell">
+          <span>剩余时间</span>
+          <b :class="daysClass(daysLeft(detailDrawer.data))">{{ formatDays(daysLeft(detailDrawer.data)) }}</b>
+        </div>
+        <div class="contract-expiry-cell wide">
+          <span>续签意向</span>
+          <el-radio-group v-model="renewIntent" size="small">
+            <el-radio-button label="未联系" />
+            <el-radio-button label="有意向" />
+            <el-radio-button label="无意向" />
+            <el-radio-button label="待定" />
+          </el-radio-group>
+        </div>
+        <div class="contract-expiry-cell">
+          <span>续签跟进人</span>
+          <el-select v-model="renewFollower" size="small" style="width: 140px">
+            <el-option v-for="s in signerOptions" :key="s" :label="s" :value="s" />
+          </el-select>
+        </div>
+      </div>
+
+      <div v-if="historyVersions.length > 1" class="bd-section-title section-gap">
+        合同版本历史 ({{ historyVersions.length }})
+      </div>
+      <ol v-if="historyVersions.length > 1" class="contract-version-list">
+        <li
+          v-for="v in historyVersions"
+          :key="v.id"
+          :class="{ current: v.id === detailDrawer.data.id }"
+        >
+          <span>v{{ v.version || 1 }}</span>
+          <b>{{ v.contractNo }}</b>
+          <em>{{ v.contractName }}</em>
+          <strong>¥ {{ formatMoney(v.contractAmount) }}</strong>
+          <small>{{ v.startDate }} 至 {{ v.endDate }}</small>
+          <el-button v-if="v.id !== detailDrawer.data.id" link type="primary" @click="openDetail(v)">查看</el-button>
+        </li>
+      </ol>
+
+      <template #timeline>
+        <div v-for="(h, i) in detailHistory" :key="'h-' + i" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: h.color === '#67c23a' || h.color === '#409eff' }" />
+          <div>
+            <strong>{{ h.action }}</strong>
+            <p>{{ h.time || '—' }} · {{ h.by }}{{ h.note ? ` · ${h.note}` : '' }}</p>
+          </div>
+        </div>
+        <div v-if="!linkageRecords.length" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>联动事件</strong>
+            <p>暂无联动记录。</p>
+          </div>
+        </div>
+        <div v-for="(rec, i) in linkageRecords" :key="'lk-' + i" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: rec.type === 'effective' || rec.type === 'sign' || rec.type === 'renew' }" />
+          <div>
+            <strong>{{ linkageTypeLabel(rec.type) }} · {{ rec.title }}</strong>
+            <p>{{ rec.time }}{{ rec.detail ? ` · ${rec.detail}` : '' }}{{ rec.by ? ` · ${rec.by}` : '' }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="contract-footer-summary">
+          <span>金额 <b>¥ {{ formatMoney(detailDrawer.data.contractAmount) }}</b></span>
+          <span>状态 <b>{{ statusTag(deriveStatus(detailDrawer.data)).label }}</b></span>
+          <span>剩余 <b>{{ formatDays(daysLeft(detailDrawer.data)) }}</b></span>
+        </div>
+        <el-button @click="detailDrawer.visible = false">关闭</el-button>
+        <el-button @click="downloadFile(detailDrawer.data)">下载合同</el-button>
+        <el-button
+          v-if="detailDrawer.data.signMethod === 'esign' && detailDrawer.data.signStatus !== 'signed'"
+          type="success"
+          @click="confirmSign(detailDrawer.data)"
+        >确认签署</el-button>
+      </template>
+    </BusinessDetailDrawer>
 
     <!-- ================== 模板管理 Dialog ================== -->
     <el-dialog v-model="tplDialog.visible" title="合同模板管理" width="900px" destroy-on-close>
@@ -775,6 +764,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { contractMgmtApi, type BizContract, type BizContractTemplate, type ContractStageRecord, type ContractLinkageRecord } from '@/api/contract-mgmt'
 import { orderApi, type BizOrder } from '@/api/order'
 import { onContractEffective } from '@/utils/biz-linkage'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 // ============== 基础状态 ==============
 const loading = ref(false)
@@ -906,6 +896,13 @@ const statusMap: Record<DerivedStatus, { label: string; type: 'info' | 'warning'
   terminated:  { label: '已终止',   type: 'info'    }
 }
 const statusTag = (s: DerivedStatus) => statusMap[s]
+function contractAvatarClass(row: BizContract): string {
+  const status = deriveStatus(row)
+  if (status === 'expired' || status === 'terminated') return 'danger'
+  if (status === 'expiring' || status === 'sent') return 'warning'
+  if (status === 'signed' || status === 'performing' || status === 'renewed') return 'success'
+  return 'company'
+}
 
 // ============== 列表筛选 ==============
 const filteredList = computed(() => {
@@ -2157,6 +2154,172 @@ onMounted(async () => {
 .ver-name { color: var(--ink-2); }
 .ver-amount { font-size: 13px; }
 .ver-date { font-size: 12px; color: var(--muted); }
+
+/* ============ 统一详情抽屉内容 ============ */
+.contract-amount-pill,
+.contract-days-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+}
+.contract-amount-pill {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+}
+.contract-days-pill.d-red,
+.contract-days-pill.d-expired {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+}
+.contract-days-pill.d-orange,
+.contract-days-pill.d-yellow {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+.contract-days-pill.d-blue {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+}
+.section-gap {
+  margin-top: 18px !important;
+}
+.contract-content-grid,
+.contract-sign-grid,
+.contract-expiry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.contract-sign-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.contract-info-card,
+.contract-sign-card,
+.contract-expiry-cell {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.contract-info-card.wide,
+.contract-expiry-cell.wide {
+  grid-column: 1 / -1;
+}
+.contract-info-card span,
+.contract-sign-card span,
+.contract-expiry-cell span {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+.contract-info-card b,
+.contract-sign-card b,
+.contract-expiry-cell b {
+  overflow-wrap: anywhere;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.contract-sign-card small {
+  display: block;
+  margin-top: 5px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.contract-esign-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+}
+.contract-esign-note span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+}
+.contract-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.contract-version-list li {
+  display: grid;
+  grid-template-columns: 48px 130px minmax(0, 1fr) 110px 150px 52px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+}
+.contract-version-list li.current {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+.contract-version-list span {
+  color: #2563eb;
+  font-weight: 750;
+}
+.contract-version-list b {
+  color: #1f2937;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.contract-version-list em {
+  overflow: hidden;
+  color: #475569;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contract-version-list strong {
+  color: #0f766e;
+  font-weight: 750;
+}
+.contract-version-list small {
+  color: #64748b;
+}
+.contract-footer-summary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+}
+.contract-footer-summary b {
+  color: #0f766e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
 
 /* ============ 其他 ============ */
 .date-range-row { display: flex; align-items: center; gap: 8px; width: 100%; }

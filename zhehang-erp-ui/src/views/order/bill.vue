@@ -722,228 +722,153 @@
       </template>
     </el-dialog>
 
-    <!-- 详情 Drawer -->
-    <el-drawer
+    <BusinessDetailDrawer
+      v-if="detailTarget"
       v-model="detailVisible"
-      :title="detailTarget ? '订单详情 · ' + detailTarget.orderNo : '订单详情'"
+      :title="detailTarget.customerName || '订单详情'"
+      :subtitle="`${detailTarget.orderNo} · ${detailTarget.submitterName || '提单人'}`"
+      eyebrow="订单提单"
+      :avatar="(detailTarget.customerName || '订单').slice(0, 2)"
+      :avatar-class="orderAvatarClass(detailTarget)"
+      :status-text="statusLabel(detailTarget.status)"
+      :status-type="statusType(detailTarget.status)"
       size="780px"
-      class="detail-drawer"
     >
-      <template v-if="detailTarget">
-        <!-- 状态流转 -->
-        <div class="detail-block">
-          <div class="block-head">
-            <span class="block-bar"></span>
-            <span class="block-title">流程状态</span>
-            <el-tag
-              :type="levelTagType(approvalLevelOf(detailTarget))"
-              effect="plain"
-              size="small"
-              class="level-tag block-level-tag"
-            >
-              {{ approvalLevelText(detailTarget) }}
-            </el-tag>
-            <span class="block-meta">{{ approvalChainText(detailTarget) }}</span>
-            <el-tag
-              v-if="isOverdueRow(detailTarget)"
-              type="danger"
-              effect="plain"
-              size="small"
-              class="overdue-chip block-overdue-tag"
-            >审批超期·{{ deadlineRemain(detailTarget) }}</el-tag>
-          </div>
-          <el-steps
-            :active="statusStep(detailTarget.status)"
-            finish-status="success"
-            :status="detailTarget.status === 'rejected' ? 'error' : detailTarget.status === 'cancelled' ? 'wait' : 'process'"
-            class="status-steps"
-          >
-            <el-step title="提交草稿" />
-            <el-step title="主管审批" />
-            <el-step title="财务确认" v-if="approvalLevelOf(detailTarget) >= 2" />
-            <el-step title="老板终审" v-if="approvalLevelOf(detailTarget) >= 3" />
-            <el-step title="订单完成" />
-          </el-steps>
-          <div
-            v-if="detailTarget.status === 'pending_approval' || detailTarget.status === 'pending_finance' || detailTarget.status === 'pending_boss'"
-            class="deadline-banner"
-            :class="{ 'is-overdue': isOverdueRow(detailTarget) }"
-          >
-            <el-icon><Clock /></el-icon>
-            <div>
-              <div class="banner-title">审批截止 · {{ detailTarget.approvalDeadline }}</div>
-              <div class="banner-sub">{{ deadlineHint(detailTarget) }} · {{ deadlineRemain(detailTarget) }}</div>
-            </div>
-          </div>
-          <div v-if="detailTarget.status === 'rejected'" class="reject-banner">
-            <el-icon><Warning /></el-icon>
-            <div>
-              <div class="reject-title">
-                订单被{{ detailTarget.rejectStage === 'manager' ? '主管' : detailTarget.rejectStage === 'finance' ? '财务' : detailTarget.rejectStage === 'boss' ? '老板' : '审批' }}驳回
-              </div>
-              <div class="reject-content">
-                <span v-if="detailTarget.rejectReasonType" class="reject-type">[{{ detailTarget.rejectReasonType }}]</span>
-                {{ detailTarget.rejectReason || detailTarget.approvalOpinion || '审批未通过' }}
-              </div>
-            </div>
-            <el-button type="warning" size="small" @click="resubmitFromDetail">修改后重新提交</el-button>
-          </div>
-        </div>
+      <template #actions>
+        <el-tag :type="levelTagType(approvalLevelOf(detailTarget))" effect="plain">
+          {{ approvalLevelText(detailTarget) }}
+        </el-tag>
+        <span v-if="isOverdueRow(detailTarget)" class="order-overdue-pill">审批超期 · {{ deadlineRemain(detailTarget) }}</span>
+      </template>
 
-        <!-- 订单基本信息 -->
-        <div class="detail-block">
-          <div class="block-head">
-            <span class="block-bar"></span>
-            <span class="block-title">订单概览</span>
-          </div>
-          <el-descriptions :column="2" border size="default">
-            <el-descriptions-item label="订单编号">{{ detailTarget.orderNo }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag :type="statusType(detailTarget.status)" effect="dark">
-                {{ statusLabel(detailTarget.status) }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="客户">{{ detailTarget.customerName }}</el-descriptions-item>
-            <el-descriptions-item label="提单人">{{ detailTarget.submitterName }}</el-descriptions-item>
-            <el-descriptions-item label="提交时间">{{ detailTarget.submitTime }}</el-descriptions-item>
-            <el-descriptions-item label="预计签约">{{ detailTarget.expectedSignDate || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="付款方式">{{ paymentMethodLabel(detailTarget.paymentMethod) }}</el-descriptions-item>
-            <el-descriptions-item label="确认方式">{{ confirmMethodLabel(detailTarget.confirmMethod) }}</el-descriptions-item>
-            <el-descriptions-item label="总金额">¥{{ formatAmount(detailTarget.totalAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="折后金额">
-              <span class="emph">¥{{ formatAmount(detailTarget.finalAmount) }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="已收定金">¥{{ formatAmount(detailTarget.depositAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="待收金额">¥{{ formatAmount(detailTarget.pendingAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="提成比例">{{ detailTarget.commissionRate }}%</el-descriptions-item>
-            <el-descriptions-item label="参考提成">¥{{ formatAmount(detailTarget.commissionAmount) }}</el-descriptions-item>
-            <el-descriptions-item label="特殊约定" :span="2">
-              {{ detailTarget.specialAgreement || '—' }}
-            </el-descriptions-item>
-          </el-descriptions>
-        </div>
-
-        <!-- 服务子项列表 -->
-        <div class="detail-block">
-          <div class="block-head">
-            <span class="block-bar"></span>
-            <span class="block-title">服务子项 ({{ detailTarget.items.length }})</span>
-          </div>
-          <el-table :data="detailTarget.items" border size="small">
-            <el-table-column label="子项编号" prop="itemNo" width="160" />
-            <el-table-column label="服务类型" min-width="120">
-              <template #default="{ row }">
-                <el-tag size="small" effect="plain">{{ serviceTypeLabel(row.serviceType) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="周期" min-width="100">
-              <template #default="{ row }">{{ servicePeriodLabel(row.servicePeriod) }}</template>
-            </el-table-column>
-            <el-table-column label="金额" width="100" align="right">
-              <template #default="{ row }">¥{{ formatAmount(row.amount) }}</template>
-            </el-table-column>
-            <el-table-column label="折后" width="100" align="right">
-              <template #default="{ row }">¥{{ formatAmount(row.finalAmount) }}</template>
-            </el-table-column>
-            <el-table-column label="子项状态" width="110" align="center">
-              <template #default="{ row }">
-                <el-tag :type="itemStatusType(row.itemStatus)" effect="plain" size="small">
-                  {{ itemStatusLabel(row.itemStatus) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="描述" min-width="160" show-overflow-tooltip prop="description" />
-          </el-table>
-        </div>
-
-        <!-- 审批历史时间线 -->
-        <div class="detail-block">
-          <div class="block-head">
-            <span class="block-bar"></span>
-            <span class="block-title">审批历史</span>
-          </div>
-          <el-timeline class="audit-timeline">
-            <el-timeline-item
-              type="primary"
-              :timestamp="detailTarget.createTime"
-              placement="top"
-            >
-              <div class="time-card">
-                <div class="time-title">订单创建</div>
-                <div class="time-desc">由 {{ detailTarget.submitterName }} 创建草稿</div>
-              </div>
-            </el-timeline-item>
-            <el-timeline-item
-              v-if="detailTarget.submitTime && detailTarget.status !== 'draft'"
-              type="warning"
-              :timestamp="detailTarget.submitTime"
-              placement="top"
-            >
-              <div class="time-card">
-                <div class="time-title">提交审批 · {{ approvalLevelText(detailTarget) }}</div>
-                <div class="time-desc">
-                  {{ approvalChainText(detailTarget) }} · 截止 {{ detailTarget.approvalDeadline || '—' }}
-                </div>
-              </div>
-            </el-timeline-item>
-            <el-timeline-item
-              v-if="detailTarget.approvalTime"
-              :type="detailTarget.rejectStage === 'manager' ? 'danger' : 'success'"
-              :timestamp="detailTarget.approvalTime"
-              placement="top"
-            >
-              <div class="time-card">
-                <div class="time-title">
-                  {{ detailTarget.rejectStage === 'manager' ? '主管驳回' : '主管已审批' }}
-                </div>
-                <div class="time-desc">{{ detailTarget.approvalOpinion || '—' }}</div>
-              </div>
-            </el-timeline-item>
-            <el-timeline-item
-              v-if="detailTarget.financeConfirmTime"
-              :type="detailTarget.rejectStage === 'finance' ? 'danger' : 'success'"
-              :timestamp="detailTarget.financeConfirmTime"
-              placement="top"
-            >
-              <div class="time-card">
-                <div class="time-title">
-                  {{ detailTarget.rejectStage === 'finance' ? '财务驳回' : '财务确认完成' }}
-                </div>
-                <div class="time-desc">{{ detailTarget.financeOpinion || '—' }}</div>
-              </div>
-            </el-timeline-item>
-            <el-timeline-item
-              v-if="detailTarget.bossApprovalTime"
-              :type="detailTarget.rejectStage === 'boss' ? 'danger' : 'success'"
-              :timestamp="detailTarget.bossApprovalTime"
-              placement="top"
-            >
-              <div class="time-card">
-                <div class="time-title">
-                  {{ detailTarget.rejectStage === 'boss' ? '老板驳回' : '老板终审通过' }}
-                </div>
-                <div class="time-desc">{{ detailTarget.bossOpinion || '—' }}</div>
-              </div>
-            </el-timeline-item>
-            <el-timeline-item
-              v-for="(log, i) in detailTarget.linkageLogs || []"
-              :key="'lk-' + i"
-              type="info"
-              :timestamp="log.time"
-              placement="top"
-            >
-              <div class="time-card linkage-card">
-                <div class="time-title">
-                  <el-icon class="linkage-icon"><Promotion /></el-icon>
-                  <span>联动 · {{ log.title }}</span>
-                </div>
-                <div class="time-desc">{{ log.desc }}</div>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
+      <template #meta>
+        <div class="bd-kv-grid">
+          <div class="bd-kv"><span>订单编号</span><b>{{ detailTarget.orderNo }}</b></div>
+          <div class="bd-kv"><span>客户名称</span><b>{{ detailTarget.customerName || '—' }}</b></div>
+          <div class="bd-kv"><span>提交时间</span><b>{{ detailTarget.submitTime || '—' }}</b></div>
+          <div class="bd-kv"><span>预计签约</span><b>{{ detailTarget.expectedSignDate || '—' }}</b></div>
+          <div class="bd-kv"><span>折后金额</span><b>¥{{ formatAmount(detailTarget.finalAmount) }}</b></div>
+          <div class="bd-kv"><span>待收金额</span><b>¥{{ formatAmount(detailTarget.pendingAmount) }}</b></div>
+          <div class="bd-kv"><span>付款方式</span><b>{{ paymentMethodLabel(detailTarget.paymentMethod) }}</b></div>
+          <div class="bd-kv"><span>确认方式</span><b>{{ confirmMethodLabel(detailTarget.confirmMethod) }}</b></div>
+          <div class="bd-kv"><span>提成比例</span><b>{{ detailTarget.commissionRate }}%</b></div>
+          <div class="bd-kv"><span>参考提成</span><b>¥{{ formatAmount(detailTarget.commissionAmount) }}</b></div>
         </div>
       </template>
-    </el-drawer>
+
+      <div class="bd-section-title">流程状态</div>
+      <div class="order-flow-card">
+        <div class="order-flow-head">
+          <span>{{ approvalChainText(detailTarget) }}</span>
+          <b>{{ detailTarget.approvalDeadline ? `${deadlineHint(detailTarget)} · ${deadlineRemain(detailTarget)}` : '暂无审批截止' }}</b>
+        </div>
+        <el-steps
+          :active="statusStep(detailTarget.status)"
+          finish-status="success"
+          :status="detailTarget.status === 'rejected' ? 'error' : detailTarget.status === 'cancelled' ? 'wait' : 'process'"
+          align-center
+        >
+          <el-step title="提交草稿" />
+          <el-step title="主管审批" />
+          <el-step title="财务确认" v-if="approvalLevelOf(detailTarget) >= 2" />
+          <el-step title="老板终审" v-if="approvalLevelOf(detailTarget) >= 3" />
+          <el-step title="订单完成" />
+        </el-steps>
+      </div>
+
+      <div v-if="detailTarget.status === 'rejected'" class="order-reject-note">
+        <strong>订单被{{ detailTarget.rejectStage === 'manager' ? '主管' : detailTarget.rejectStage === 'finance' ? '财务' : detailTarget.rejectStage === 'boss' ? '老板' : '审批' }}驳回</strong>
+        <p>
+          <span v-if="detailTarget.rejectReasonType">[{{ detailTarget.rejectReasonType }}]</span>
+          {{ detailTarget.rejectReason || detailTarget.approvalOpinion || '审批未通过' }}
+        </p>
+      </div>
+
+      <div class="bd-section-title section-gap">服务子项 ({{ detailTarget.items.length }})</div>
+      <el-table :data="detailTarget.items" border size="small" class="drawer-table">
+        <el-table-column label="子项编号" prop="itemNo" width="150" />
+        <el-table-column label="服务类型" min-width="120">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain">{{ serviceTypeLabel(row.serviceType) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="周期" min-width="100">
+          <template #default="{ row }">{{ servicePeriodLabel(row.servicePeriod) }}</template>
+        </el-table-column>
+        <el-table-column label="金额" width="100" align="right">
+          <template #default="{ row }">¥{{ formatAmount(row.amount) }}</template>
+        </el-table-column>
+        <el-table-column label="折后" width="100" align="right">
+          <template #default="{ row }">¥{{ formatAmount(row.finalAmount) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="itemStatusType(row.itemStatus)" effect="plain" size="small">
+              {{ itemStatusLabel(row.itemStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="描述" min-width="170" show-overflow-tooltip prop="description" />
+      </el-table>
+
+      <div class="bd-section-title section-gap">特殊约定</div>
+      <div class="order-agreement-box">{{ detailTarget.specialAgreement || '暂无特殊约定' }}</div>
+
+      <template #timeline>
+        <div class="bd-timeline-item">
+          <i class="bd-timeline-dot success" />
+          <div>
+            <strong>订单创建</strong>
+            <p>{{ detailTarget.createTime || '—' }} · {{ detailTarget.submitterName }} 创建草稿。</p>
+          </div>
+        </div>
+        <div v-if="detailTarget.submitTime && detailTarget.status !== 'draft'" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: ['pending_finance', 'pending_boss', 'completed'].includes(detailTarget.status) }" />
+          <div>
+            <strong>提交审批 · {{ approvalLevelText(detailTarget) }}</strong>
+            <p>{{ detailTarget.submitTime }} · {{ approvalChainText(detailTarget) }} · 截止 {{ detailTarget.approvalDeadline || '—' }}</p>
+          </div>
+        </div>
+        <div v-if="detailTarget.approvalTime" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: detailTarget.rejectStage !== 'manager' }" />
+          <div>
+            <strong>{{ detailTarget.rejectStage === 'manager' ? '主管驳回' : '主管已审批' }}</strong>
+            <p>{{ detailTarget.approvalTime }} · {{ detailTarget.approvalOpinion || '—' }}</p>
+          </div>
+        </div>
+        <div v-if="detailTarget.financeConfirmTime" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: detailTarget.rejectStage !== 'finance' }" />
+          <div>
+            <strong>{{ detailTarget.rejectStage === 'finance' ? '财务驳回' : '财务确认完成' }}</strong>
+            <p>{{ detailTarget.financeConfirmTime }} · {{ detailTarget.financeOpinion || '—' }}</p>
+          </div>
+        </div>
+        <div v-if="detailTarget.bossApprovalTime" class="bd-timeline-item">
+          <i class="bd-timeline-dot" :class="{ success: detailTarget.rejectStage !== 'boss' }" />
+          <div>
+            <strong>{{ detailTarget.rejectStage === 'boss' ? '老板驳回' : '老板终审通过' }}</strong>
+            <p>{{ detailTarget.bossApprovalTime }} · {{ detailTarget.bossOpinion || '—' }}</p>
+          </div>
+        </div>
+        <div v-for="(log, i) in detailTarget.linkageLogs || []" :key="'lk-' + i" class="bd-timeline-item">
+          <i class="bd-timeline-dot" />
+          <div>
+            <strong>联动 · {{ log.title }}</strong>
+            <p>{{ log.time }} · {{ log.desc }}</p>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="order-footer-summary">
+          <span>折后 <b>¥{{ formatAmount(detailTarget.finalAmount) }}</b></span>
+          <span>待收 <b>¥{{ formatAmount(detailTarget.pendingAmount) }}</b></span>
+          <span>子项 <b>{{ detailTarget.items.length }}</b></span>
+        </div>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button v-if="detailTarget.status === 'rejected'" type="warning" @click="resubmitFromDetail">修改后重新提交</el-button>
+      </template>
+    </BusinessDetailDrawer>
   </div>
 </template>
 
@@ -965,6 +890,7 @@ import {
   type BizOrderItem,
   type OrderStats
 } from '@/api/order'
+import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 // ===== 当前时钟（倒计时驱动重算） =====
 const now = ref(Date.now())
@@ -1187,6 +1113,12 @@ function statusType(status: string): 'info' | 'warning' | 'primary' | 'success' 
     cancelled: 'info'
   }
   return map[status] || 'info'
+}
+function orderAvatarClass(row: BizOrder): string {
+  if (isOverdueRow(row) || row.status === 'rejected') return 'danger'
+  if (row.status === 'completed') return 'success'
+  if (row.status === 'pending_finance' || row.status === 'pending_boss') return 'warning'
+  return 'company'
 }
 function statusStep(status: string): number {
   return ({
@@ -2495,6 +2427,113 @@ onBeforeUnmount(() => {
 .val-overdue {
   color: #FF8F8F !important;
   font-weight: 600;
+}
+
+.order-overdue-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.order-flow-card {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+
+  :deep(.el-step__title) {
+    font-size: 12px;
+  }
+}
+
+.order-flow-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: #475569;
+  font-size: 13px;
+
+  b {
+    color: #0f766e;
+    font-weight: 700;
+  }
+}
+
+.section-gap {
+  margin-top: 18px !important;
+}
+
+.drawer-table {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  :deep(.el-table__header th) {
+    background: #f8fafc !important;
+    color: #475569;
+    font-weight: 650;
+  }
+
+  :deep(.el-table__body td) {
+    color: #334155;
+  }
+}
+
+.order-reject-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #b91c1c;
+
+  strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+
+  p {
+    margin: 0;
+    color: #991b1b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.order-agreement-box {
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.order-footer-summary {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin-right: auto;
+  color: #64748b;
+  font-size: 13px;
+
+  b {
+    color: #0f766e;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+  }
 }
 
 /* ============== Reject Dialog ============== */

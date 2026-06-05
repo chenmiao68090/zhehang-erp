@@ -122,6 +122,20 @@ export const constantRoutes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/tax',
+    component: Layout,
+    redirect: '/tax/calendar',
+    meta: { title: '财税交付', icon: 'Calendar' },
+    children: [
+      {
+        path: 'calendar',
+        name: 'TaxCalendar',
+        component: () => import('@/views/tax/calendar.vue'),
+        meta: { title: '报税日历', icon: 'Calendar' }
+      }
+    ]
+  },
+  {
     path: '/customer',
     component: Layout,
     redirect: '/customer/enterprise-master',

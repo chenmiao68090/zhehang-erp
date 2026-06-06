@@ -815,26 +815,16 @@
       </div>
 
       <template #timeline>
-        <div v-if="drawer.row">
-          <div class="bd-timeline-item">
-            <span class="bd-timeline-dot success"></span>
+        <div v-if="drawer.row" class="real-timeline">
+          <div v-if="drawerTimeline.length === 0" class="empty-timeline">暂无时间线记录</div>
+          <div v-for="item in drawerTimeline" :key="item.id" class="bd-timeline-item">
+            <span class="bd-timeline-dot" :class="item.statusLevel"></span>
             <div>
-              <strong>最近互动</strong>
-              <p>{{ drawer.row.lastTouchAt }} · {{ drawer.row.source }} · {{ drawer.row.demand }}</p>
-            </div>
-          </div>
-          <div class="bd-timeline-item">
-            <span class="bd-timeline-dot"></span>
-            <div>
-              <strong>工商/撞单判断</strong>
-              <p>{{ drawer.row.verification?.nextAction || '未核验,建议先补齐工商主体再分配跟进。' }}</p>
-            </div>
-          </div>
-          <div class="bd-timeline-item">
-            <span class="bd-timeline-dot"></span>
-            <div>
-              <strong>下一步</strong>
-              <p>{{ drawer.row.nextAction }}</p>
+              <div class="timeline-title-row">
+                <strong>{{ item.title }}</strong>
+                <el-tag :type="item.statusLevel" size="small" effect="plain">{{ item.statusText }}</el-tag>
+              </div>
+              <p>{{ item.time }} · {{ item.operatorName }} · {{ item.content }}</p>
             </div>
           </div>
         </div>
@@ -975,6 +965,7 @@ import {
   type PrivateSummary,
   type PrivateTask,
   type PrivateTaskStatus,
+  type PrivateTimelineItem,
   type PrivateWecomConfig
 } from '@/api/private-domain'
 
@@ -989,6 +980,7 @@ const integrations = ref<PrivateIntegration[]>([])
 const ownershipRules = ref<PrivateOwnershipRule[]>([])
 const deliveryPackages = ref<PrivateDeliveryPackage[]>([])
 const followRecords = ref<PrivateFollowRecord[]>([])
+const drawerTimeline = ref<PrivateTimelineItem[]>([])
 const convertingIds = ref<number[]>([])
 const verifyingIds = ref<number[]>([])
 const deliveryCreatingIds = ref<number[]>([])
@@ -1433,9 +1425,18 @@ function resetQuery() {
   loadContacts()
 }
 
+async function loadDrawerTimeline(id: number) {
+  try {
+    drawerTimeline.value = await privateDomainApi.getContactTimeline(id)
+  } catch {
+    drawerTimeline.value = []
+  }
+}
+
 function openContact(row: PrivateContact) {
   drawer.row = row
   drawer.visible = true
+  loadDrawerTimeline(row.id)
 }
 
 function padTime(value: number) {
@@ -1471,7 +1472,10 @@ async function verifyContact(row: PrivateContact) {
   try {
     const updated = await privateDomainApi.verifyContact(row.id)
     contacts.value = contacts.value.map(item => item.id === updated.id ? updated : item)
-    if (drawer.row?.id === updated.id) drawer.row = updated
+    if (drawer.row?.id === updated.id) {
+      drawer.row = updated
+      await loadDrawerTimeline(updated.id)
+    }
     ElMessage.success(`工商核验完成: ${verificationText(updated.verification)} / ${duplicateRiskText(updated.verification?.duplicateRisk)}`)
   } catch (error: any) {
     ElMessage.error(error?.message || '工商核验失败')
@@ -1496,6 +1500,7 @@ async function createFollowTask(row: PrivateContact) {
     const task = await privateDomainApi.createTaskFromContact(row.id)
     ElMessage.success(`已生成跟进任务: ${task.title}`)
     await loadContacts()
+    if (drawer.row?.id === row.id) await loadDrawerTimeline(row.id)
   } catch (error: any) {
     ElMessage.error(error?.message || '生成跟进任务失败')
   }
@@ -1509,7 +1514,10 @@ async function saveFollowRecord() {
     followDialog.visible = false
     activeTab.value = 'follow'
     await loadContacts()
-    if (drawer.row?.id === result.contact.id) drawer.row = result.contact
+    if (drawer.row?.id === result.contact.id) {
+      drawer.row = result.contact
+      await loadDrawerTimeline(result.contact.id)
+    }
   } catch (error: any) {
     ElMessage.error(error?.message || '保存跟进记录失败')
   } finally {
@@ -1573,7 +1581,10 @@ async function createDeliveryPackage(row: PrivateContact) {
     ElMessage.success(result.reused ? '该客户已生成过交付包' : `已生成${result.package.packageName}`)
     await loadContacts()
     activeTab.value = 'delivery'
-    if (drawer.row?.id === row.id) drawer.row = contacts.value.find(item => item.id === row.id) || drawer.row
+    if (drawer.row?.id === row.id) {
+      drawer.row = contacts.value.find(item => item.id === row.id) || drawer.row
+      await loadDrawerTimeline(row.id)
+    }
   } catch (error: any) {
     ElMessage.error(error?.message || '生成交付包失败')
   } finally {
@@ -2477,6 +2488,46 @@ onMounted(loadContacts)
   b {
     color: #111827;
     font-size: 13px;
+  }
+}
+
+.real-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.timeline-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.empty-timeline {
+  padding: 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+}
+
+.bd-timeline-dot {
+  &.primary {
+    background: #3370ff;
+  }
+
+  &.warning {
+    background: #f59e0b;
+  }
+
+  &.danger {
+    background: #ef4444;
+  }
+
+  &.info {
+    background: #94a3b8;
   }
 }
 

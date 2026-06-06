@@ -13,6 +13,7 @@ export type PrivateCollisionPolicy = 'block' | 'collaborate' | 'manager' | 'merg
 export type PrivateDeliveryStatus = 'created' | 'in_progress' | 'done'
 export type PrivateFollowMethod = '企微' | '电话' | '微信' | '短信' | '社群' | '线下' | '其他'
 export type PrivateFollowResult = '无响应' | '已联系' | '有意向' | '已报价' | '已成交' | '暂缓' | '流失'
+export type PrivateTimelineType = 'contact' | 'verify' | 'follow' | 'task' | 'delivery'
 
 export interface PrivateOwnershipRule {
   id: number
@@ -92,6 +93,17 @@ export interface PrivateFollowCreatePayload {
   nextAction?: string
   nextTouchAt?: string
   ownerName?: string
+}
+
+export interface PrivateTimelineItem {
+  id: string
+  type: PrivateTimelineType
+  title: string
+  content: string
+  operatorName: string
+  time: string
+  statusText: string
+  statusLevel: 'success' | 'warning' | 'danger' | 'info' | 'primary'
 }
 
 export interface PrivateCompanyVerification {
@@ -1283,6 +1295,90 @@ function normalizeFollowPayload(payload: PrivateFollowCreatePayload) {
   }
 }
 
+function buildContactTimeline(
+  contact: PrivateContact,
+  followRecords: PrivateFollowRecord[],
+  packages: PrivateDeliveryPackage[],
+  tasks: PrivateTask[]
+): PrivateTimelineItem[] {
+  const items: PrivateTimelineItem[] = [
+    {
+      id: `contact-${contact.id}`,
+      type: 'contact',
+      title: '私域客户入库',
+      content: `${contact.source} · ${contact.communityName} · ${contact.demand}`,
+      operatorName: contact.ownerName,
+      time: contact.lastTouchAt,
+      statusText: stageTextForTimeline(contact.stage),
+      statusLevel: contact.stage === 'ordered' ? 'success' : contact.stage === 'silent' ? 'danger' : 'primary'
+    }
+  ]
+
+  if (contact.verification) {
+    items.push({
+      id: `verify-${contact.id}`,
+      type: 'verify',
+      title: contact.verification.matched ? '工商主体已核验' : '工商主体待补全',
+      content: `${contact.verification.linkageText} · ${contact.verification.suggestionText}`,
+      operatorName: '工商核验',
+      time: contact.lastTouchAt,
+      statusText: contact.verification.duplicateRisk === 'hit' ? '撞单强命中' : contact.verification.matched ? '已核验' : '待核验',
+      statusLevel: contact.verification.duplicateRisk === 'hit' ? 'danger' : contact.verification.matched ? 'success' : 'warning'
+    })
+  }
+
+  followRecords
+    .filter(item => item.contactId === contact.id)
+    .forEach(item => {
+      items.push({
+        id: `follow-${item.id}`,
+        type: 'follow',
+        title: `${item.method}跟进 · ${item.result}`,
+        content: `${item.content}${item.quotedAmount ? ` · 报价¥${item.quotedAmount.toLocaleString('zh-CN')}` : ''}${item.nextAction ? ` · 下一步:${item.nextAction}` : ''}`,
+        operatorName: item.ownerName,
+        time: item.createdAt,
+        statusText: item.result,
+        statusLevel: item.result === '已成交' ? 'success' : item.result === '流失' ? 'danger' : item.result === '已报价' ? 'warning' : 'primary'
+      })
+    })
+
+  packages
+    .filter(item => item.contactId === contact.id)
+    .forEach(item => {
+      items.push({
+        id: `delivery-${item.id}`,
+        type: 'delivery',
+        title: `生成${item.packageName}`,
+        content: `${item.serviceLine} · 自动拆解 ${item.taskIds.length} 个交付任务 · 最晚节点 ${item.dueDate}`,
+        operatorName: item.ownerName,
+        time: item.createdAt,
+        statusText: item.status === 'done' ? '已完成' : item.status === 'in_progress' ? '进行中' : '已创建',
+        statusLevel: item.status === 'done' ? 'success' : item.status === 'in_progress' ? 'primary' : 'warning'
+      })
+    })
+
+  tasks
+    .filter(item => item.companyName === contact.companyName && item.contactName === contact.name)
+    .forEach(item => {
+      items.push({
+        id: `task-${item.id}`,
+        type: 'task',
+        title: item.title,
+        content: `${item.action} · 截止 ${item.dueTime}`,
+        operatorName: item.ownerName,
+        time: item.dueTime,
+        statusText: item.status === 'done' ? '已完成' : item.status === 'overdue' ? '已逾期' : '待处理',
+        statusLevel: item.status === 'done' ? 'success' : item.status === 'overdue' ? 'danger' : 'warning'
+      })
+    })
+
+  return items.sort((a, b) => b.time.localeCompare(a.time))
+}
+
+function stageTextForTimeline(stage: PrivateStage) {
+  return ({ new: '新触点', nurturing: '培育中', intent: '有意向', quoted: '已报价', ordered: '已成交', silent: '沉默' } as Record<PrivateStage, string>)[stage]
+}
+
 export const privateDomainApi = {
   importTemplate() {
     return delay({
@@ -1422,6 +1518,17 @@ export const privateDomainApi = {
     if (contactId) records = records.filter(item => item.contactId === contactId)
     records = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     return delay(records)
+  },
+  async getContactTimeline(id: number) {
+    ensureSeeds()
+    const contact = readList<PrivateContact>(CONTACT_KEY).find(item => item.id === id)
+    if (!contact) throw new Error('私域客户不存在')
+    return delay(buildContactTimeline(
+      contact,
+      readList<PrivateFollowRecord>(FOLLOW_KEY),
+      readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY),
+      readList<PrivateTask>(TASK_KEY)
+    ))
   },
   async createFollowRecord(payload: PrivateFollowCreatePayload) {
     ensureSeeds()

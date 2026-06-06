@@ -1046,6 +1046,26 @@
                 <strong>{{ task.title.replace(deliveryDrawer.row.companyName + ' - ', '') }}</strong>
                 <el-tag :type="taskStatusTag(task.status)" size="small">{{ taskStatusText(task.status) }}</el-tag>
                 <el-tag :type="priorityTag(task.priority)" size="small" effect="plain">{{ task.priority }}</el-tag>
+                <el-button
+                  v-if="task.status === 'pending'"
+                  type="danger"
+                  text
+                  size="small"
+                  :disabled="isUpdatingDeliveryTask(task.id)"
+                  @click.stop="deliveryDrawer.row && markDeliveryTaskOverdue(deliveryDrawer.row, task)"
+                >
+                  标记逾期
+                </el-button>
+                <el-button
+                  v-else-if="task.status === 'overdue'"
+                  type="primary"
+                  text
+                  size="small"
+                  :disabled="isUpdatingDeliveryTask(task.id)"
+                  @click.stop="deliveryDrawer.row && restoreDeliveryTask(deliveryDrawer.row, task)"
+                >
+                  恢复待处理
+                </el-button>
               </div>
               <p>{{ task.dueTime }} · {{ task.ownerName }} · {{ task.action }}</p>
             </div>
@@ -2021,21 +2041,33 @@ async function createDeliveryFromFollow(row: PrivateFollowRecord) {
   await createDeliveryPackage(contact)
 }
 
-async function toggleDeliveryTask(row: PrivateDeliveryPackage, task: PrivateTask, checked: boolean) {
+async function updateDeliveryTaskState(row: PrivateDeliveryPackage, task: PrivateTask, status: PrivateTaskStatus, successMessage: string) {
   if (isUpdatingDeliveryTask(task.id)) return
   deliveryTaskUpdatingIds.value = [...deliveryTaskUpdatingIds.value, task.id]
   try {
-    const nextPackage = await privateDomainApi.updateDeliveryTaskStatus(row.id, task.id, checked ? 'done' : 'pending')
+    const nextPackage = await privateDomainApi.updateDeliveryTaskStatus(row.id, task.id, status)
     const idx = deliveryPackages.value.findIndex(item => item.id === row.id)
     if (idx >= 0) deliveryPackages.value[idx] = nextPackage
     if (deliveryDrawer.row?.id === row.id) deliveryDrawer.row = nextPackage
     await loadDashboard()
-    ElMessage.success(checked ? '交付任务已完成' : '交付任务已恢复待处理')
+    ElMessage.success(successMessage)
   } catch (error: any) {
     ElMessage.error(error?.message || '更新交付任务失败')
   } finally {
     deliveryTaskUpdatingIds.value = deliveryTaskUpdatingIds.value.filter(id => id !== task.id)
   }
+}
+
+async function toggleDeliveryTask(row: PrivateDeliveryPackage, task: PrivateTask, checked: boolean) {
+  await updateDeliveryTaskState(row, task, checked ? 'done' : 'pending', checked ? '交付任务已完成' : '交付任务已恢复待处理')
+}
+
+async function markDeliveryTaskOverdue(row: PrivateDeliveryPackage, task: PrivateTask) {
+  await updateDeliveryTaskState(row, task, 'overdue', '交付任务已标记逾期')
+}
+
+async function restoreDeliveryTask(row: PrivateDeliveryPackage, task: PrivateTask) {
+  await updateDeliveryTaskState(row, task, 'pending', '交付任务已恢复待处理')
 }
 
 async function createOrderDraft(row: PrivateFollowRecord) {

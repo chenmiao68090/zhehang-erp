@@ -701,6 +701,7 @@
               <div><span>待推进</span><b>{{ deliveryStats.pending }}</b></div>
               <div><span>逾期包</span><b>{{ deliveryStats.overdue }}</b></div>
               <div><span>待锁地址</span><b>{{ deliveryStats.addressUnlocked }}</b></div>
+              <div><span>待绑资源</span><b>{{ deliveryStats.addressUnbound }}</b></div>
             </div>
             <div class="delivery-filter-bar">
               <el-radio-group v-model="deliveryFilter">
@@ -1394,7 +1395,7 @@ import {
 } from '@/api/private-domain'
 
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
-type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'address_unlocked' | 'done'
+type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'address_unlocked' | 'address_unbound' | 'done'
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 
 const router = useRouter()
@@ -1534,7 +1535,7 @@ const followMethodOptions: PrivateFollowMethod[] = ['企微', '电话', '微信'
 const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '有意向', '已报价', '已成交', '暂缓', '流失']
 const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
 const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
-const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'address_unlocked', 'done']
+const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'address_unlocked', 'address_unbound', 'done']
 const routeTaskFilters: TaskFilter[] = ['all', 'pending', 'overdue', 'address_stock', 'supervisor', 'done']
 const diagnosisQuestions = [
   {
@@ -1649,6 +1650,7 @@ const deliveryStats = computed(() => ({
   inProgress: deliveryPackages.value.filter(item => item.status === 'in_progress').length,
   overdue: deliveryPackages.value.filter(item => deliveryOverdueCount(item) > 0).length,
   addressUnlocked: deliveryPackages.value.filter(item => needsAddressLock(item)).length,
+  addressUnbound: deliveryPackages.value.filter(item => needsAddressResourceBinding(item)).length,
   done: deliveryPackages.value.filter(item => item.status === 'done').length,
   pending: deliveryPackages.value.filter(item => item.status !== 'done').length
 }))
@@ -1658,6 +1660,7 @@ const deliveryFilterOptions = computed(() => [
   { label: `进行中 ${deliveryStats.value.inProgress}`, value: 'in_progress' },
   { label: `有逾期 ${deliveryStats.value.overdue}`, value: 'overdue' },
   { label: `待锁地址 ${deliveryStats.value.addressUnlocked}`, value: 'address_unlocked' },
+  { label: `待绑资源 ${deliveryStats.value.addressUnbound}`, value: 'address_unbound' },
   { label: `已完成 ${deliveryStats.value.done}`, value: 'done' }
 ] as const)
 const deliveryFilterHint = computed(() => ({
@@ -1666,6 +1669,7 @@ const deliveryFilterHint = computed(() => ({
   in_progress: '已经开始推进的交付包,重点看最晚节点和剩余任务。',
   overdue: '存在逾期任务的交付包,需要主管介入处理。',
   address_unlocked: '地址类业务还没有锁定资源池,需要渠道或交付先确认可售地址。',
+  address_unbound: '已经锁定地址但缺少 ADR 资源编号的交付包,需要补绑定资源池。',
   done: '已完成交付包,用于回访、续费和服务质量复盘。'
 } as Record<DeliveryFilter, string>)[deliveryFilter.value])
 const focusedDeliveryPackage = computed(() => {
@@ -1678,6 +1682,7 @@ const filteredDeliveryPackages = computed(() => {
     if (deliveryFilter.value === 'in_progress') return item.status === 'in_progress'
     if (deliveryFilter.value === 'overdue') return deliveryOverdueCount(item) > 0
     if (deliveryFilter.value === 'address_unlocked') return needsAddressLock(item)
+    if (deliveryFilter.value === 'address_unbound') return needsAddressResourceBinding(item)
     if (deliveryFilter.value === 'done') return item.status === 'done'
     return true
   })
@@ -1814,6 +1819,11 @@ function activeAddressLock(row: PrivateDeliveryPackage) {
 
 function needsAddressLock(row: PrivateDeliveryPackage) {
   return isAddressDelivery(row) && !activeAddressLock(row)
+}
+
+function needsAddressResourceBinding(row: PrivateDeliveryPackage) {
+  const lock = activeAddressLock(row)
+  return isAddressDelivery(row) && Boolean(lock && !lock.resourceId)
 }
 
 function formatAddressResourceNo(resourceId?: number) {

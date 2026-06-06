@@ -1355,6 +1355,21 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
     })
   }
 
+  const packageOverdue = packages.filter(item =>
+    item.status !== 'done' &&
+    item.tasks.some(task => task.status === 'overdue')
+  )
+  const overdueTaskCount = packageOverdue.reduce((sum, item) => sum + item.tasks.filter(task => task.status === 'overdue').length, 0)
+  if (packageOverdue.length) {
+    risks.push({
+      title: '私域交付逾期未处理',
+      label: overdueTaskCount >= 3 ? '高' : '中',
+      level: overdueTaskCount >= 3 ? 'high' : 'medium',
+      desc: `${packageOverdue.length} 个交付包存在 ${overdueTaskCount} 个逾期任务,建议主管当天介入处理并确认客户预期。`,
+      path: '/leads/private-domain?tab=delivery&deliveryFilter=overdue'
+    })
+  }
+
   const duplicateRisk = contacts.filter(item => item.verification?.duplicateRisk && item.verification.duplicateRisk !== 'none')
   if (duplicateRisk.length) {
     risks.push({

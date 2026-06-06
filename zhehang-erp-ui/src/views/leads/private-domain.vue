@@ -1332,6 +1332,7 @@ const followMethodOptions: PrivateFollowMethod[] = ['企微', '电话', '微信'
 const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '有意向', '已报价', '已成交', '暂缓', '流失']
 const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
 const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
+const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'done']
 const diagnosisQuestions = [
   {
     key: 'sourceTruth',
@@ -2138,6 +2139,12 @@ function applyRouteQueue() {
   if (routeFollowFilters.includes(filter as FollowFilter)) {
     followFilter.value = filter as FollowFilter
     activeTab.value = 'follow'
+  }
+
+  const deliveryQueue = queryValue(route.query.deliveryFilter)
+  if (routeDeliveryFilters.includes(deliveryQueue as DeliveryFilter)) {
+    deliveryFilter.value = deliveryQueue as DeliveryFilter
+    activeTab.value = 'delivery'
   }
 }
 

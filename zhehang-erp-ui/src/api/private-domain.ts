@@ -11,6 +11,8 @@ export type PrivateDuplicateRisk = CompanyResolveResult['duplicateRisk']
 export type PrivateOwnerPolicy = 'first_touch' | 'source_team' | 'manager_assign' | 'channel_dedicated' | 'score_priority'
 export type PrivateCollisionPolicy = 'block' | 'collaborate' | 'manager' | 'merge'
 export type PrivateDeliveryStatus = 'created' | 'in_progress' | 'done'
+export type PrivateFollowMethod = '企微' | '电话' | '微信' | '短信' | '社群' | '线下' | '其他'
+export type PrivateFollowResult = '无响应' | '已联系' | '有意向' | '已报价' | '已成交' | '暂缓' | '流失'
 
 export interface PrivateOwnershipRule {
   id: number
@@ -64,6 +66,32 @@ export interface PrivateBossMetric {
   value: string | number
   trend: string
   type: 'up' | 'warn' | 'danger'
+}
+
+export interface PrivateFollowRecord {
+  id: number
+  contactId: number
+  contactName: string
+  companyName: string
+  ownerName: string
+  method: PrivateFollowMethod
+  result: PrivateFollowResult
+  content: string
+  quotedAmount: number
+  nextAction: string
+  nextTouchAt: string
+  createdAt: string
+}
+
+export interface PrivateFollowCreatePayload {
+  contactId: number
+  method: PrivateFollowMethod
+  result: PrivateFollowResult
+  content: string
+  quotedAmount?: number
+  nextAction?: string
+  nextTouchAt?: string
+  ownerName?: string
 }
 
 export interface PrivateCompanyVerification {
@@ -247,6 +275,8 @@ export interface PrivateSummary {
   orderedCount: number
   deliveryPackageCount: number
   deliveryTaskCount: number
+  followRecordCount: number
+  quoteAmount: number
   groupCount: number
   touchCount: number
   estimatedAmount: number
@@ -263,6 +293,7 @@ const PROFILE_KEY = 'biz_private_ops_profile'
 const OWNERSHIP_RULE_KEY = 'biz_private_ownership_rules'
 const WECOM_CONFIG_KEY = 'biz_private_wecom_config'
 const DELIVERY_PACKAGE_KEY = 'biz_private_delivery_packages'
+const FOLLOW_KEY = 'biz_private_follow_records'
 const PRIVATE_SOURCE_OPTIONS: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
 const PRIVATE_STAGE_OPTIONS: PrivateStage[] = ['new', 'nurturing', 'intent', 'quoted', 'ordered', 'silent']
 const ANSWER_OPTIONS = {
@@ -720,9 +751,41 @@ function ensureSeeds() {
   if (!readList<PrivateOwnershipRule>(OWNERSHIP_RULE_KEY).length) writeOwnershipRules(defaultOwnershipRules())
   if (!localStorage.getItem(WECOM_CONFIG_KEY)) writeWecomConfig(defaultWecomConfig())
   if (!localStorage.getItem(DELIVERY_PACKAGE_KEY)) writeList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY, [])
+  if (!readList<PrivateFollowRecord>(FOLLOW_KEY).length) {
+    writeList<PrivateFollowRecord>(FOLLOW_KEY, [
+      {
+        id: 1,
+        contactId: 1,
+        contactName: '张总',
+        companyName: '杭州启辰企业管理有限公司',
+        ownerName: '何海琳',
+        method: '企微',
+        result: '有意向',
+        content: '客户已确认新公司开办后需要税务报到和代理记账,希望当天拿到套餐报价。',
+        quotedAmount: 12800,
+        nextAction: '发送开办套餐报价并预约电话确认付款节点',
+        nextTouchAt: ts(0, 17, 30),
+        createdAt: ts(0, 10, 12)
+      },
+      {
+        id: 2,
+        contactId: 2,
+        contactName: '陈女士',
+        companyName: '浙江朗和装饰工程有限公司',
+        ownerName: '陈思旭',
+        method: '电话',
+        result: '已报价',
+        content: '已说明注册地址异常解除和挂靠地址组合方案,客户重点关心地址区域和办理周期。',
+        quotedAmount: 23800,
+        nextAction: '确认地址库存和同行渠道价格后发正式报价单',
+        nextTouchAt: ts(1, 10, 0),
+        createdAt: ts(0, 11, 35)
+      }
+    ])
+  }
 }
 
-function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[], packages: PrivateDeliveryPackage[] = []): PrivateSummary {
+function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[], packages: PrivateDeliveryPackage[] = [], followRecords: PrivateFollowRecord[] = []): PrivateSummary {
   const intentStages: PrivateStage[] = ['intent', 'quoted', 'ordered']
   const stages: Array<{ key: PrivateStage; label: string }> = [
     { key: 'new', label: '新触点' },
@@ -750,6 +813,8 @@ function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[], package
     orderedCount: contacts.filter(item => item.stage === 'ordered').length,
     deliveryPackageCount: packages.length,
     deliveryTaskCount: packages.reduce((sum, item) => sum + item.taskIds.length, 0),
+    followRecordCount: followRecords.length,
+    quoteAmount: followRecords.reduce((sum, item) => sum + Number(item.quotedAmount || 0), 0),
     groupCount: groups.length,
     touchCount: contacts.reduce((sum, item) => sum + item.touchCount, 0),
     estimatedAmount: contacts.filter(item => intentStages.includes(item.stage)).reduce((sum, item) => sum + item.estimatedAmount, 0),
@@ -765,7 +830,7 @@ function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[], package
   }
 }
 
-function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegration[], rules: PrivateOwnershipRule[], packages: PrivateDeliveryPackage[]): PrivateOpsCheck[] {
+function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegration[], rules: PrivateOwnershipRule[], packages: PrivateDeliveryPackage[], followRecords: PrivateFollowRecord[]): PrivateOpsCheck[] {
   const wecom = integrations.find(item => item.key === 'wecom-contact')
   const wechat = integrations.find(item => item.key === 'wechat-service')
   return [
@@ -799,11 +864,11 @@ function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegra
     {
       id: 'follow',
       name: '跟进动作闭环',
-      status: 'partial',
+      status: followRecords.length ? 'ready' : 'partial',
       ownerName: '电销/顾问',
-      current: '可生成跟进任务,但跟进结果、报价、提单还需要强绑定',
-      next: '将 A/B/C 意向、报价金额、下次跟进时间写成必填项',
-      path: '/task-center/once'
+      current: followRecords.length ? `已记录 ${followRecords.length} 条私域跟进,可沉淀结果、报价金额和下次动作` : '可生成跟进任务,但跟进结果、报价、提单还需要强绑定',
+      next: followRecords.length ? '下一步把通话录音、企微聊天和报价单自动挂接到同一条跟进记录' : '将 A/B/C 意向、报价金额、下次跟进时间写成必填项',
+      path: '/leads/private-domain'
     },
     {
       id: 'delivery',
@@ -1167,11 +1232,55 @@ function buildBossMetrics(summary: PrivateSummary): PrivateBossMetric[] {
   const intentRate = summary.contactCount ? Math.round(summary.intentCount / summary.contactCount * 100) : 0
   const verifyRate = summary.contactCount ? Math.round(summary.verifiedCount / summary.contactCount * 100) : 0
   return [
-    { label: '私域客户', value: summary.contactCount, trend: `高意向 ${summary.intentCount} · ${intentRate}%`, type: intentRate >= 40 ? 'up' : 'warn' },
+    { label: '私域客户', value: summary.contactCount, trend: `高意向 ${summary.intentCount} · 跟进 ${summary.followRecordCount}`, type: intentRate >= 40 ? 'up' : 'warn' },
     { label: '工商核验率', value: `${verifyRate}%`, trend: `已核验 ${summary.verifiedCount} 家`, type: verifyRate >= 60 ? 'up' : 'warn' },
     { label: '撞单风险', value: summary.duplicateRiskCount, trend: summary.duplicateRiskCount ? '需主管仲裁' : '暂无异常', type: summary.duplicateRiskCount ? 'danger' : 'up' },
     { label: '成交交付包', value: summary.deliveryPackageCount, trend: `任务 ${summary.deliveryTaskCount} 个`, type: summary.deliveryPackageCount ? 'up' : 'warn' }
   ]
+}
+
+function stageFromFollowResult(result: PrivateFollowResult, current: PrivateStage): PrivateStage {
+  const map: Partial<Record<PrivateFollowResult, PrivateStage>> = {
+    无响应: current === 'new' ? 'new' : 'silent',
+    已联系: current === 'new' ? 'nurturing' : current,
+    有意向: 'intent',
+    已报价: 'quoted',
+    已成交: 'ordered',
+    暂缓: 'nurturing',
+    流失: 'silent'
+  }
+  return map[result] || current
+}
+
+function defaultNextActionForFollow(result: PrivateFollowResult) {
+  const map: Record<PrivateFollowResult, string> = {
+    无响应: '次日再次触达,连续 3 次无响应后进入沉默唤醒',
+    已联系: '补齐客户需求、预算、服务线和下次跟进时间',
+    有意向: '输出套餐报价并预约下一次电话确认',
+    已报价: '跟进报价反馈,确认付款节点和合同主体',
+    已成交: '生成交付包并发起财务核对',
+    暂缓: '设置保护期内复联提醒,避免客户流失',
+    流失: '记录流失原因,进入复盘和沉默客户池'
+  }
+  return map[result]
+}
+
+function normalizeFollowPayload(payload: PrivateFollowCreatePayload) {
+  const quotedAmount = Number(payload.quotedAmount || 0)
+  if (!payload.contactId) throw new Error('请选择客户')
+  if (!payload.method) throw new Error('请选择跟进方式')
+  if (!payload.result) throw new Error('请选择跟进结果')
+  if (!cleanText(payload.content)) throw new Error('请填写本次跟进内容')
+  if (['已报价', '已成交'].includes(payload.result) && quotedAmount <= 0) {
+    throw new Error('报价或成交必须填写金额')
+  }
+  return {
+    ...payload,
+    content: cleanText(payload.content),
+    quotedAmount: Number.isFinite(quotedAmount) && quotedAmount > 0 ? quotedAmount : 0,
+    nextAction: cleanText(payload.nextAction) || defaultNextActionForFollow(payload.result),
+    nextTouchAt: cleanText(payload.nextTouchAt) || (payload.result === '已成交' || payload.result === '流失' ? '' : ts(1, 10, 0))
+  }
 }
 
 export const privateDomainApi = {
@@ -1191,8 +1300,9 @@ export const privateDomainApi = {
     const ownershipRules = readOwnershipRules()
     const wecomConfig = readWecomConfig()
     const deliveryPackages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+    const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
     const opsProfile = readProfile()
-    const summary = calcSummary(contacts, groups, deliveryPackages)
+    const summary = calcSummary(contacts, groups, deliveryPackages, followRecords)
     return delay({
       summary,
       contacts,
@@ -1203,9 +1313,10 @@ export const privateDomainApi = {
       ownershipRules,
       wecomConfig,
       deliveryPackages,
+      followRecords,
       bossMetrics: buildBossMetrics(summary),
       opsProfile,
-      opsChecks: buildOpsChecks(opsProfile, integrations, ownershipRules, deliveryPackages),
+      opsChecks: buildOpsChecks(opsProfile, integrations, ownershipRules, deliveryPackages, followRecords),
       dailyActions: buildDailyActions(opsProfile)
     })
   },
@@ -1305,6 +1416,62 @@ export const privateDomainApi = {
     ensureSeeds()
     return delay(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY))
   },
+  async listFollowRecords(contactId?: number) {
+    ensureSeeds()
+    let records = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    if (contactId) records = records.filter(item => item.contactId === contactId)
+    records = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return delay(records)
+  },
+  async createFollowRecord(payload: PrivateFollowCreatePayload) {
+    ensureSeeds()
+    const normalized = normalizeFollowPayload(payload)
+    const contacts = readList<PrivateContact>(CONTACT_KEY)
+    const contactIdx = contacts.findIndex(item => item.id === normalized.contactId)
+    if (contactIdx < 0) throw new Error('私域客户不存在')
+    const contact = contacts[contactIdx]
+    const records = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    const record: PrivateFollowRecord = {
+      id: maxId(records) + 1,
+      contactId: contact.id,
+      contactName: contact.name,
+      companyName: contact.companyName,
+      ownerName: normalized.ownerName || contact.ownerName,
+      method: normalized.method,
+      result: normalized.result,
+      content: normalized.content,
+      quotedAmount: normalized.quotedAmount,
+      nextAction: normalized.nextAction,
+      nextTouchAt: normalized.nextTouchAt,
+      createdAt: ts()
+    }
+    writeList(FOLLOW_KEY, [record, ...records])
+
+    const tasks = readList<PrivateTask>(TASK_KEY)
+    const taskIdx = tasks.findIndex(item => item.companyName === contact.companyName && item.contactName === contact.name && item.status === 'pending')
+    if (taskIdx >= 0 && normalized.result !== '无响应') {
+      tasks[taskIdx] = { ...tasks[taskIdx], status: 'done' }
+      writeList(TASK_KEY, tasks)
+    }
+
+    const amount = normalized.quotedAmount || contact.estimatedAmount
+    contacts[contactIdx] = {
+      ...contact,
+      ownerName: record.ownerName,
+      stage: stageFromFollowResult(normalized.result, contact.stage),
+      estimatedAmount: amount > contact.estimatedAmount ? amount : contact.estimatedAmount,
+      lastTouchAt: record.createdAt,
+      nextAction: normalized.nextAction,
+      touchCount: contact.touchCount + 1,
+      tags: Array.from(new Set([
+        ...contact.tags,
+        normalized.result,
+        normalized.quotedAmount ? '已报价金额' : ''
+      ].filter(Boolean))).slice(0, 8)
+    }
+    writeList(CONTACT_KEY, contacts)
+    return delay({ record, contact: contacts[contactIdx] })
+  },
   async createDeliveryPackageFromContact(id: number) {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)
@@ -1360,7 +1527,8 @@ export const privateDomainApi = {
     const summary = calcSummary(
       readList<PrivateContact>(CONTACT_KEY),
       readList<PrivateGroup>(GROUP_KEY),
-      readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+      readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY),
+      readList<PrivateFollowRecord>(FOLLOW_KEY)
     )
     return delay({
       summary,

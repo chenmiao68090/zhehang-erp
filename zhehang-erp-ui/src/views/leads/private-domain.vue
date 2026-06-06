@@ -457,9 +457,10 @@
             <el-table-column label="需求" min-width="260" prop="demand" show-overflow-tooltip />
             <el-table-column label="最近互动" width="150" prop="lastTouchAt" />
             <el-table-column label="下一动作" min-width="230" prop="nextAction" show-overflow-tooltip />
-            <el-table-column label="操作" width="410" fixed="right">
+            <el-table-column label="操作" width="480" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click.stop="openContact(row)">详情</el-button>
+                <el-button link type="primary" @click.stop="openFollowDialog(row)">记录跟进</el-button>
                 <el-button
                   link
                   type="primary"
@@ -489,6 +490,47 @@
               </template>
             </el-table-column>
           </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="跟进记录" name="follow">
+          <div class="follow-panel">
+            <div class="panel-title compact">
+              <div>
+                <h2>私域跟进记录</h2>
+                <p>每次电话、企微、社群触达都要记录结果、报价金额和下一步动作，后续才能复盘员工产能和成交漏斗。</p>
+              </div>
+              <el-button type="primary" @click="openFollowDialog()">记录跟进</el-button>
+            </div>
+            <div class="follow-summary">
+              <div><span>跟进次数</span><b>{{ followStats.total }}</b></div>
+              <div><span>报价金额</span><b>¥{{ formatMoney(followStats.quoteAmount) }}</b></div>
+              <div><span>成交记录</span><b>{{ followStats.ordered }}</b></div>
+              <div><span>待复联</span><b>{{ followStats.nextTouch }}</b></div>
+            </div>
+            <el-table :data="followRecords" border stripe empty-text="暂无跟进记录，请先从客户雷达或详情页记录一次跟进">
+              <el-table-column prop="createdAt" label="记录时间" width="150" />
+              <el-table-column label="客户" min-width="240">
+                <template #default="{ row }">
+                  <strong>{{ row.companyName }}</strong>
+                  <div class="sub-line">{{ row.contactName }} · {{ row.ownerName }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="method" label="方式" width="90" />
+              <el-table-column label="结果" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="followResultTag(row.result)" size="small">{{ row.result }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="报价金额" width="120" align="right">
+                <template #default="{ row }">
+                  {{ row.quotedAmount ? `¥${formatMoney(row.quotedAmount)}` : '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="content" label="跟进内容" min-width="280" show-overflow-tooltip />
+              <el-table-column prop="nextAction" label="下一动作" min-width="240" show-overflow-tooltip />
+              <el-table-column prop="nextTouchAt" label="下次跟进" width="150" />
+            </el-table>
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="社群运营" name="groups">
@@ -807,6 +849,7 @@
         >
           工商核验
         </el-button>
+        <el-button v-if="drawer.row" @click.stop="openFollowDialog(drawer.row)">记录跟进</el-button>
         <el-button v-if="drawer.row" @click.stop="createFollowTask(drawer.row)">生成跟进任务</el-button>
         <el-button
           v-if="drawer.row"
@@ -826,6 +869,70 @@
         </el-button>
       </template>
     </BusinessDetailDrawer>
+
+    <el-dialog v-model="followDialog.visible" title="记录私域跟进" width="640px" class="follow-dialog" append-to-body>
+      <el-form label-position="top" class="follow-form">
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="客户">
+              <el-select v-model="followForm.contactId" placeholder="请选择客户" filterable>
+                <el-option
+                  v-for="item in contacts"
+                  :key="item.id"
+                  :label="`${item.companyName} · ${item.name}`"
+                  :value="item.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="负责人">
+              <el-input v-model="followForm.ownerName" placeholder="默认取客户负责人" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="8">
+            <el-form-item label="跟进方式">
+              <el-select v-model="followForm.method">
+                <el-option v-for="item in followMethodOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="8">
+            <el-form-item label="跟进结果">
+              <el-select v-model="followForm.result">
+                <el-option v-for="item in followResultOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="8">
+            <el-form-item label="报价/成交金额">
+              <el-input-number v-model="followForm.quotedAmount" :min="0" :step="1000" controls-position="right" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="本次跟进内容">
+          <el-input v-model="followForm.content" type="textarea" :rows="3" placeholder="例如：客户确认需要代理记账，预算 1.2 万，关心税务报到和银行开户。" />
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="10">
+            <el-form-item label="下次跟进时间">
+              <el-input v-model="followForm.nextTouchAt" placeholder="例如：2026-06-08 10:00" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="14">
+            <el-form-item label="下一步动作">
+              <el-input v-model="followForm.nextAction" placeholder="不填时系统按结果自动生成" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="followDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="followSaving" @click="saveFollowRecord">保存跟进记录</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -850,6 +957,10 @@ import {
   type PrivateDeliveryPackage,
   type PrivateDeliveryStatus,
   type PrivateDuplicateRisk,
+  type PrivateFollowCreatePayload,
+  type PrivateFollowMethod,
+  type PrivateFollowRecord,
+  type PrivateFollowResult,
   type PrivateGroup,
   type PrivateImportPreviewRow,
   type PrivateImportStatus,
@@ -877,6 +988,7 @@ const tasks = ref<PrivateTask[]>([])
 const integrations = ref<PrivateIntegration[]>([])
 const ownershipRules = ref<PrivateOwnershipRule[]>([])
 const deliveryPackages = ref<PrivateDeliveryPackage[]>([])
+const followRecords = ref<PrivateFollowRecord[]>([])
 const convertingIds = ref<number[]>([])
 const verifyingIds = ref<number[]>([])
 const deliveryCreatingIds = ref<number[]>([])
@@ -885,6 +997,7 @@ const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
 const wecomSaving = ref(false)
+const followSaving = ref(false)
 const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
 const importFileName = ref('')
@@ -901,6 +1014,8 @@ const summary = reactive<PrivateSummary>({
   orderedCount: 0,
   deliveryPackageCount: 0,
   deliveryTaskCount: 0,
+  followRecordCount: 0,
+  quoteAmount: 0,
   groupCount: 0,
   touchCount: 0,
   estimatedAmount: 0,
@@ -913,6 +1028,17 @@ const query = reactive<{ keyword: string; source: '' | PrivateSource; stage: '' 
   stage: ''
 })
 const drawer = reactive<{ visible: boolean; row: PrivateContact | null }>({ visible: false, row: null })
+const followDialog = reactive<{ visible: boolean; row: PrivateContact | null }>({ visible: false, row: null })
+const followForm = reactive<PrivateFollowCreatePayload>({
+  contactId: 0,
+  method: '电话',
+  result: '已联系',
+  content: '',
+  quotedAmount: 0,
+  nextAction: '',
+  nextTouchAt: '',
+  ownerName: ''
+})
 const opsProfile = reactive<PrivateOpsProfile>({
   companyName: '浙杭集团',
   city: '杭州',
@@ -965,6 +1091,8 @@ const collisionPolicyOptions: Array<{ label: string; value: PrivateCollisionPoli
   { label: '主管仲裁', value: 'manager' },
   { label: '合并客户记录', value: 'merge' }
 ]
+const followMethodOptions: PrivateFollowMethod[] = ['企微', '电话', '微信', '短信', '社群', '线下', '其他']
+const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '有意向', '已报价', '已成交', '暂缓', '流失']
 const diagnosisQuestions = [
   {
     key: 'sourceTruth',
@@ -999,6 +1127,12 @@ const previewStats = computed(() => ({
   verified: importPreview.value.filter(item => item.verification?.matched).length
 }))
 const wecomReady = computed(() => Boolean(wecomConfig.corpId && wecomConfig.contactSecret && wecomConfig.token && wecomConfig.aesKey))
+const followStats = computed(() => ({
+  total: followRecords.value.length,
+  quoteAmount: followRecords.value.reduce((sum, item) => sum + Number(item.quotedAmount || 0), 0),
+  ordered: followRecords.value.filter(item => item.result === '已成交').length,
+  nextTouch: followRecords.value.filter(item => item.nextTouchAt && item.result !== '已成交' && item.result !== '流失').length
+}))
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
   { label: '培育中', value: 'nurturing' },
@@ -1068,6 +1202,10 @@ function deliveryStatusTag(status: PrivateDeliveryStatus) {
   return ({ created: 'warning', in_progress: 'primary', done: 'success' } as Record<PrivateDeliveryStatus, any>)[status]
 }
 
+function followResultTag(result: PrivateFollowResult) {
+  return ({ 无响应: 'info', 已联系: 'primary', 有意向: 'warning', 已报价: 'warning', 已成交: 'success', 暂缓: 'info', 流失: 'danger' } as Record<PrivateFollowResult, any>)[result]
+}
+
 function priorityTag(priority: PrivateTask['priority']) {
   return priority === '高' ? 'danger' : priority === '中' ? 'warning' : 'info'
 }
@@ -1135,6 +1273,7 @@ async function loadDashboard() {
   integrations.value = data.integrations
   ownershipRules.value = data.ownershipRules
   deliveryPackages.value = data.deliveryPackages
+  followRecords.value = data.followRecords
   opsChecks.value = data.opsChecks
   dailyActions.value = data.dailyActions
   Object.assign(wecomConfig, data.wecomConfig)
@@ -1299,6 +1438,33 @@ function openContact(row: PrivateContact) {
   drawer.visible = true
 }
 
+function padTime(value: number) {
+  return String(value).padStart(2, '0')
+}
+
+function nextTouchTime(offsetDays = 1, hour = 10, minute = 0) {
+  const d = new Date()
+  d.setDate(d.getDate() + offsetDays)
+  d.setHours(hour, minute, 0, 0)
+  return `${d.getFullYear()}-${padTime(d.getMonth() + 1)}-${padTime(d.getDate())} ${padTime(d.getHours())}:${padTime(d.getMinutes())}`
+}
+
+function openFollowDialog(row?: PrivateContact) {
+  const target = row || contacts.value[0]
+  followDialog.row = target || null
+  Object.assign(followForm, {
+    contactId: target?.id || 0,
+    method: '电话',
+    result: '已联系',
+    content: '',
+    quotedAmount: target?.estimatedAmount && target.stage === 'quoted' ? target.estimatedAmount : 0,
+    nextAction: target?.nextAction || '',
+    nextTouchAt: nextTouchTime(1, 10, 0),
+    ownerName: target?.ownerName || ''
+  })
+  followDialog.visible = true
+}
+
 async function verifyContact(row: PrivateContact) {
   if (isVerifying(row.id)) return
   verifyingIds.value = [...verifyingIds.value, row.id]
@@ -1332,6 +1498,22 @@ async function createFollowTask(row: PrivateContact) {
     await loadContacts()
   } catch (error: any) {
     ElMessage.error(error?.message || '生成跟进任务失败')
+  }
+}
+
+async function saveFollowRecord() {
+  followSaving.value = true
+  try {
+    const result = await privateDomainApi.createFollowRecord({ ...followForm })
+    ElMessage.success(`已记录跟进: ${result.record.companyName} / ${result.record.result}`)
+    followDialog.visible = false
+    activeTab.value = 'follow'
+    await loadContacts()
+    if (drawer.row?.id === result.contact.id) drawer.row = result.contact
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存跟进记录失败')
+  } finally {
+    followSaving.value = false
   }
 }
 
@@ -1704,6 +1886,7 @@ onMounted(loadContacts)
 
 .rule-panel,
 .delivery-panel,
+.follow-panel,
 .wecom-config-card {
   padding: 16px;
   border: 1px solid #dbe5f2;
@@ -1717,7 +1900,8 @@ onMounted(loadContacts)
 }
 
 .rule-toolbar,
-.delivery-summary {
+.delivery-summary,
+.follow-summary {
   display: grid;
   gap: 10px;
   margin-bottom: 12px;
@@ -1744,7 +1928,8 @@ onMounted(loadContacts)
   }
 }
 
-.delivery-summary {
+.delivery-summary,
+.follow-summary {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 
   div {
@@ -1765,6 +1950,14 @@ onMounted(loadContacts)
     color: #111827;
     font-size: 20px;
   }
+}
+
+.follow-dialog :deep(.el-dialog__body) {
+  padding-top: 8px;
+}
+
+.follow-form :deep(.el-select) {
+  width: 100%;
 }
 
 .package-task-list {

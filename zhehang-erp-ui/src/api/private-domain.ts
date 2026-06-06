@@ -1340,6 +1340,21 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
     })
   }
 
+  const packageNotStarted = packages.filter(item =>
+    item.status === 'created' &&
+    item.tasks.length > 0 &&
+    item.tasks.every(task => task.status === 'pending')
+  )
+  if (packageNotStarted.length) {
+    risks.push({
+      title: '私域交付包未启动',
+      label: packageNotStarted.length >= 3 ? '高' : '中',
+      level: packageNotStarted.length >= 3 ? 'high' : 'medium',
+      desc: `${packageNotStarted.length} 个私域交付包已创建但首批任务仍未推进,建议当天确认资料、回款和责任人。`,
+      path: '/leads/private-domain?tab=delivery'
+    })
+  }
+
   const duplicateRisk = contacts.filter(item => item.verification?.duplicateRisk && item.verification.duplicateRisk !== 'none')
   if (duplicateRisk.length) {
     risks.push({

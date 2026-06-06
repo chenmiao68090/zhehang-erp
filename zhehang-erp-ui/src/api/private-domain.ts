@@ -1470,7 +1470,8 @@ function buildBossRisks(
   packages: PrivateDeliveryPackage[],
   followRecords: PrivateFollowRecord[],
   addressInventory: PrivateAddressInventory[] = [],
-  tasks: PrivateTask[] = []
+  tasks: PrivateTask[] = [],
+  addressLocks: PrivateAddressLock[] = []
 ): PrivateBossRisk[] {
   const risks: PrivateBossRisk[] = []
   const intentContacts = contacts.filter(item => ['intent', 'quoted'].includes(item.stage))
@@ -1556,6 +1557,17 @@ function buildBossRisks(
       level: overdueTaskCount >= 3 ? 'high' : 'medium',
       desc: `${packageOverdue.length} 个交付包存在 ${overdueTaskCount} 个逾期任务,建议主管当天介入处理并确认客户预期。`,
       path: '/leads/private-domain?tab=delivery&deliveryFilter=overdue'
+    })
+  }
+
+  const unboundAddressLocks = addressLocks.filter(item => item.status === 'locked' && !item.resourceId)
+  if (unboundAddressLocks.length) {
+    risks.push({
+      title: '地址锁定未绑定资源',
+      label: unboundAddressLocks.length >= 2 ? '高' : '中',
+      level: unboundAddressLocks.length >= 2 ? 'high' : 'medium',
+      desc: `${unboundAddressLocks.length} 条私域地址锁定缺少 ADR 资源编号,资源池无法反查客户,需要交付或渠道当天补绑定。`,
+      path: '/leads/private-domain?tab=delivery&deliveryFilter=address_unbound'
     })
   }
 
@@ -2353,18 +2365,20 @@ export const privateDomainApi = {
     const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
     const tasks = readList<PrivateTask>(TASK_KEY)
     const addressInventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
+    const addressLocks = readList<PrivateAddressLock>(ADDRESS_LOCK_KEY)
     const packages = await hydrateDeliveryPackages(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY), followRecords)
     const summary = calcSummary(contacts, groups, packages, followRecords)
     const addressInventoryStats = {
       totalAvailable: addressInventory.reduce((sum, item) => sum + item.available, 0),
       totalLocked: addressInventory.reduce((sum, item) => sum + item.locked, 0),
       riskCount: addressInventory.filter(item => item.status === 'blocked' || item.available <= 2).length,
-      blockedCount: addressInventory.filter(item => item.status === 'blocked' || item.available <= 0).length
+      blockedCount: addressInventory.filter(item => item.status === 'blocked' || item.available <= 0).length,
+      unboundLockCount: addressLocks.filter(item => item.status === 'locked' && !item.resourceId).length
     }
     return delay({
       summary,
       metrics: buildBossMetrics(summary),
-      risks: buildBossRisks(contacts, packages, followRecords, addressInventory, tasks),
+      risks: buildBossRisks(contacts, packages, followRecords, addressInventory, tasks, addressLocks),
       addressInventoryStats
     })
   },

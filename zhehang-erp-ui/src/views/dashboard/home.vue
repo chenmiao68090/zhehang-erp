@@ -343,16 +343,19 @@ async function loadPrivateBossMetrics() {
     privateBossMetrics.value = data.metrics
     const riskMetric = data.metrics.find(item => item.label === '撞单风险')
     const packageMetric = data.metrics.find(item => item.label === '成交交付包')
-    const addressRisk = data.risks.find(item => item.title.includes('地址库存'))
+    const addressRisk = data.risks.find(item => item.title.includes('地址库存') || item.title.includes('地址锁定'))
     const addressStats = data.addressInventoryStats
+    const unboundLockCount = addressStats.unboundLockCount || 0
     statCards.value = statCards.value.map(item => item.label === '可售地址资源'
       ? {
           ...item,
           value: addressStats.totalAvailable,
-          trend: addressStats.riskCount
+          trend: unboundLockCount
+            ? `待绑 ${unboundLockCount} · 已锁 ${addressStats.totalLocked}`
+            : addressStats.riskCount
             ? `${addressStats.riskCount} 个库存预警 · 已锁 ${addressStats.totalLocked}`
             : `已锁 ${addressStats.totalLocked} · 库存正常`,
-          trendType: addressStats.blockedCount ? 'danger' : addressStats.riskCount ? 'warn' : 'up'
+          trendType: addressStats.blockedCount || unboundLockCount ? 'danger' : addressStats.riskCount ? 'warn' : 'up'
         }
       : item
     )
@@ -366,7 +369,7 @@ async function loadPrivateBossMetrics() {
       ...businessProgress.value
         .filter(item => item.title !== '私域运营')
         .map(item => item.title === '挂靠地址'
-          ? { ...item, value: `${addressStats.totalAvailable} 套`, desc: `可售 ${addressStats.totalAvailable}，已锁 ${addressStats.totalLocked}，预警 ${addressStats.riskCount}` }
+          ? { ...item, value: `${addressStats.totalAvailable} 套`, desc: `可售 ${addressStats.totalAvailable}，已锁 ${addressStats.totalLocked}，预警 ${addressStats.riskCount}，待绑 ${unboundLockCount}` }
           : item
         ),
       { title: '私域运营', value: `${data.summary.intentCount} 条`, desc: `客户 ${data.summary.contactCount}，核验 ${data.summary.verifiedCount}，交付包 ${data.summary.deliveryPackageCount}` }

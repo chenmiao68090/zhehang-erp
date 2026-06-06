@@ -343,9 +343,11 @@ async function loadPrivateBossMetrics() {
     privateBossMetrics.value = data.metrics
     const riskMetric = data.metrics.find(item => item.label === '撞单风险')
     const packageMetric = data.metrics.find(item => item.label === '成交交付包')
+    const addressRisk = data.risks.find(item => item.title.includes('地址库存'))
     focusTags.value = [
       data.summary.duplicateRiskCount ? `私域撞单风险 ${data.summary.duplicateRiskCount} 条` : '私域撞单风险正常',
       `私域成交交付包 ${packageMetric?.value || 0} 个`,
+      addressRisk ? addressRisk.title : '地址库存正常',
       riskMetric?.type === 'danger' ? '需主管仲裁撞单归属' : '归属规则已启用'
     ]
     businessProgress.value = [
@@ -354,7 +356,7 @@ async function loadPrivateBossMetrics() {
     ]
     const privateRisks = (data.risks || []).map((item: PrivateBossRisk) => ({ ...item }))
     riskAlerts.value = [...privateRisks, ...baseRiskAlerts].slice(0, 6)
-    aiSummary.value = `今日重点：私域客户 ${data.summary.contactCount} 家，高意向 ${data.summary.intentCount} 条，撞单风险 ${data.summary.duplicateRiskCount} 条，成交后交付包 ${data.summary.deliveryPackageCount} 个。`
+    aiSummary.value = `今日重点：私域客户 ${data.summary.contactCount} 家，高意向 ${data.summary.intentCount} 条，撞单风险 ${data.summary.duplicateRiskCount} 条，成交后交付包 ${data.summary.deliveryPackageCount} 个${addressRisk ? `，${addressRisk.title}` : ''}。`
   } catch {
     privateBossMetrics.value = privateBossMetrics.value.map(item => ({ ...item, trend: '本地私域数据暂不可读' }))
   }

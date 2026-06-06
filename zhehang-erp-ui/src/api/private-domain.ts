@@ -1323,7 +1323,13 @@ function buildBossMetrics(summary: PrivateSummary): PrivateBossMetric[] {
   ]
 }
 
-function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPackage[], followRecords: PrivateFollowRecord[]): PrivateBossRisk[] {
+function buildBossRisks(
+  contacts: PrivateContact[],
+  packages: PrivateDeliveryPackage[],
+  followRecords: PrivateFollowRecord[],
+  addressInventory: PrivateAddressInventory[] = [],
+  tasks: PrivateTask[] = []
+): PrivateBossRisk[] {
   const risks: PrivateBossRisk[] = []
   const intentContacts = contacts.filter(item => ['intent', 'quoted'].includes(item.stage))
   const latestFollowByContact = new Map<number, PrivateFollowRecord>()
@@ -1408,6 +1414,22 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
       level: overdueTaskCount >= 3 ? 'high' : 'medium',
       desc: `${packageOverdue.length} 个交付包存在 ${overdueTaskCount} 个逾期任务,建议主管当天介入处理并确认客户预期。`,
       path: '/leads/private-domain?tab=delivery&deliveryFilter=overdue'
+    })
+  }
+
+  const addressRiskItems = addressInventory.filter(item => item.status === 'blocked' || item.available <= 2)
+  if (addressRiskItems.length) {
+    const blockedCount = addressRiskItems.filter(item => item.status === 'blocked' || item.available <= 0).length
+    const openReplenishTaskCount = tasks.filter(item =>
+      item.status !== 'done' &&
+      (item.title.includes('地址库存补货') || item.action.includes('地址库存 #'))
+    ).length
+    risks.push({
+      title: '地址库存低于阈值',
+      label: blockedCount ? '高' : '中',
+      level: blockedCount ? 'high' : 'medium',
+      desc: `${addressRiskItems.length} 个挂靠地址库存低于安全线${blockedCount ? `,其中 ${blockedCount} 个已停售或无可售量` : ''};${openReplenishTaskCount ? `已有 ${openReplenishTaskCount} 个补货任务待渠道经理处理。` : '建议立即生成补货任务并确认供应商报价、账期。'}`,
+      path: '/leads/private-domain?tab=tasks&taskFilter=address_stock'
     })
   }
 
@@ -2171,12 +2193,14 @@ export const privateDomainApi = {
     const contacts = readList<PrivateContact>(CONTACT_KEY)
     const groups = readList<PrivateGroup>(GROUP_KEY)
     const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    const tasks = readList<PrivateTask>(TASK_KEY)
+    const addressInventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
     const packages = await hydrateDeliveryPackages(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY), followRecords)
     const summary = calcSummary(contacts, groups, packages, followRecords)
     return delay({
       summary,
       metrics: buildBossMetrics(summary),
-      risks: buildBossRisks(contacts, packages, followRecords)
+      risks: buildBossRisks(contacts, packages, followRecords, addressInventory, tasks)
     })
   },
   async verifyContact(id: number) {

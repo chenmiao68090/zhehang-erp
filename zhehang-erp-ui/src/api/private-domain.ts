@@ -8,6 +8,63 @@ export type OpsCheckStatus = 'ready' | 'partial' | 'missing'
 export type DailyActionStatus = 'todo' | 'doing' | 'blocked' | 'done'
 export type PrivateImportStatus = 'ready' | 'duplicate' | 'error'
 export type PrivateDuplicateRisk = CompanyResolveResult['duplicateRisk']
+export type PrivateOwnerPolicy = 'first_touch' | 'source_team' | 'manager_assign' | 'channel_dedicated' | 'score_priority'
+export type PrivateCollisionPolicy = 'block' | 'collaborate' | 'manager' | 'merge'
+export type PrivateDeliveryStatus = 'created' | 'in_progress' | 'done'
+
+export interface PrivateOwnershipRule {
+  id: number
+  source: PrivateSource
+  enabled: boolean
+  ownerPolicy: PrivateOwnerPolicy
+  ownerTeam: string
+  defaultOwner: string
+  protectDays: number
+  firstTouchMinutes: number
+  recycleDays: number
+  collisionPolicy: PrivateCollisionPolicy
+  priority: number
+  remark: string
+  updatedAt: string
+}
+
+export interface PrivateWecomConfig {
+  corpId: string
+  contactSecret: string
+  customerGroupSecret: string
+  callbackUrl: string
+  token: string
+  aesKey: string
+  syncExternalContact: boolean
+  syncCustomerGroup: boolean
+  syncTag: boolean
+  syncInteraction: boolean
+  syncIntervalMinutes: number
+  ownerName: string
+  updatedAt: string
+}
+
+export interface PrivateDeliveryPackage {
+  id: number
+  contactId: number
+  companyName: string
+  contactName: string
+  serviceLine: string
+  packageName: string
+  ownerName: string
+  status: PrivateDeliveryStatus
+  createdAt: string
+  dueDate: string
+  taskIds: number[]
+  tasks: PrivateTask[]
+}
+
+export interface PrivateBossMetric {
+  label: string
+  value: string | number
+  trend: string
+  type: 'up' | 'warn' | 'danger'
+}
 
 export interface PrivateCompanyVerification {
   matched: boolean
@@ -185,6 +242,11 @@ export interface PrivateSummary {
   intentCount: number
   silentCount: number
   convertedCount: number
+  verifiedCount: number
+  duplicateRiskCount: number
+  orderedCount: number
+  deliveryPackageCount: number
+  deliveryTaskCount: number
   groupCount: number
   touchCount: number
   estimatedAmount: number
@@ -198,6 +260,9 @@ const CONTENT_KEY = 'biz_private_contents'
 const TASK_KEY = 'biz_private_tasks'
 const INTEGRATION_KEY = 'biz_private_integrations'
 const PROFILE_KEY = 'biz_private_ops_profile'
+const OWNERSHIP_RULE_KEY = 'biz_private_ownership_rules'
+const WECOM_CONFIG_KEY = 'biz_private_wecom_config'
+const DELIVERY_PACKAGE_KEY = 'biz_private_delivery_packages'
 const PRIVATE_SOURCE_OPTIONS: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
 const PRIVATE_STAGE_OPTIONS: PrivateStage[] = ['new', 'nurturing', 'intent', 'quoted', 'ordered', 'silent']
 const ANSWER_OPTIONS = {
@@ -329,6 +394,177 @@ function readProfile(): PrivateOpsProfile {
 
 function writeProfile(profile: PrivateOpsProfile) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
+}
+
+function defaultOwnershipRules(): PrivateOwnershipRule[] {
+  return [
+    {
+      id: 1,
+      source: '企业微信',
+      enabled: true,
+      ownerPolicy: 'source_team',
+      ownerTeam: '私域运营',
+      defaultOwner: '何海琳',
+      protectDays: 15,
+      firstTouchMinutes: 30,
+      recycleDays: 3,
+      collisionPolicy: 'collaborate',
+      priority: 90,
+      remark: '企微客户以来源部门为主,高意向 30 分钟内必须分配顾问。',
+      updatedAt: ts()
+    },
+    {
+      id: 2,
+      source: '个人微信',
+      enabled: true,
+      ownerPolicy: 'first_touch',
+      ownerTeam: '销售顾问',
+      defaultOwner: '首添人',
+      protectDays: 10,
+      firstTouchMinutes: 60,
+      recycleDays: 5,
+      collisionPolicy: 'manager',
+      priority: 70,
+      remark: '个人微信先尊重首添人,撞单由主管仲裁。',
+      updatedAt: ts()
+    },
+    {
+      id: 3,
+      source: '微信群',
+      enabled: true,
+      ownerPolicy: 'source_team',
+      ownerTeam: '社群运营',
+      defaultOwner: '陈思旭',
+      protectDays: 12,
+      firstTouchMinutes: 45,
+      recycleDays: 4,
+      collisionPolicy: 'collaborate',
+      priority: 82,
+      remark: '社群客户先归群主/社群运营,成交前补销售顾问协作。',
+      updatedAt: ts()
+    },
+    {
+      id: 4,
+      source: '朋友圈',
+      enabled: true,
+      ownerPolicy: 'score_priority',
+      ownerTeam: '网销运营',
+      defaultOwner: '网销二组',
+      protectDays: 7,
+      firstTouchMinutes: 60,
+      recycleDays: 3,
+      collisionPolicy: 'manager',
+      priority: 65,
+      remark: '朋友圈互动按客户评分和空闲产能分配。',
+      updatedAt: ts()
+    },
+    {
+      id: 5,
+      source: '公众号',
+      enabled: true,
+      ownerPolicy: 'score_priority',
+      ownerTeam: '网销运营',
+      defaultOwner: '财税顾问组',
+      protectDays: 7,
+      firstTouchMinutes: 60,
+      recycleDays: 3,
+      collisionPolicy: 'merge',
+      priority: 62,
+      remark: '公众号留资优先补工商信息,重复客户合并线索记录。',
+      updatedAt: ts()
+    },
+    {
+      id: 6,
+      source: '视频号',
+      enabled: true,
+      ownerPolicy: 'manager_assign',
+      ownerTeam: '网销运营',
+      defaultOwner: '刘洋',
+      protectDays: 5,
+      firstTouchMinutes: 30,
+      recycleDays: 2,
+      collisionPolicy: 'manager',
+      priority: 68,
+      remark: '直播留资波动大,由主管按意向和服务线快速派单。',
+      updatedAt: ts()
+    },
+    {
+      id: 7,
+      source: '老客转介绍',
+      enabled: true,
+      ownerPolicy: 'channel_dedicated',
+      ownerTeam: '渠道经理',
+      defaultOwner: '王舟',
+      protectDays: 30,
+      firstTouchMinutes: 120,
+      recycleDays: 10,
+      collisionPolicy: 'block',
+      priority: 96,
+      remark: '老客转介绍和同行渠道单独保护,涉及挂靠地址先核库存和账期。',
+      updatedAt: ts()
+    }
+  ]
+}
+
+function readOwnershipRules() {
+  const rules = readList<PrivateOwnershipRule>(OWNERSHIP_RULE_KEY)
+  return rules.length ? rules : defaultOwnershipRules()
+}
+
+function writeOwnershipRules(rules: PrivateOwnershipRule[]) {
+  writeList(OWNERSHIP_RULE_KEY, rules)
+}
+
+function defaultWecomConfig(): PrivateWecomConfig {
+  return {
+    corpId: '',
+    contactSecret: '',
+    customerGroupSecret: '',
+    callbackUrl: 'https://your-domain.com/api/wecom/private-domain/callback',
+    token: '',
+    aesKey: '',
+    syncExternalContact: true,
+    syncCustomerGroup: true,
+    syncTag: true,
+    syncInteraction: true,
+    syncIntervalMinutes: 30,
+    ownerName: '系统管理员',
+    updatedAt: ts()
+  }
+}
+
+function readWecomConfig(): PrivateWecomConfig {
+  try {
+    const raw = localStorage.getItem(WECOM_CONFIG_KEY)
+    return raw ? { ...defaultWecomConfig(), ...JSON.parse(raw) } : defaultWecomConfig()
+  } catch {
+    return defaultWecomConfig()
+  }
+}
+
+function writeWecomConfig(config: PrivateWecomConfig) {
+  localStorage.setItem(WECOM_CONFIG_KEY, JSON.stringify(config))
+}
+
+function isWecomReady(config: PrivateWecomConfig) {
+  return Boolean(config.corpId && config.contactSecret && config.token && config.aesKey)
+}
+
+function syncWecomIntegration(config: PrivateWecomConfig) {
+  const integrations = readList<PrivateIntegration>(INTEGRATION_KEY)
+  const idx = integrations.findIndex(item => item.key === 'wecom-contact')
+  if (idx < 0) return
+  const connected = isWecomReady(config)
+  integrations[idx] = {
+    ...integrations[idx],
+    status: connected ? 'connected' : 'pending',
+    ownerName: config.ownerName || integrations[idx].ownerName,
+    lastSyncAt: connected ? ts(0, 9, 0) : '待授权',
+    description: connected
+      ? '已保存企微客户联系参数,可同步外部联系人、客户群、标签和互动记录。'
+      : '同步外部联系人、企微客户群、员工归属和客户标签。'
+  }
+  writeList(INTEGRATION_KEY, integrations)
 }
 
 function ensureSeeds() {
@@ -481,9 +717,12 @@ function ensureSeeds() {
   }
 
   if (!localStorage.getItem(PROFILE_KEY)) writeProfile(defaultProfile())
+  if (!readList<PrivateOwnershipRule>(OWNERSHIP_RULE_KEY).length) writeOwnershipRules(defaultOwnershipRules())
+  if (!localStorage.getItem(WECOM_CONFIG_KEY)) writeWecomConfig(defaultWecomConfig())
+  if (!localStorage.getItem(DELIVERY_PACKAGE_KEY)) writeList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY, [])
 }
 
-function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[]): PrivateSummary {
+function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[], packages: PrivateDeliveryPackage[] = []): PrivateSummary {
   const intentStages: PrivateStage[] = ['intent', 'quoted', 'ordered']
   const stages: Array<{ key: PrivateStage; label: string }> = [
     { key: 'new', label: '新触点' },
@@ -506,6 +745,11 @@ function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[]): Privat
     intentCount: contacts.filter(item => intentStages.includes(item.stage)).length,
     silentCount: contacts.filter(item => item.stage === 'silent').length,
     convertedCount: contacts.filter(item => item.convertedLeadId).length,
+    verifiedCount: contacts.filter(item => item.verification?.matched).length,
+    duplicateRiskCount: contacts.filter(item => item.verification?.duplicateRisk && item.verification.duplicateRisk !== 'none').length,
+    orderedCount: contacts.filter(item => item.stage === 'ordered').length,
+    deliveryPackageCount: packages.length,
+    deliveryTaskCount: packages.reduce((sum, item) => sum + item.taskIds.length, 0),
     groupCount: groups.length,
     touchCount: contacts.reduce((sum, item) => sum + item.touchCount, 0),
     estimatedAmount: contacts.filter(item => intentStages.includes(item.stage)).reduce((sum, item) => sum + item.estimatedAmount, 0),
@@ -521,7 +765,7 @@ function calcSummary(contacts: PrivateContact[], groups: PrivateGroup[]): Privat
   }
 }
 
-function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegration[]): PrivateOpsCheck[] {
+function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegration[], rules: PrivateOwnershipRule[], packages: PrivateDeliveryPackage[]): PrivateOpsCheck[] {
   const wecom = integrations.find(item => item.key === 'wecom-contact')
   const wechat = integrations.find(item => item.key === 'wechat-service')
   return [
@@ -531,7 +775,7 @@ function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegra
       status: wecom?.status === 'connected' && wechat?.status === 'connected' ? 'ready' : 'partial',
       ownerName: '私域运营',
       current: `已覆盖 ${profile.privatePlatforms.join('、')}`,
-      next: wecom?.status === 'connected' ? '补齐公众号/个人微信留资映射' : '先授权企微客户联系,再接公众号/微信客服',
+      next: wecom?.status === 'connected' ? '继续补齐公众号/个人微信留资映射' : '先在接入配置里保存企微客户联系参数',
       path: '/leads/private-domain'
     },
     {
@@ -548,9 +792,9 @@ function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegra
       name: '分配与保护期',
       status: 'ready',
       ownerName: '销售主管',
-      current: '已有分配规则、回收规则、公海私海和撞单管理',
-      next: '把私域来源、同行渠道、地址挂靠分别配置不同保护期',
-      path: '/system/distribute-config'
+      current: `已维护 ${rules.filter(item => item.enabled).length} 条私域归属规则,覆盖来源部门、首添人、保护期、回收和撞单策略`,
+      next: '后续按实际命中率、回收率和撞单仲裁结果复盘规则',
+      path: '/leads/private-domain'
     },
     {
       id: 'follow',
@@ -564,19 +808,19 @@ function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegra
     {
       id: 'delivery',
       name: '成交后交付',
-      status: 'partial',
+      status: packages.length ? 'ready' : 'partial',
       ownerName: '财税交付',
-      current: '已有提单、财务核对、报税日历和任务中心',
-      next: '按服务项目自动生成工商/财税/地址交付任务包',
+      current: packages.length ? `已生成 ${packages.length} 个私域成交交付包,自动挂接任务中心` : '已支持按服务项目生成工商/财税/地址交付任务包',
+      next: packages.length ? '下一步把交付包接到真实订单、回款和报税日历' : '从高意向或成交客户生成第一批交付包',
       path: '/tax/calendar'
     },
     {
       id: 'boss',
       name: '老板经营看板',
-      status: 'partial',
+      status: 'ready',
       ownerName: '老板/管理层',
-      current: '首页和驾驶舱已有线索、ROI、回款、交付指标',
-      next: '统一按来源、部门、个人、服务线做利润和转化追踪',
+      current: '首页已加入私域经营指标,可看客户量、意向、工商核验、撞单和交付包',
+      next: '后续继续按来源、部门、个人、服务线做利润和转化追踪',
       path: '/dashboard/home'
     }
   ]
@@ -854,6 +1098,82 @@ function contactFromImport(row: PrivateContactImportRow, id: number, verificatio
   return applyVerification(contact, verification)
 }
 
+function applyOwnershipRule(contact: PrivateContact, rules = readOwnershipRules()): PrivateContact {
+  const rule = rules.find(item => item.enabled && item.source === contact.source)
+  if (!rule) return contact
+  const ownerName = contact.ownerName && contact.ownerName !== '待分配'
+    ? contact.ownerName
+    : rule.defaultOwner || rule.ownerTeam || '待分配'
+  const ruleTags = new Set(contact.tags)
+  ruleTags.add(`${rule.protectDays}天保护期`)
+  if (rule.collisionPolicy === 'block') ruleTags.add('渠道保护')
+  if (rule.ownerPolicy === 'first_touch') ruleTags.add('首添归属')
+  if (rule.ownerPolicy === 'source_team') ruleTags.add('来源部门归属')
+  return {
+    ...contact,
+    ownerName,
+    tags: Array.from(ruleTags).slice(0, 8),
+    nextAction: contact.nextAction || `${rule.firstTouchMinutes}分钟内完成首次触达`
+  }
+}
+
+function deliveryPlanFor(contact: PrivateContact) {
+  const text = `${contact.serviceLine}${contact.demand}${contact.tags.join('')}`
+  const base = [
+    { title: '成交资料确认', action: '核对合同、报价、付款节点、联系人和开票主体', role: contact.ownerName, offsetDays: 0, priority: '高' as const }
+  ]
+  if (/同行|挂靠|地址/.test(text)) {
+    return [
+      ...base,
+      { title: '地址库存锁定', action: '锁定可售地址,确认区域、价格、账期和供应商', role: '渠道经理', offsetDays: 0, priority: '高' as const },
+      { title: '挂靠资料收集', action: '收集法人、股东、注册地址使用资料和授权材料', role: '工商交付', offsetDays: 1, priority: '高' as const },
+      { title: '异常/地址流程跟进', action: '跟进市场监管/税务地址异常解除或迁入流程', role: '工商交付', offsetDays: 3, priority: '中' as const },
+      { title: '渠道应收确认', action: '确认同行月结额度、返点、应收账期和回款责任人', role: '财务核对', offsetDays: 3, priority: '中' as const }
+    ]
+  }
+  if (/注销/.test(text)) {
+    return [
+      ...base,
+      { title: '注销前税务体检', action: '核对税控、发票、申报、欠税和异常状态', role: '财税交付', offsetDays: 1, priority: '高' as const },
+      { title: '清税资料收集', action: '收集营业执照、公章、账套、实名信息和清税材料', role: '工商交付', offsetDays: 2, priority: '高' as const },
+      { title: '注销流程排期', action: '排期税务注销、工商注销、公示和银行销户节点', role: '项目交付', offsetDays: 4, priority: '中' as const }
+    ]
+  }
+  if (/代理记账|财税|税务|体检|筹划|出口退税/.test(text)) {
+    return [
+      ...base,
+      { title: '账套与税务资料交接', action: '收集执照、税控、电子税务局、银行流水和票据资料', role: '财税交付', offsetDays: 1, priority: '高' as const },
+      { title: '税务资质和风险核验', action: '核验纳税人资格、申报状态、欠税异常和历史账务风险', role: '财税主管', offsetDays: 2, priority: '高' as const },
+      { title: '首月做账排期', action: '确认首月申报期、票据截止日、客户交票方式和服务群', role: '代账会计', offsetDays: 3, priority: '中' as const },
+      { title: '客户成功建群', action: '建立服务群,同步交付清单、负责人和续费提醒规则', role: '客户成功', offsetDays: 3, priority: '中' as const }
+    ]
+  }
+  return [
+    ...base,
+    { title: '工商资料收集', action: '确认名称、经营范围、股东、法人和地址材料', role: '工商交付', offsetDays: 1, priority: '高' as const },
+    { title: '财税交付预检查', action: '确认是否需要代理记账、税务报到、银行开户和社保公积金', role: '财税交付', offsetDays: 2, priority: '中' as const },
+    { title: '交付节点同步客户', action: '同步办理节点、材料缺口、预计完成时间和责任人', role: '项目交付', offsetDays: 3, priority: '中' as const }
+  ]
+}
+
+function packageNameOf(contact: PrivateContact) {
+  if (/同行|挂靠|地址/.test(`${contact.serviceLine}${contact.demand}`)) return '地址挂靠/渠道交付包'
+  if (/注销/.test(`${contact.serviceLine}${contact.demand}`)) return '工商注销交付包'
+  if (/代理记账|财税|税务|体检|筹划|出口退税/.test(`${contact.serviceLine}${contact.demand}`)) return '财税服务交付包'
+  return '工商财税综合交付包'
+}
+
+function buildBossMetrics(summary: PrivateSummary): PrivateBossMetric[] {
+  const intentRate = summary.contactCount ? Math.round(summary.intentCount / summary.contactCount * 100) : 0
+  const verifyRate = summary.contactCount ? Math.round(summary.verifiedCount / summary.contactCount * 100) : 0
+  return [
+    { label: '私域客户', value: summary.contactCount, trend: `高意向 ${summary.intentCount} · ${intentRate}%`, type: intentRate >= 40 ? 'up' : 'warn' },
+    { label: '工商核验率', value: `${verifyRate}%`, trend: `已核验 ${summary.verifiedCount} 家`, type: verifyRate >= 60 ? 'up' : 'warn' },
+    { label: '撞单风险', value: summary.duplicateRiskCount, trend: summary.duplicateRiskCount ? '需主管仲裁' : '暂无异常', type: summary.duplicateRiskCount ? 'danger' : 'up' },
+    { label: '成交交付包', value: summary.deliveryPackageCount, trend: `任务 ${summary.deliveryTaskCount} 个`, type: summary.deliveryPackageCount ? 'up' : 'warn' }
+  ]
+}
+
 export const privateDomainApi = {
   importTemplate() {
     return delay({
@@ -868,16 +1188,24 @@ export const privateDomainApi = {
     const contents = readList<PrivateContent>(CONTENT_KEY)
     const tasks = readList<PrivateTask>(TASK_KEY)
     const integrations = readList<PrivateIntegration>(INTEGRATION_KEY)
+    const ownershipRules = readOwnershipRules()
+    const wecomConfig = readWecomConfig()
+    const deliveryPackages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
     const opsProfile = readProfile()
+    const summary = calcSummary(contacts, groups, deliveryPackages)
     return delay({
-      summary: calcSummary(contacts, groups),
+      summary,
       contacts,
       groups,
       contents,
       tasks,
       integrations,
+      ownershipRules,
+      wecomConfig,
+      deliveryPackages,
+      bossMetrics: buildBossMetrics(summary),
       opsProfile,
-      opsChecks: buildOpsChecks(opsProfile, integrations),
+      opsChecks: buildOpsChecks(opsProfile, integrations, ownershipRules, deliveryPackages),
       dailyActions: buildDailyActions(opsProfile)
     })
   },
@@ -908,11 +1236,12 @@ export const privateDomainApi = {
   async importContacts(rows: PrivateContactImportRow[]): Promise<PrivateImportResult> {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)
+    const ownershipRules = readOwnershipRules()
     const preview = await buildImportPreview(rows, contacts)
     let nextId = maxId(contacts)
     const importedContacts = preview
       .filter(item => item.status === 'ready')
-      .map(item => contactFromImport(item.data, ++nextId, item.verification))
+      .map(item => applyOwnershipRule(contactFromImport(item.data, ++nextId, item.verification), ownershipRules))
     if (importedContacts.length) writeList(CONTACT_KEY, [...importedContacts, ...contacts])
     return delay({
       total: preview.length,
@@ -934,6 +1263,109 @@ export const privateDomainApi = {
     if (params.stage) contacts = contacts.filter(item => item.stage === params.stage)
     contacts = contacts.sort((a, b) => b.score - a.score || b.lastTouchAt.localeCompare(a.lastTouchAt))
     return delay(contacts)
+  },
+  async listOwnershipRules() {
+    ensureSeeds()
+    return delay(readOwnershipRules())
+  },
+  async saveOwnershipRule(rule: PrivateOwnershipRule) {
+    ensureSeeds()
+    const rules = readOwnershipRules()
+    const idx = rules.findIndex(item => item.id === rule.id)
+    const payload: PrivateOwnershipRule = {
+      ...rule,
+      protectDays: Math.max(0, Number(rule.protectDays || 0)),
+      firstTouchMinutes: Math.max(0, Number(rule.firstTouchMinutes || 0)),
+      recycleDays: Math.max(0, Number(rule.recycleDays || 0)),
+      priority: Math.max(0, Number(rule.priority || 0)),
+      updatedAt: ts()
+    }
+    if (idx >= 0) rules[idx] = payload
+    else rules.unshift({ ...payload, id: maxId(rules) + 1 })
+    writeOwnershipRules(rules)
+    return delay(payload)
+  },
+  async getWecomConfig() {
+    ensureSeeds()
+    return delay(readWecomConfig())
+  },
+  async saveWecomConfig(config: PrivateWecomConfig) {
+    ensureSeeds()
+    const payload: PrivateWecomConfig = {
+      ...defaultWecomConfig(),
+      ...config,
+      syncIntervalMinutes: Math.max(5, Number(config.syncIntervalMinutes || 30)),
+      updatedAt: ts()
+    }
+    writeWecomConfig(payload)
+    syncWecomIntegration(payload)
+    return delay(payload)
+  },
+  async listDeliveryPackages() {
+    ensureSeeds()
+    return delay(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY))
+  },
+  async createDeliveryPackageFromContact(id: number) {
+    ensureSeeds()
+    const contacts = readList<PrivateContact>(CONTACT_KEY)
+    const contactIdx = contacts.findIndex(item => item.id === id)
+    if (contactIdx < 0) throw new Error('私域客户不存在')
+    const contact = contacts[contactIdx]
+    const packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+    const existed = packages.find(item => item.contactId === id)
+    if (existed) return delay({ package: existed, reused: true })
+
+    const tasks = readList<PrivateTask>(TASK_KEY)
+    let nextTaskId = maxId(tasks)
+    const plan = deliveryPlanFor(contact)
+    const deliveryTasks: PrivateTask[] = plan.map((step) => ({
+      id: ++nextTaskId,
+      title: `${contact.companyName} - ${step.title}`,
+      contactName: contact.name,
+      companyName: contact.companyName,
+      ownerName: step.role,
+      dueTime: ts(step.offsetDays, 17, 30),
+      priority: step.priority,
+      status: 'pending',
+      action: step.action
+    }))
+    const dueDate = deliveryTasks[deliveryTasks.length - 1]?.dueTime || ts(3, 17, 30)
+    const deliveryPackage: PrivateDeliveryPackage = {
+      id: maxId(packages) + 1,
+      contactId: contact.id,
+      companyName: contact.companyName,
+      contactName: contact.name,
+      serviceLine: contact.serviceLine,
+      packageName: packageNameOf(contact),
+      ownerName: contact.ownerName,
+      status: 'created',
+      createdAt: ts(),
+      dueDate,
+      taskIds: deliveryTasks.map(item => item.id),
+      tasks: deliveryTasks
+    }
+    writeList(TASK_KEY, [...deliveryTasks, ...tasks])
+    writeList(DELIVERY_PACKAGE_KEY, [deliveryPackage, ...packages])
+    contacts[contactIdx] = {
+      ...contact,
+      stage: 'ordered',
+      lastTouchAt: ts(),
+      nextAction: `已生成${deliveryPackage.packageName},请交付团队按任务包推进`
+    }
+    writeList(CONTACT_KEY, contacts)
+    return delay({ package: deliveryPackage, reused: false })
+  },
+  async bossSnapshot() {
+    ensureSeeds()
+    const summary = calcSummary(
+      readList<PrivateContact>(CONTACT_KEY),
+      readList<PrivateGroup>(GROUP_KEY),
+      readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+    )
+    return delay({
+      summary,
+      metrics: buildBossMetrics(summary)
+    })
   },
   async verifyContact(id: number) {
     ensureSeeds()

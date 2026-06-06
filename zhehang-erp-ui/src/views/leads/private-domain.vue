@@ -209,6 +209,84 @@
           </div>
         </el-tab-pane>
 
+        <el-tab-pane label="归属规则" name="ownership">
+          <div class="rule-panel">
+            <div class="panel-title compact">
+              <div>
+                <h2>私域归属规则</h2>
+                <p>把来源部门、首添人、保护期、回收天数和撞单优先级放在同一张表里维护，避免销售、公海、渠道之间口径不一致。</p>
+              </div>
+              <el-tag type="primary" effect="plain">A · 归属闭环</el-tag>
+            </div>
+            <div class="rule-toolbar">
+              <span>已启用 {{ ownershipRules.filter(item => item.enabled).length }} 条规则</span>
+              <span>同行/挂靠地址客户默认独立保护，撞单先冻结再仲裁。</span>
+            </div>
+            <el-table :data="ownershipRules" border stripe class="ownership-table">
+              <el-table-column prop="source" label="来源触点" width="110" fixed="left" />
+              <el-table-column label="启用" width="80" align="center">
+                <template #default="{ row }">
+                  <el-switch v-model="row.enabled" />
+                </template>
+              </el-table-column>
+              <el-table-column label="归属口径" min-width="160">
+                <template #default="{ row }">
+                  <el-select v-model="row.ownerPolicy" size="small">
+                    <el-option v-for="item in ownerPolicyOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="来源部门" min-width="140">
+                <template #default="{ row }">
+                  <el-input v-model="row.ownerTeam" size="small" />
+                </template>
+              </el-table-column>
+              <el-table-column label="默认负责人" min-width="130">
+                <template #default="{ row }">
+                  <el-input v-model="row.defaultOwner" size="small" />
+                </template>
+              </el-table-column>
+              <el-table-column label="保护期" width="110" align="center">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.protectDays" :min="0" :max="120" size="small" controls-position="right" />
+                </template>
+              </el-table-column>
+              <el-table-column label="首触时限" width="120" align="center">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.firstTouchMinutes" :min="0" :max="480" size="small" controls-position="right" />
+                </template>
+              </el-table-column>
+              <el-table-column label="回收天数" width="120" align="center">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.recycleDays" :min="0" :max="60" size="small" controls-position="right" />
+                </template>
+              </el-table-column>
+              <el-table-column label="撞单策略" min-width="150">
+                <template #default="{ row }">
+                  <el-select v-model="row.collisionPolicy" size="small">
+                    <el-option v-for="item in collisionPolicyOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="优先级" width="110" align="center">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.priority" :min="0" :max="100" size="small" controls-position="right" />
+                </template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="260">
+                <template #default="{ row }">
+                  <el-input v-model="row.remark" size="small" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" :loading="isRuleSaving(row.id)" @click="saveOwnershipRule(row)">保存规则</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="批量导入" name="import">
           <div class="import-layout">
             <div class="import-main">
@@ -379,7 +457,7 @@
             <el-table-column label="需求" min-width="260" prop="demand" show-overflow-tooltip />
             <el-table-column label="最近互动" width="150" prop="lastTouchAt" />
             <el-table-column label="下一动作" min-width="230" prop="nextAction" show-overflow-tooltip />
-            <el-table-column label="操作" width="330" fixed="right">
+            <el-table-column label="操作" width="410" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click.stop="openContact(row)">详情</el-button>
                 <el-button
@@ -398,6 +476,14 @@
                   @click.stop="convertLead(row)"
                 >
                   {{ row.convertedLeadId ? '已入库' : '入库线索' }}
+                </el-button>
+                <el-button
+                  link
+                  type="success"
+                  :loading="isCreatingDelivery(row.id)"
+                  @click.stop="createDeliveryPackage(row)"
+                >
+                  交付包
                 </el-button>
                 <el-button link type="warning" @click.stop="markIntent(row)">标记意向</el-button>
               </template>
@@ -482,7 +568,123 @@
           </el-table>
         </el-tab-pane>
 
+        <el-tab-pane label="交付包" name="delivery">
+          <div class="delivery-panel">
+            <div class="panel-title compact">
+              <div>
+                <h2>成交交付包</h2>
+                <p>私域成交后自动拆成工商、财税、地址、渠道应收等任务，避免销售签完单后交付断档。</p>
+              </div>
+              <el-tag type="success" effect="plain">C · 成交后交付</el-tag>
+            </div>
+            <div class="delivery-summary">
+              <div><span>交付包</span><b>{{ deliveryPackages.length }}</b></div>
+              <div><span>任务数</span><b>{{ deliveryPackages.reduce((sum, item) => sum + item.taskIds.length, 0) }}</b></div>
+              <div><span>待推进</span><b>{{ deliveryPackages.filter(item => item.status !== 'done').length }}</b></div>
+              <div><span>自动勾稽</span><b>任务中心</b></div>
+            </div>
+            <el-table :data="deliveryPackages" border stripe empty-text="还没有交付包，可从客户雷达或详情页生成">
+              <el-table-column label="交付包" min-width="260">
+                <template #default="{ row }">
+                  <strong>{{ row.packageName }}</strong>
+                  <div class="sub-line">{{ row.companyName }} · {{ row.contactName }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="serviceLine" label="业务线" width="130" />
+              <el-table-column prop="ownerName" label="销售/负责人" width="130" />
+              <el-table-column prop="createdAt" label="创建时间" width="150" />
+              <el-table-column prop="dueDate" label="最晚节点" width="150" />
+              <el-table-column label="任务数" width="90" align="center">
+                <template #default="{ row }">{{ row.taskIds.length }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="deliveryStatusTag(row.status)" size="small">{{ deliveryStatusText(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="任务拆解" min-width="320">
+                <template #default="{ row }">
+                  <div class="package-task-list">
+                    <span v-for="task in row.tasks.slice(0, 4)" :key="task.id">{{ task.title.replace(row.companyName + ' - ', '') }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="接入配置" name="config">
+          <div class="wecom-config-card">
+            <div class="panel-title compact">
+              <div>
+                <h2>企业微信接入参数</h2>
+                <p>用于同步外部联系人、客户群、标签和互动记录。先保存本地配置，后续接真实企微回调和定时同步。</p>
+              </div>
+              <el-tag :type="wecomReady ? 'success' : 'warning'" effect="plain">{{ wecomReady ? '已具备接入参数' : '待补参数' }}</el-tag>
+            </div>
+            <el-form label-position="top" class="wecom-form">
+              <el-row :gutter="12">
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="企业 ID / CorpId">
+                    <el-input v-model="wecomConfig.corpId" placeholder="wwxxxxxxxx" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="客户联系 Secret">
+                    <el-input v-model="wecomConfig.contactSecret" type="password" show-password />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="客户群 Secret">
+                    <el-input v-model="wecomConfig.customerGroupSecret" type="password" show-password />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="12">
+                <el-col :xs="24" :md="10">
+                  <el-form-item label="回调 URL">
+                    <el-input v-model="wecomConfig.callbackUrl" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="7">
+                  <el-form-item label="Token">
+                    <el-input v-model="wecomConfig.token" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="7">
+                  <el-form-item label="EncodingAESKey">
+                    <el-input v-model="wecomConfig.aesKey" type="password" show-password />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="12">
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="同步负责人">
+                    <el-input v-model="wecomConfig.ownerName" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="同步间隔（分钟）">
+                    <el-input-number v-model="wecomConfig.syncIntervalMinutes" :min="5" :max="1440" controls-position="right" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="同步范围">
+                    <div class="sync-switches">
+                      <el-checkbox v-model="wecomConfig.syncExternalContact">外部联系人</el-checkbox>
+                      <el-checkbox v-model="wecomConfig.syncCustomerGroup">客户群</el-checkbox>
+                      <el-checkbox v-model="wecomConfig.syncTag">标签</el-checkbox>
+                      <el-checkbox v-model="wecomConfig.syncInteraction">互动记录</el-checkbox>
+                    </div>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
+            <div class="profile-actions">
+              <span>最近更新：{{ wecomConfig.updatedAt || '-' }}</span>
+              <el-button type="primary" :loading="wecomSaving" @click="saveWecomConfig">保存企微配置</el-button>
+            </div>
+          </div>
           <div class="config-grid">
             <div v-for="item in integrations" :key="item.key" class="config-card">
               <div class="config-title">
@@ -608,6 +810,13 @@
         <el-button v-if="drawer.row" @click.stop="createFollowTask(drawer.row)">生成跟进任务</el-button>
         <el-button
           v-if="drawer.row"
+          :loading="isCreatingDelivery(drawer.row.id)"
+          @click.stop="createDeliveryPackage(drawer.row)"
+        >
+          生成交付包
+        </el-button>
+        <el-button
+          v-if="drawer.row"
           type="primary"
           :loading="isConverting(drawer.row.id)"
           :disabled="!!drawer.row.convertedLeadId || isConverting(drawer.row.id)"
@@ -638,18 +847,24 @@ import {
   type PrivateContactImportRow,
   type PrivateContent,
   type PrivateDailyAction,
+  type PrivateDeliveryPackage,
+  type PrivateDeliveryStatus,
   type PrivateDuplicateRisk,
   type PrivateGroup,
   type PrivateImportPreviewRow,
   type PrivateImportStatus,
   type PrivateIntegration,
+  type PrivateCollisionPolicy,
+  type PrivateOwnerPolicy,
+  type PrivateOwnershipRule,
   type PrivateOpsCheck,
   type PrivateOpsProfile,
   type PrivateSource,
   type PrivateStage,
   type PrivateSummary,
   type PrivateTask,
-  type PrivateTaskStatus
+  type PrivateTaskStatus,
+  type PrivateWecomConfig
 } from '@/api/private-domain'
 
 const router = useRouter()
@@ -660,11 +875,16 @@ const groups = ref<PrivateGroup[]>([])
 const contents = ref<PrivateContent[]>([])
 const tasks = ref<PrivateTask[]>([])
 const integrations = ref<PrivateIntegration[]>([])
+const ownershipRules = ref<PrivateOwnershipRule[]>([])
+const deliveryPackages = ref<PrivateDeliveryPackage[]>([])
 const convertingIds = ref<number[]>([])
 const verifyingIds = ref<number[]>([])
+const deliveryCreatingIds = ref<number[]>([])
+const ruleSavingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
+const wecomSaving = ref(false)
 const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
 const importFileName = ref('')
@@ -676,6 +896,11 @@ const summary = reactive<PrivateSummary>({
   intentCount: 0,
   silentCount: 0,
   convertedCount: 0,
+  verifiedCount: 0,
+  duplicateRiskCount: 0,
+  orderedCount: 0,
+  deliveryPackageCount: 0,
+  deliveryTaskCount: 0,
   groupCount: 0,
   touchCount: 0,
   estimatedAmount: 0,
@@ -706,12 +931,40 @@ const opsProfile = reactive<PrivateOpsProfile>({
   },
   updatedAt: ''
 })
+const wecomConfig = reactive<PrivateWecomConfig>({
+  corpId: '',
+  contactSecret: '',
+  customerGroupSecret: '',
+  callbackUrl: '',
+  token: '',
+  aesKey: '',
+  syncExternalContact: true,
+  syncCustomerGroup: true,
+  syncTag: true,
+  syncInteraction: true,
+  syncIntervalMinutes: 30,
+  ownerName: '系统管理员',
+  updatedAt: ''
+})
 
 const sourceOptions: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
 const serviceOptions = ['代理记账', '工商注册', '地址挂靠', '异常解除', '税务筹划', '公司注销', '同行渠道', '财税体检', '出口退税']
 const departmentOptions = ['网销运营', '私域运营', '电销坐席', '销售顾问', '渠道经理', '财税交付', '财务核对', '老板/管理层']
 const requiredFieldOptions = ['公司名称', '联系人', '手机号', '微信号', '来源触点', '客户需求', '工商状态', '税务资质', '地址需求', '预算金额', '负责人', '下次跟进时间']
 const workflowSteps = ['私域触点', '公司核验', '查重分配', '销售跟进', '报价提单', '财税交付', '回款续费']
+const ownerPolicyOptions: Array<{ label: string; value: PrivateOwnerPolicy }> = [
+  { label: '谁先添加归谁', value: 'first_touch' },
+  { label: '来源部门优先', value: 'source_team' },
+  { label: '主管分配', value: 'manager_assign' },
+  { label: '渠道客户独立归属', value: 'channel_dedicated' },
+  { label: '按客户等级分配', value: 'score_priority' }
+]
+const collisionPolicyOptions: Array<{ label: string; value: PrivateCollisionPolicy }> = [
+  { label: '先冻结不流转', value: 'block' },
+  { label: '允许协作跟进', value: 'collaborate' },
+  { label: '主管仲裁', value: 'manager' },
+  { label: '合并客户记录', value: 'merge' }
+]
 const diagnosisQuestions = [
   {
     key: 'sourceTruth',
@@ -745,6 +998,7 @@ const previewStats = computed(() => ({
   error: importPreview.value.filter(item => item.status === 'error').length,
   verified: importPreview.value.filter(item => item.verification?.matched).length
 }))
+const wecomReady = computed(() => Boolean(wecomConfig.corpId && wecomConfig.contactSecret && wecomConfig.token && wecomConfig.aesKey))
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
   { label: '培育中', value: 'nurturing' },
@@ -806,6 +1060,14 @@ function taskStatusTag(status: PrivateTaskStatus) {
   return ({ pending: 'warning', done: 'success', overdue: 'danger' } as Record<PrivateTaskStatus, any>)[status]
 }
 
+function deliveryStatusText(status: PrivateDeliveryStatus) {
+  return ({ created: '已创建', in_progress: '进行中', done: '已完成' } as Record<PrivateDeliveryStatus, string>)[status]
+}
+
+function deliveryStatusTag(status: PrivateDeliveryStatus) {
+  return ({ created: 'warning', in_progress: 'primary', done: 'success' } as Record<PrivateDeliveryStatus, any>)[status]
+}
+
 function priorityTag(priority: PrivateTask['priority']) {
   return priority === '高' ? 'danger' : priority === '中' ? 'warning' : 'info'
 }
@@ -856,6 +1118,14 @@ function isVerifying(id: number) {
   return verifyingIds.value.includes(id)
 }
 
+function isCreatingDelivery(id: number) {
+  return deliveryCreatingIds.value.includes(id)
+}
+
+function isRuleSaving(id: number) {
+  return ruleSavingIds.value.includes(id)
+}
+
 async function loadDashboard() {
   const data = await privateDomainApi.dashboard()
   Object.assign(summary, data.summary)
@@ -863,8 +1133,11 @@ async function loadDashboard() {
   contents.value = data.contents
   tasks.value = data.tasks
   integrations.value = data.integrations
+  ownershipRules.value = data.ownershipRules
+  deliveryPackages.value = data.deliveryPackages
   opsChecks.value = data.opsChecks
   dailyActions.value = data.dailyActions
+  Object.assign(wecomConfig, data.wecomConfig)
   Object.assign(opsProfile, data.opsProfile)
   opsProfile.answers = { sourceTruth: '', ownerRule: '', successMetric: '', dataImport: '', ...(data.opsProfile.answers || {}) }
 }
@@ -1081,8 +1354,54 @@ async function convertLead(row: PrivateContact) {
   }
 }
 
+async function saveOwnershipRule(row: PrivateOwnershipRule) {
+  if (isRuleSaving(row.id)) return
+  ruleSavingIds.value = [...ruleSavingIds.value, row.id]
+  try {
+    const saved = await privateDomainApi.saveOwnershipRule({ ...row })
+    ownershipRules.value = ownershipRules.value.map(item => item.id === saved.id ? saved : item)
+    await loadDashboard()
+    ElMessage.success(`${saved.source} 归属规则已保存`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存归属规则失败')
+  } finally {
+    ruleSavingIds.value = ruleSavingIds.value.filter(id => id !== row.id)
+  }
+}
+
+async function saveWecomConfig() {
+  wecomSaving.value = true
+  try {
+    const saved = await privateDomainApi.saveWecomConfig({ ...wecomConfig })
+    Object.assign(wecomConfig, saved)
+    await loadDashboard()
+    ElMessage.success(wecomReady.value ? '企业微信接入参数已保存,接入卡片已标记为可同步' : '企业微信配置已保存,还需补齐 CorpId/Secret/Token/AESKey')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存企微配置失败')
+  } finally {
+    wecomSaving.value = false
+  }
+}
+
+async function createDeliveryPackage(row: PrivateContact) {
+  if (isCreatingDelivery(row.id)) return
+  deliveryCreatingIds.value = [...deliveryCreatingIds.value, row.id]
+  try {
+    const result = await privateDomainApi.createDeliveryPackageFromContact(row.id)
+    ElMessage.success(result.reused ? '该客户已生成过交付包' : `已生成${result.package.packageName}`)
+    await loadContacts()
+    activeTab.value = 'delivery'
+    if (drawer.row?.id === row.id) drawer.row = contacts.value.find(item => item.id === row.id) || drawer.row
+  } catch (error: any) {
+    ElMessage.error(error?.message || '生成交付包失败')
+  } finally {
+    deliveryCreatingIds.value = deliveryCreatingIds.value.filter(id => id !== row.id)
+  }
+}
+
 function syncHint() {
-  ElMessage.info('当前为本地私域运营台。接入企业微信后,这里会自动同步外部联系人、客户群、标签和互动记录。')
+  activeTab.value = 'config'
+  ElMessage.info('请先在接入配置里保存企微参数。接通后会同步外部联系人、客户群、标签和互动记录。')
 }
 
 function goOnlineLeads() {
@@ -1381,6 +1700,94 @@ onMounted(loadContacts)
 
 .main-panel {
   padding: 14px;
+}
+
+.rule-panel,
+.delivery-panel,
+.wecom-config-card {
+  padding: 16px;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(31, 47, 70, 0.04);
+}
+
+.wecom-config-card {
+  margin-bottom: 12px;
+}
+
+.rule-toolbar,
+.delivery-summary {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rule-toolbar {
+  grid-template-columns: auto 1fr;
+  padding: 10px 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+
+  span:first-child {
+    color: #245bdb;
+    font-weight: 700;
+  }
+}
+
+.ownership-table {
+  :deep(.el-input-number) {
+    width: 84px;
+  }
+}
+
+.delivery-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  div {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 20px;
+  }
+}
+
+.package-task-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  span {
+    padding: 4px 8px;
+    border: 1px solid #c7d9ff;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #245bdb;
+    font-size: 12px;
+  }
+}
+
+.sync-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-height: 32px;
+  align-items: center;
 }
 
 .diagnosis-layout {
@@ -1915,6 +2322,7 @@ onMounted(loadContacts)
   .config-grid,
   .toolbar,
   .preview-summary,
+  .delivery-summary,
   .verify-detail-grid,
   .config-meta {
     grid-template-columns: 1fr;

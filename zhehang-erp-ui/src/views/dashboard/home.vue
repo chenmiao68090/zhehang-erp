@@ -31,6 +31,22 @@
       </el-col>
     </el-row>
 
+    <el-card class="private-card" shadow="never">
+      <template #header>
+        <div class="card-header">
+          <span class="card-title">私域经营看板</span>
+          <el-link type="primary" :underline="false" @click="router.push('/leads/private-domain')">打开私域运营</el-link>
+        </div>
+      </template>
+      <div class="private-metric-grid">
+        <div v-for="item in privateBossMetrics" :key="item.label" class="private-metric" :class="item.type">
+          <span>{{ item.label }}</span>
+          <b>{{ item.value }}</b>
+          <em>{{ item.trend }}</em>
+        </div>
+      </div>
+    </el-card>
+
     <!-- 主内容区 -->
     <el-row :gutter="16">
       <el-col :xs="24" :lg="16">
@@ -197,6 +213,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
 import { getStorage } from '@/utils/storage'
+import { privateDomainApi, type PrivateBossMetric } from '@/api/private-domain'
 import {
   Calendar, DocumentChecked, Tickets, User as UserIcon,
   TrendCharts, Link, Setting, Money, DataAnalysis,
@@ -292,6 +309,13 @@ const notices = ref<NoticeItem[]>([
   { id: 5, title: '代理记账续费客户回访话术已更新', type: 'notice', publishTime: '05-30', publisher: '客户成功部' }
 ])
 
+const privateBossMetrics = ref<PrivateBossMetric[]>([
+  { label: '私域客户', value: 0, trend: '等待加载', type: 'warn' },
+  { label: '工商核验率', value: '0%', trend: '等待加载', type: 'warn' },
+  { label: '撞单风险', value: 0, trend: '等待加载', type: 'warn' },
+  { label: '成交交付包', value: 0, trend: '等待加载', type: 'warn' }
+])
+
 interface RecentVisit { path: string; title: string; time: string }
 const recentVisits = ref<RecentVisit[]>([])
 
@@ -312,9 +336,31 @@ function priorityTagType(p: string) {
   return 'info'
 }
 
-onMounted(() => {
+async function loadPrivateBossMetrics() {
+  try {
+    const data = await privateDomainApi.bossSnapshot()
+    privateBossMetrics.value = data.metrics
+    const riskMetric = data.metrics.find(item => item.label === '撞单风险')
+    const packageMetric = data.metrics.find(item => item.label === '成交交付包')
+    focusTags.value = [
+      data.summary.duplicateRiskCount ? `私域撞单风险 ${data.summary.duplicateRiskCount} 条` : '私域撞单风险正常',
+      `私域成交交付包 ${packageMetric?.value || 0} 个`,
+      riskMetric?.type === 'danger' ? '需主管仲裁撞单归属' : '归属规则已启用'
+    ]
+    businessProgress.value = [
+      ...businessProgress.value.filter(item => item.title !== '私域运营').slice(0, 3),
+      { title: '私域运营', value: `${data.summary.intentCount} 条`, desc: `客户 ${data.summary.contactCount}，核验 ${data.summary.verifiedCount}，交付包 ${data.summary.deliveryPackageCount}` }
+    ]
+    aiSummary.value = `今日重点：私域客户 ${data.summary.contactCount} 家，高意向 ${data.summary.intentCount} 条，撞单风险 ${data.summary.duplicateRiskCount} 条，成交后交付包 ${data.summary.deliveryPackageCount} 个。`
+  } catch {
+    privateBossMetrics.value = privateBossMetrics.value.map(item => ({ ...item, trend: '本地私域数据暂不可读' }))
+  }
+}
+
+onMounted(async () => {
   loadRecentVisits()
   aiSummary.value = '今日线索增长正常，但网销投产比、同行渠道应收和地址资源库存需要优先处理。'
+  await loadPrivateBossMetrics()
 })
 </script>
 
@@ -451,6 +497,55 @@ onMounted(() => {
   border-bottom: 1px solid var(--border-soft);
 }
 :deep(.el-card__body) { padding: 16px 20px; }
+
+.private-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.private-metric {
+  display: grid;
+  gap: 6px;
+  min-height: 96px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid #2563eb;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.up {
+    border-left-color: #047857;
+  }
+
+  &.warn {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+    background: #fff7f7;
+  }
+
+  span {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  b {
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    line-height: 1.1;
+  }
+
+  em {
+    color: var(--text-body);
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.5;
+  }
+}
 
 .shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .shortcut-item {
@@ -670,7 +765,10 @@ onMounted(() => {
 .empty-tip { text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 14px; }
 
 @media (max-width: 1200px) {
-  .business-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .business-grid,
+  .private-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -681,7 +779,8 @@ onMounted(() => {
   }
 
   .shortcut-grid,
-  .business-grid {
+  .business-grid,
+  .private-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

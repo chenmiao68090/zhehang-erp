@@ -1133,10 +1133,20 @@
               </el-button>
             </div>
             <div class="address-inventory-list">
-              <div v-for="item in addressInventory" :key="item.id" class="address-inventory-item" :class="item.status">
+              <div
+                v-for="item in addressInventoryForDelivery(deliveryDrawer.row)"
+                :key="item.id"
+                class="address-inventory-item"
+                :class="[item.status, { active: isCurrentAddressInventory(deliveryDrawer.row, item) }]"
+              >
                 <div class="address-inventory-head">
                   <strong>{{ item.city }}{{ item.district }} · {{ item.addressType }}</strong>
-                  <el-tag :type="addressStatusTag(item.status)" size="small">{{ addressStatusText(item.status) }}</el-tag>
+                  <div class="address-inventory-tags">
+                    <el-tag v-if="isCurrentAddressInventory(deliveryDrawer.row, item)" type="primary" size="small">
+                      当前锁定
+                    </el-tag>
+                    <el-tag :type="addressStatusTag(item.status)" size="small">{{ addressStatusText(item.status) }}</el-tag>
+                  </div>
                 </div>
                 <p>{{ item.supplierName }} · {{ item.remark }}</p>
                 <div class="address-inventory-meta">
@@ -1865,6 +1875,27 @@ function addressLockRemark(row: PrivateDeliveryPackage) {
 
 function addressInventoryOf(lock?: PrivateAddressLock) {
   return lock ? addressInventory.value.find(item => item.id === lock.inventoryId) : undefined
+}
+
+function isCurrentAddressInventory(row: PrivateDeliveryPackage | null | undefined, item: PrivateAddressInventory) {
+  return Boolean(row && activeAddressLock(row)?.inventoryId === item.id)
+}
+
+function addressInventoryForDelivery(row: PrivateDeliveryPackage | null | undefined) {
+  const lock = row ? activeAddressLock(row) : undefined
+  const currentId = lock?.inventoryId
+  const statusRank: Record<PrivateAddressInventoryStatus, number> = { available: 0, low: 1, blocked: 2 }
+  return addressInventory.value.slice().sort((left, right) => {
+    if (currentId) {
+      if (left.id === currentId) return -1
+      if (right.id === currentId) return 1
+    }
+    const statusDelta = statusRank[left.status] - statusRank[right.status]
+    if (statusDelta !== 0) return statusDelta
+    const availableDelta = Number(right.available || 0) - Number(left.available || 0)
+    if (availableDelta !== 0) return availableDelta
+    return Number(right.channelPrice || 0) - Number(left.channelPrice || 0)
+  })
 }
 
 function addressResourceOf(lock?: PrivateAddressLock) {
@@ -3385,12 +3416,26 @@ watch(() => route.fullPath, applyRouteQueue)
     background: #fef2f2;
   }
 
+  &.active {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    box-shadow: inset 3px 0 0 #2563eb;
+  }
+
   p {
     margin: 0;
     color: #64748b;
     font-size: 12px;
     line-height: 1.5;
   }
+}
+
+.address-inventory-tags {
+  display: inline-flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
 }
 
 .address-inventory-head {

@@ -6,6 +6,7 @@ export type PrivateTaskStatus = 'pending' | 'done' | 'overdue'
 export type IntegrationStatus = 'connected' | 'pending' | 'blocked'
 export type OpsCheckStatus = 'ready' | 'partial' | 'missing'
 export type DailyActionStatus = 'todo' | 'doing' | 'blocked' | 'done'
+export type PrivateImportStatus = 'ready' | 'duplicate' | 'error'
 
 export interface PrivateContact {
   id: number
@@ -25,6 +26,47 @@ export interface PrivateContact {
   nextAction: string
   touchCount: number
   convertedLeadId?: number
+}
+
+export interface PrivateImportTemplateColumn {
+  key: keyof PrivateContactImportRow
+  label: string
+  required: boolean
+  example: string
+  tip: string
+}
+
+export interface PrivateContactImportRow {
+  companyName: string
+  name: string
+  phone: string
+  source?: string
+  communityName?: string
+  ownerName?: string
+  demand?: string
+  serviceLine?: string
+  estimatedAmount?: string | number
+  tags?: string
+  stage?: string
+  nextAction?: string
+  lastTouchAt?: string
+}
+
+export interface PrivateImportPreviewRow {
+  rowNo: number
+  data: PrivateContactImportRow
+  status: PrivateImportStatus
+  errors: string[]
+  duplicateText?: string
+}
+
+export interface PrivateImportResult {
+  total: number
+  imported: number
+  duplicate: number
+  failed: number
+  contacts: PrivateContact[]
+  preview: PrivateImportPreviewRow[]
 }
 
 export interface PrivateGroup {
@@ -130,12 +172,63 @@ const CONTENT_KEY = 'biz_private_contents'
 const TASK_KEY = 'biz_private_tasks'
 const INTEGRATION_KEY = 'biz_private_integrations'
 const PROFILE_KEY = 'biz_private_ops_profile'
+const PRIVATE_SOURCE_OPTIONS: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
+const PRIVATE_STAGE_OPTIONS: PrivateStage[] = ['new', 'nurturing', 'intent', 'quoted', 'ordered', 'silent']
 const ANSWER_OPTIONS = {
   sourceTruth: ['企微/微信群为主', '个人微信为主', '广告留资为主', '同行渠道为主', '多来源混合', '暂不确定'],
   ownerRule: ['谁先添加归谁', '来源部门优先', '销售主管分配', '渠道客户单独归属', '按客户等级分配', '暂不确定'],
   successMetric: ['新增线索/有效线索', '成交金额/回款', 'ROI/投产比', '交付逾期/客户风险', '员工产能/跟进量', '全部都要'],
   dataImport: ['先 Excel 导入', '先手工录入', '企微接口优先', '呼叫中心优先', '广告平台优先', '先做本地闭环']
 }
+
+export const privateImportTemplateColumns: PrivateImportTemplateColumn[] = [
+  { key: 'companyName', label: '公司名称', required: true, example: '杭州启辰企业管理有限公司', tip: '必须填公司全称,后续用于工商核验和撞单。' },
+  { key: 'name', label: '联系人', required: true, example: '张总', tip: '客户联系人姓名或称呼。' },
+  { key: 'phone', label: '手机号', required: true, example: '18600008888', tip: '用于去重和后续电销触达。' },
+  { key: 'source', label: '来源触点', required: true, example: '企业微信', tip: '可填企业微信、个人微信、微信群、朋友圈、公众号、视频号、老客转介绍。' },
+  { key: 'communityName', label: '社群/触点名称', required: false, example: '新公司开办咨询群', tip: '微信群、企微标签、直播间或朋友圈主题。' },
+  { key: 'ownerName', label: '负责人', required: true, example: '何海琳', tip: '当前跟进人或归属部门负责人。' },
+  { key: 'demand', label: '客户需求', required: true, example: '新注册公司,需要税务报到和代理记账', tip: '写清楚客户要解决什么问题。' },
+  { key: 'serviceLine', label: '业务线', required: true, example: '代理记账', tip: '例如代理记账、地址挂靠、异常解除、税务筹划、公司注销、同行渠道。' },
+  { key: 'estimatedAmount', label: '预估金额', required: false, example: '12800', tip: '只填数字,用于老板看商机金额。' },
+  { key: 'tags', label: '标签', required: false, example: '新设企业;代理记账;3日内跟进', tip: '多个标签用分号隔开。' },
+  { key: 'stage', label: '阶段', required: false, example: '有意向', tip: '可填新触点、培育中、有意向、已报价、已成交、沉默。' },
+  { key: 'nextAction', label: '下一步动作', required: false, example: '发送开办套餐报价并预约电话', tip: '不填时系统自动生成。' },
+  { key: 'lastTouchAt', label: '最近互动时间', required: false, example: '2026-06-07 10:30', tip: '不填时使用导入时间。' }
+]
+
+export const privateImportTemplateSamples: PrivateContactImportRow[] = [
+  {
+    companyName: '杭州启辰企业管理有限公司',
+    name: '张总',
+    phone: '18600008888',
+    source: '企业微信',
+    communityName: '新公司开办咨询群',
+    ownerName: '何海琳',
+    demand: '刚注册公司,需要税务报到、代理记账和银行开户指导',
+    serviceLine: '代理记账',
+    estimatedAmount: 12800,
+    tags: '新设企业;代理记账;3日内跟进',
+    stage: '有意向',
+    nextAction: '发送开办套餐报价并预约电话',
+    lastTouchAt: '2026-06-07 10:30'
+  },
+  {
+    companyName: '义乌市诚达财税服务部',
+    name: '王经理',
+    phone: '13900001111',
+    source: '老客转介绍',
+    communityName: '同行渠道合作',
+    ownerName: '王舟',
+    demand: '同行批量采购挂靠地址,希望月结',
+    serviceLine: '同行渠道',
+    estimatedAmount: 42000,
+    tags: '同行渠道;地址挂靠;账期',
+    stage: '有意向',
+    nextAction: '核对供应商地址库存并申请账期',
+    lastTouchAt: '2026-06-07 14:00'
+  }
+]
 
 const delay = <T>(data: T, ms = 80) => new Promise<T>(resolve => setTimeout(() => resolve(data), ms))
 
@@ -474,7 +567,176 @@ function buildDailyActions(profile: PrivateOpsProfile): PrivateDailyAction[] {
   ]
 }
 
+function cleanText(value: unknown) {
+  return String(value ?? '').trim()
+}
+
+function normalizePhone(value: unknown) {
+  return cleanText(value).replace(/[^\d]/g, '')
+}
+
+function normalizeSource(value: unknown): PrivateSource | '' {
+  const text = cleanText(value)
+  if (!text) return ''
+  if ((PRIVATE_SOURCE_OPTIONS as string[]).includes(text)) return text as PrivateSource
+  if (text.includes('企微') || text.includes('企业微信')) return '企业微信'
+  if (text.includes('个人') || text.includes('私微')) return '个人微信'
+  if (text.includes('群')) return '微信群'
+  if (text.includes('朋友圈')) return '朋友圈'
+  if (text.includes('公众号')) return '公众号'
+  if (text.includes('视频') || text.includes('直播')) return '视频号'
+  if (text.includes('转介绍') || text.includes('老客')) return '老客转介绍'
+  return ''
+}
+
+function normalizeStage(value: unknown): PrivateStage {
+  const text = cleanText(value)
+  const map: Record<string, PrivateStage> = {
+    new: 'new',
+    nurturing: 'nurturing',
+    intent: 'intent',
+    quoted: 'quoted',
+    ordered: 'ordered',
+    silent: 'silent',
+    新触点: 'new',
+    新线索: 'new',
+    培育中: 'nurturing',
+    培育: 'nurturing',
+    有意向: 'intent',
+    意向: 'intent',
+    已报价: 'quoted',
+    报价: 'quoted',
+    已成交: 'ordered',
+    成交: 'ordered',
+    沉默: 'silent',
+    无响应: 'silent'
+  }
+  return map[text] || 'new'
+}
+
+function validStage(value: unknown) {
+  const text = cleanText(value)
+  if (!text) return true
+  return PRIVATE_STAGE_OPTIONS.includes(text as PrivateStage) || ['新触点', '新线索', '培育中', '培育', '有意向', '意向', '已报价', '报价', '已成交', '成交', '沉默', '无响应'].includes(text)
+}
+
+function tagList(value: unknown) {
+  return cleanText(value)
+    .split(/[;；,，、\s]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+}
+
+function amountOf(value: unknown) {
+  const text = cleanText(value).replace(/[¥,，元\s]/g, '')
+  const amount = Number(text || 0)
+  return Number.isFinite(amount) && amount >= 0 ? amount : 0
+}
+
+function contactKey(companyName: string, phone: string) {
+  return `${companyName.trim()}::${phone.trim()}`
+}
+
+function scoreOf(row: PrivateContactImportRow, stage: PrivateStage, tags: string[]) {
+  let score = 66
+  if (stage === 'intent') score += 14
+  if (stage === 'quoted') score += 18
+  if (stage === 'ordered') score += 22
+  if (stage === 'silent') score -= 10
+  const text = `${row.demand || ''}${row.serviceLine || ''}${tags.join('')}`
+  if (/地址|异常|挂靠|同行|税务|注销|代理记账|出口退税/.test(text)) score += 8
+  if (/高客单|账期|批量|月结|报价/.test(text)) score += 6
+  if (amountOf(row.estimatedAmount) >= 20000) score += 6
+  return Math.max(40, Math.min(98, score))
+}
+
+function validateImportRow(row: PrivateContactImportRow) {
+  const errors: string[] = []
+  const companyName = cleanText(row.companyName)
+  const name = cleanText(row.name)
+  const phone = normalizePhone(row.phone)
+  const source = normalizeSource(row.source)
+  if (!companyName) errors.push('公司名称必填')
+  if (!name) errors.push('联系人必填')
+  if (!phone) errors.push('手机号必填')
+  if (phone && phone.length < 7) errors.push('手机号格式过短')
+  if (!source) errors.push('来源触点不在可选范围内')
+  if (!cleanText(row.ownerName)) errors.push('负责人必填')
+  if (!cleanText(row.demand)) errors.push('客户需求必填')
+  if (!cleanText(row.serviceLine)) errors.push('业务线必填')
+  if (!validStage(row.stage)) errors.push('阶段不在可选范围内')
+  return { errors, companyName, name, phone, source }
+}
+
+function buildImportPreview(rows: PrivateContactImportRow[], contacts: PrivateContact[]) {
+  const existingMap = new Map(contacts.map(item => [contactKey(item.companyName, item.phone), item.companyName]))
+  const seenMap = new Map<string, number>()
+  return rows.map((raw, idx): PrivateImportPreviewRow => {
+    const rowNo = idx + 2
+    const data: PrivateContactImportRow = {
+      companyName: cleanText(raw.companyName),
+      name: cleanText(raw.name),
+      phone: normalizePhone(raw.phone),
+      source: cleanText(raw.source),
+      communityName: cleanText(raw.communityName),
+      ownerName: cleanText(raw.ownerName),
+      demand: cleanText(raw.demand),
+      serviceLine: cleanText(raw.serviceLine),
+      estimatedAmount: cleanText(raw.estimatedAmount),
+      tags: cleanText(raw.tags),
+      stage: cleanText(raw.stage),
+      nextAction: cleanText(raw.nextAction),
+      lastTouchAt: cleanText(raw.lastTouchAt)
+    }
+    const checked = validateImportRow(data)
+    const key = contactKey(checked.companyName, checked.phone)
+    let duplicateText = ''
+    if (!checked.errors.length && existingMap.has(key)) duplicateText = `已存在: ${existingMap.get(key)}`
+    if (!checked.errors.length && !duplicateText && seenMap.has(key)) duplicateText = `本次导入第 ${seenMap.get(key)} 行已出现`
+    if (!checked.errors.length && !duplicateText) seenMap.set(key, rowNo)
+    return {
+      rowNo,
+      data,
+      status: checked.errors.length ? 'error' : duplicateText ? 'duplicate' : 'ready',
+      errors: checked.errors,
+      duplicateText
+    }
+  })
+}
+
+function contactFromImport(row: PrivateContactImportRow, id: number): PrivateContact {
+  const stage = normalizeStage(row.stage)
+  const tags = tagList(row.tags)
+  const source = normalizeSource(row.source) || '企业微信'
+  const amount = amountOf(row.estimatedAmount)
+  return {
+    id,
+    name: cleanText(row.name),
+    companyName: cleanText(row.companyName),
+    phone: normalizePhone(row.phone),
+    source,
+    communityName: cleanText(row.communityName) || `${source}导入`,
+    ownerName: cleanText(row.ownerName) || '待分配',
+    tags: tags.length ? tags : [source, cleanText(row.serviceLine) || '待分类'],
+    stage,
+    score: scoreOf(row, stage, tags),
+    demand: cleanText(row.demand),
+    serviceLine: cleanText(row.serviceLine) || '综合财税',
+    estimatedAmount: amount,
+    lastTouchAt: cleanText(row.lastTouchAt) || ts(),
+    nextAction: cleanText(row.nextAction) || '导入后 24 小时内完成首次触达',
+    touchCount: 1
+  }
+}
+
 export const privateDomainApi = {
+  importTemplate() {
+    return delay({
+      columns: privateImportTemplateColumns,
+      samples: privateImportTemplateSamples
+    })
+  },
   async dashboard() {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)
@@ -513,6 +775,29 @@ export const privateDomainApi = {
     }
     writeProfile(payload)
     return delay(payload)
+  },
+  async previewImport(rows: PrivateContactImportRow[]) {
+    ensureSeeds()
+    const contacts = readList<PrivateContact>(CONTACT_KEY)
+    return delay(buildImportPreview(rows, contacts))
+  },
+  async importContacts(rows: PrivateContactImportRow[]): Promise<PrivateImportResult> {
+    ensureSeeds()
+    const contacts = readList<PrivateContact>(CONTACT_KEY)
+    const preview = buildImportPreview(rows, contacts)
+    let nextId = maxId(contacts)
+    const importedContacts = preview
+      .filter(item => item.status === 'ready')
+      .map(item => contactFromImport(item.data, ++nextId))
+    if (importedContacts.length) writeList(CONTACT_KEY, [...importedContacts, ...contacts])
+    return delay({
+      total: preview.length,
+      imported: importedContacts.length,
+      duplicate: preview.filter(item => item.status === 'duplicate').length,
+      failed: preview.filter(item => item.status === 'error').length,
+      contacts: importedContacts,
+      preview
+    })
   },
   async listContacts(params: { keyword?: string; source?: string; stage?: string } = {}) {
     ensureSeeds()

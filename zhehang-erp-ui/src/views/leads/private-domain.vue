@@ -9,6 +9,8 @@
       <div class="head-actions">
         <el-button @click="goOnlineLeads">查看网销线索</el-button>
         <el-button @click="goDistribution">分配规则</el-button>
+        <el-button @click="activeTab = 'import'">批量导入</el-button>
+        <el-button @click="downloadImportTemplate">下载导入模板</el-button>
         <el-button type="primary" @click="syncHint">同步私域数据</el-button>
       </div>
     </header>
@@ -204,6 +206,105 @@
                 </div>
               </div>
             </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="批量导入" name="import">
+          <div class="import-layout">
+            <div class="import-main">
+              <div class="panel-title compact">
+                <div>
+                  <h2>Excel 导入模板</h2>
+                  <p>先用模板统一字段，再批量导入私域客户；系统会按公司名称 + 手机号自动去重。</p>
+                </div>
+                <el-tag type="success" effect="plain">Excel 可打开 CSV</el-tag>
+              </div>
+
+              <div class="import-actions">
+                <input ref="fileInputRef" class="hidden-input" type="file" accept=".csv,.txt" @change="handleImportFile" />
+                <el-button type="primary" @click="downloadImportTemplate">下载模板</el-button>
+                <el-button @click="triggerFileSelect">选择 CSV 文件</el-button>
+                <el-button :disabled="!importPreview.length" @click="clearImportPreview">清空预览</el-button>
+                <el-button
+                  type="success"
+                  :loading="importing"
+                  :disabled="previewStats.ready === 0"
+                  @click="importValidRows"
+                >
+                  导入有效行
+                </el-button>
+              </div>
+
+              <div class="import-hint">
+                <b>落地用法</b>
+                <span>下载模板 -> 用 Excel 填客户 -> 另存为 CSV -> 上传；也可以直接从 Excel 复制表格内容粘贴到下方。</span>
+              </div>
+
+              <el-table :data="importColumns" border stripe class="template-table">
+                <el-table-column prop="label" label="字段" width="150" />
+                <el-table-column label="必填" width="80">
+                  <template #default="{ row }">
+                    <el-tag :type="row.required ? 'danger' : 'info'" size="small">{{ row.required ? '必填' : '选填' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="example" label="示例" min-width="180" />
+                <el-table-column prop="tip" label="填写说明" min-width="260" />
+              </el-table>
+            </div>
+
+            <div class="paste-card">
+              <div class="panel-title compact">
+                <div>
+                  <h2>粘贴导入</h2>
+                  <p>从 Excel 选中表头和数据复制,粘到这里即可预览。</p>
+                </div>
+              </div>
+              <el-input
+                v-model="pasteText"
+                type="textarea"
+                :rows="10"
+                placeholder="粘贴 Excel 表格内容。第一行必须是模板表头。"
+              />
+              <div class="paste-actions">
+                <span>{{ importFileName || '未选择文件' }}</span>
+                <el-button type="primary" plain @click="previewPasteText">解析粘贴内容</el-button>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-panel">
+            <div class="preview-summary">
+              <div><span>预览行数</span><b>{{ previewStats.total }}</b></div>
+              <div><span>可导入</span><b>{{ previewStats.ready }}</b></div>
+              <div><span>重复</span><b>{{ previewStats.duplicate }}</b></div>
+              <div><span>错误</span><b>{{ previewStats.error }}</b></div>
+            </div>
+            <el-table :data="importPreview" border stripe height="360" empty-text="请先下载模板并导入 CSV 或粘贴 Excel 内容">
+              <el-table-column prop="rowNo" label="行号" width="80" />
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="importStatusTag(row.status)" size="small">{{ importStatusText(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="客户" min-width="240">
+                <template #default="{ row }">
+                  <strong>{{ row.data.companyName }}</strong>
+                  <div class="sub-line">{{ row.data.name }} · {{ row.data.phone }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="data.source" label="来源" width="120" />
+              <el-table-column prop="data.ownerName" label="负责人" width="110" />
+              <el-table-column prop="data.serviceLine" label="业务线" width="120" />
+              <el-table-column prop="data.estimatedAmount" label="预估金额" width="110" />
+              <el-table-column prop="data.demand" label="客户需求" min-width="240" show-overflow-tooltip />
+              <el-table-column label="问题" min-width="260">
+                <template #default="{ row }">
+                  <span v-if="row.status === 'ready'" class="ok-text">可导入</span>
+                  <span v-else-if="row.status === 'duplicate'" class="warn-text">{{ row.duplicateText }}</span>
+                  <span v-else class="error-text">{{ row.errors.join('；') }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
         </el-tab-pane>
 
@@ -453,20 +554,25 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 import {
+  privateImportTemplateColumns,
+  privateImportTemplateSamples,
   privateDomainApi,
   type DailyActionStatus,
   type IntegrationStatus,
   type OpsCheckStatus,
   type PrivateContact,
+  type PrivateContactImportRow,
   type PrivateContent,
   type PrivateDailyAction,
   type PrivateGroup,
+  type PrivateImportPreviewRow,
+  type PrivateImportStatus,
   type PrivateIntegration,
   type PrivateOpsCheck,
   type PrivateOpsProfile,
@@ -489,6 +595,12 @@ const convertingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
+const importColumns = privateImportTemplateColumns
+const importPreview = ref<PrivateImportPreviewRow[]>([])
+const importFileName = ref('')
+const pasteText = ref('')
+const importing = ref(false)
+const fileInputRef = ref<HTMLInputElement>()
 const summary = reactive<PrivateSummary>({
   contactCount: 0,
   intentCount: 0,
@@ -556,6 +668,12 @@ const diagnosisQuestions = [
     options: ['先 Excel 导入', '先手工录入', '企微接口优先', '呼叫中心优先', '广告平台优先', '先做本地闭环']
   }
 ] as const
+const previewStats = computed(() => ({
+  total: importPreview.value.length,
+  ready: importPreview.value.filter(item => item.status === 'ready').length,
+  duplicate: importPreview.value.filter(item => item.status === 'duplicate').length,
+  error: importPreview.value.filter(item => item.status === 'error').length
+}))
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
   { label: '培育中', value: 'nurturing' },
@@ -621,6 +739,14 @@ function priorityTag(priority: PrivateTask['priority']) {
   return priority === '高' ? 'danger' : priority === '中' ? 'warning' : 'info'
 }
 
+function importStatusText(status: PrivateImportStatus) {
+  return ({ ready: '可导入', duplicate: '重复', error: '错误' } as Record<PrivateImportStatus, string>)[status]
+}
+
+function importStatusTag(status: PrivateImportStatus): 'success' | 'warning' | 'danger' {
+  return ({ ready: 'success', duplicate: 'warning', error: 'danger' } as Record<PrivateImportStatus, 'success' | 'warning' | 'danger'>)[status]
+}
+
 function contentRate(row: PrivateContent) {
   if (!row.reachCount) return 0
   return Number((row.leadCount / row.reachCount * 100).toFixed(1))
@@ -650,6 +776,143 @@ async function loadContacts() {
     await loadDashboard()
   } finally {
     loading.value = false
+  }
+}
+
+function csvCell(value: unknown) {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function downloadImportTemplate() {
+  const header = importColumns.map(column => column.label)
+  const rows = privateImportTemplateSamples.map(sample => importColumns.map(column => sample[column.key] ?? ''))
+  const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '私域客户导入模板.csv'
+  link.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('已下载私域客户导入模板,可直接用 Excel 打开')
+}
+
+function detectDelimiter(firstLine: string) {
+  if (firstLine.includes('\t')) return '\t'
+  if (firstLine.includes(';') && !firstLine.includes(',')) return ';'
+  return ','
+}
+
+function parseSeparatedText(text: string) {
+  const raw = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const delimiter = detectDelimiter(raw.split('\n')[0] || '')
+  const rows: string[][] = []
+  let row: string[] = []
+  let value = ''
+  let inQuotes = false
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i]
+    const next = raw[i + 1]
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        value += '"'
+        i += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (ch === delimiter && !inQuotes) {
+      row.push(value.trim())
+      value = ''
+    } else if (ch === '\n' && !inQuotes) {
+      row.push(value.trim())
+      if (row.some(cell => cell)) rows.push(row)
+      row = []
+      value = ''
+    } else {
+      value += ch
+    }
+  }
+  row.push(value.trim())
+  if (row.some(cell => cell)) rows.push(row)
+  return rows
+}
+
+function rowsFromText(text: string): PrivateContactImportRow[] {
+  const rows = parseSeparatedText(text)
+  if (rows.length < 2) return []
+  const header = rows[0].map(item => item.trim())
+  const keyByHeader = new Map<string, keyof PrivateContactImportRow>()
+  importColumns.forEach(column => {
+    keyByHeader.set(column.label, column.key)
+    keyByHeader.set(String(column.key), column.key)
+  })
+  return rows.slice(1).map((cells) => {
+    const item: Record<string, string> = {}
+    header.forEach((name, idx) => {
+      const key = keyByHeader.get(name)
+      if (key) item[key] = cells[idx] || ''
+    })
+    return item as unknown as PrivateContactImportRow
+  }).filter(item => Object.values(item).some(Boolean))
+}
+
+async function previewImportRows(rows: PrivateContactImportRow[], sourceName = '') {
+  if (!rows.length) {
+    ElMessage.warning('没有解析到客户数据,请确认第一行是模板表头')
+    return
+  }
+  importPreview.value = await privateDomainApi.previewImport(rows)
+  if (sourceName) importFileName.value = sourceName
+  const ready = importPreview.value.filter(item => item.status === 'ready').length
+  const blocked = importPreview.value.length - ready
+  ElMessage.success(`已解析 ${importPreview.value.length} 行,可导入 ${ready} 行${blocked ? `,需处理 ${blocked} 行` : ''}`)
+}
+
+function triggerFileSelect() {
+  fileInputRef.value?.click()
+}
+
+async function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!/\.(csv|txt)$/i.test(file.name)) {
+    ElMessage.warning('当前先支持 CSV。请用 Excel 打开模板后另存为 CSV 再导入。')
+    return
+  }
+  const text = await file.text()
+  pasteText.value = text
+  await previewImportRows(rowsFromText(text), file.name)
+}
+
+async function previewPasteText() {
+  await previewImportRows(rowsFromText(pasteText.value), '粘贴内容')
+}
+
+function clearImportPreview() {
+  importPreview.value = []
+  importFileName.value = ''
+  pasteText.value = ''
+}
+
+async function importValidRows() {
+  if (!previewStats.value.ready) {
+    ElMessage.warning('没有可导入的数据')
+    return
+  }
+  importing.value = true
+  try {
+    const result = await privateDomainApi.importContacts(importPreview.value.map(item => item.data))
+    importPreview.value = result.preview
+    await loadContacts()
+    activeTab.value = 'contacts'
+    ElMessage.success(`已导入 ${result.imported} 条,重复 ${result.duplicate} 条,错误 ${result.failed} 条`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '导入失败')
+  } finally {
+    importing.value = false
   }
 }
 
@@ -1061,6 +1324,125 @@ onMounted(loadContacts)
   font-size: 12px;
 }
 
+.import-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 12px;
+}
+
+.import-main,
+.paste-card,
+.preview-panel {
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(31, 47, 70, 0.04);
+}
+
+.import-main,
+.paste-card {
+  padding: 16px;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.import-actions,
+.paste-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.paste-actions {
+  justify-content: space-between;
+  margin-top: 10px;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.import-hint {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+
+  b {
+    color: #245bdb;
+    white-space: nowrap;
+  }
+}
+
+.template-table {
+  margin-top: 12px;
+}
+
+.preview-panel {
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.preview-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+
+  div {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 20px;
+    line-height: 1.1;
+  }
+}
+
+.ok-text,
+.warn-text,
+.error-text {
+  font-weight: 700;
+}
+
+.ok-text {
+  color: #16a34a;
+}
+
+.warn-text {
+  color: #d97706;
+}
+
+.error-text {
+  color: #dc2626;
+}
+
 .question-stack {
   display: grid;
   gap: 12px;
@@ -1303,7 +1685,8 @@ onMounted(loadContacts)
   }
 
   .landing-panel,
-  .diagnosis-layout {
+  .diagnosis-layout,
+  .import-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1328,7 +1711,12 @@ onMounted(loadContacts)
   .group-grid,
   .config-grid,
   .toolbar,
+  .preview-summary,
   .config-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .import-hint {
     grid-template-columns: 1fr;
   }
 }

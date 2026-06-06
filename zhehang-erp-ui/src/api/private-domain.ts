@@ -1582,6 +1582,23 @@ async function hydrateDeliveryPackages(
   return hydrated
 }
 
+function closeDeliveryHandoffTasks(tasks: PrivateTask[], contact: PrivateContact, orderNo?: string) {
+  let changed = false
+  const next = tasks.map(item => {
+    const matchContact = item.companyName === contact.companyName
+    const matchAction = !orderNo || item.action.includes(orderNo)
+    const isHandoff = item.title.includes('生成成交交付包') || item.action.includes('生成交付包')
+    if (item.status !== 'pending' || !matchContact || !matchAction || !isHandoff) return item
+    changed = true
+    return {
+      ...item,
+      status: 'done' as PrivateTaskStatus,
+      action: `${item.action} · 已生成交付包 ${ts()}`
+    }
+  })
+  return { tasks: next, changed }
+}
+
 function stageTextForTimeline(stage: PrivateStage) {
   return ({ new: '新触点', nurturing: '培育中', intent: '有意向', quoted: '已报价', ordered: '已成交', silent: '沉默' } as Record<PrivateStage, string>)[stage]
 }
@@ -1909,7 +1926,8 @@ export const privateDomainApi = {
       taskIds: deliveryTasks.map(item => item.id),
       tasks: deliveryTasks
     }
-    writeList(TASK_KEY, [...deliveryTasks, ...tasks])
+    const closedHandoff = closeDeliveryHandoffTasks(tasks, contact, deliveryPackage.orderNo)
+    writeList(TASK_KEY, [...deliveryTasks, ...closedHandoff.tasks])
     writeList(DELIVERY_PACKAGE_KEY, [deliveryPackage, ...packages])
     contacts[contactIdx] = {
       ...contact,

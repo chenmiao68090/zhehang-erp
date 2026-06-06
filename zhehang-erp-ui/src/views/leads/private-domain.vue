@@ -663,12 +663,20 @@
               <el-tag type="success" effect="plain">C · 成交后交付</el-tag>
             </div>
             <div class="delivery-summary">
-              <div><span>交付包</span><b>{{ deliveryPackages.length }}</b></div>
-              <div><span>任务数</span><b>{{ deliveryPackages.reduce((sum, item) => sum + item.taskIds.length, 0) }}</b></div>
-              <div><span>待推进</span><b>{{ deliveryPackages.filter(item => item.status !== 'done').length }}</b></div>
-              <div><span>自动勾稽</span><b>任务中心</b></div>
+              <div><span>交付包</span><b>{{ deliveryStats.all }}</b></div>
+              <div><span>任务数</span><b>{{ deliveryStats.totalTasks }}</b></div>
+              <div><span>待推进</span><b>{{ deliveryStats.pending }}</b></div>
+              <div><span>逾期包</span><b>{{ deliveryStats.overdue }}</b></div>
             </div>
-            <el-table :data="deliveryPackages" border stripe empty-text="还没有交付包，可从客户雷达或详情页生成">
+            <div class="delivery-filter-bar">
+              <el-radio-group v-model="deliveryFilter">
+                <el-radio-button v-for="item in deliveryFilterOptions" :key="item.value" :label="item.value" :value="item.value">
+                  {{ item.label }}
+                </el-radio-button>
+              </el-radio-group>
+              <span>{{ deliveryFilterHint }} 当前显示 {{ filteredDeliveryPackages.length }} 个交付包。</span>
+            </div>
+            <el-table :data="filteredDeliveryPackages" border stripe empty-text="当前筛选下暂无交付包">
               <el-table-column label="交付包" min-width="260">
                 <template #default="{ row }">
                   <strong>{{ row.packageName }}</strong>
@@ -1178,6 +1186,7 @@ import {
 } from '@/api/private-domain'
 
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
+type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'done'
 
 const router = useRouter()
 const route = useRoute()
@@ -1204,6 +1213,7 @@ const profileSaving = ref(false)
 const wecomSaving = ref(false)
 const followSaving = ref(false)
 const followFilter = ref<FollowFilter>('all')
+const deliveryFilter = ref<DeliveryFilter>('all')
 const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
 const importFileName = ref('')
@@ -1376,6 +1386,36 @@ const filteredFollowRecords = computed(() => {
     return true
   })
 })
+const deliveryStats = computed(() => ({
+  all: deliveryPackages.value.length,
+  totalTasks: deliveryPackages.value.reduce((sum, item) => sum + (item.tasks.length || item.taskIds.length), 0),
+  notStarted: deliveryPackages.value.filter(item => item.status === 'created' && deliveryProgress(item) === 0).length,
+  inProgress: deliveryPackages.value.filter(item => item.status === 'in_progress').length,
+  overdue: deliveryPackages.value.filter(item => deliveryOverdueCount(item) > 0).length,
+  done: deliveryPackages.value.filter(item => item.status === 'done').length,
+  pending: deliveryPackages.value.filter(item => item.status !== 'done').length
+}))
+const deliveryFilterOptions = computed(() => [
+  { label: `全部 ${deliveryStats.value.all}`, value: 'all' },
+  { label: `待启动 ${deliveryStats.value.notStarted}`, value: 'not_started' },
+  { label: `进行中 ${deliveryStats.value.inProgress}`, value: 'in_progress' },
+  { label: `有逾期 ${deliveryStats.value.overdue}`, value: 'overdue' },
+  { label: `已完成 ${deliveryStats.value.done}`, value: 'done' }
+] as const)
+const deliveryFilterHint = computed(() => ({
+  all: '查看所有成交交付包。',
+  not_started: '已创建但任务还没启动的交付包,需要当天确认资料、回款和责任人。',
+  in_progress: '已经开始推进的交付包,重点看最晚节点和剩余任务。',
+  overdue: '存在逾期任务的交付包,需要主管介入处理。',
+  done: '已完成交付包,用于回访、续费和服务质量复盘。'
+} as Record<DeliveryFilter, string>)[deliveryFilter.value])
+const filteredDeliveryPackages = computed(() => deliveryPackages.value.filter(item => {
+  if (deliveryFilter.value === 'not_started') return item.status === 'created' && deliveryProgress(item) === 0
+  if (deliveryFilter.value === 'in_progress') return item.status === 'in_progress'
+  if (deliveryFilter.value === 'overdue') return deliveryOverdueCount(item) > 0
+  if (deliveryFilter.value === 'done') return item.status === 'done'
+  return true
+}))
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
   { label: '培育中', value: 'nurturing' },
@@ -2413,7 +2453,8 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
-.follow-filter-bar {
+.follow-filter-bar,
+.delivery-filter-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2423,29 +2464,33 @@ watch(() => route.fullPath, applyRouteQueue)
   border: 1px solid #edf2f7;
   border-radius: 8px;
   background: #f8fafc;
+}
 
-  :deep(.el-radio-group) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
+.follow-filter-bar :deep(.el-radio-group),
+.delivery-filter-bar :deep(.el-radio-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 
-  :deep(.el-radio-button__inner) {
-    border: 1px solid #dbe5f2;
-    border-radius: 999px;
-    box-shadow: none;
-  }
+.follow-filter-bar :deep(.el-radio-button__inner),
+.delivery-filter-bar :deep(.el-radio-button__inner) {
+  border: 1px solid #dbe5f2;
+  border-radius: 999px;
+  box-shadow: none;
+}
 
-  :deep(.el-radio-button:first-child .el-radio-button__inner) {
-    border-left: 1px solid #dbe5f2;
-  }
+.follow-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner),
+.delivery-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-left: 1px solid #dbe5f2;
+}
 
-  span {
-    max-width: 420px;
-    color: #64748b;
-    font-size: 12px;
-    line-height: 1.6;
-  }
+.follow-filter-bar span,
+.delivery-filter-bar span {
+  max-width: 420px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .follow-dialog :deep(.el-dialog__body) {
@@ -3231,6 +3276,12 @@ watch(() => route.fullPath, applyRouteQueue)
 
   .verify-tags {
     justify-content: flex-start;
+  }
+
+  .follow-filter-bar,
+  .delivery-filter-bar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .import-hint {

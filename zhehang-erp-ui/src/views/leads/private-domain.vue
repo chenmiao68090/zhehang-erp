@@ -700,6 +700,7 @@
               <div><span>任务数</span><b>{{ deliveryStats.totalTasks }}</b></div>
               <div><span>待推进</span><b>{{ deliveryStats.pending }}</b></div>
               <div><span>逾期包</span><b>{{ deliveryStats.overdue }}</b></div>
+              <div><span>待锁地址</span><b>{{ deliveryStats.addressUnlocked }}</b></div>
             </div>
             <div class="delivery-filter-bar">
               <el-radio-group v-model="deliveryFilter">
@@ -1341,7 +1342,7 @@ import {
 } from '@/api/private-domain'
 
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
-type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'done'
+type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'address_unlocked' | 'done'
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 
 const router = useRouter()
@@ -1476,7 +1477,7 @@ const followMethodOptions: PrivateFollowMethod[] = ['企微', '电话', '微信'
 const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '有意向', '已报价', '已成交', '暂缓', '流失']
 const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
 const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
-const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'done']
+const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'address_unlocked', 'done']
 const routeTaskFilters: TaskFilter[] = ['all', 'pending', 'overdue', 'address_stock', 'supervisor', 'done']
 const diagnosisQuestions = [
   {
@@ -1590,6 +1591,7 @@ const deliveryStats = computed(() => ({
   notStarted: deliveryPackages.value.filter(item => item.status === 'created' && deliveryProgress(item) === 0).length,
   inProgress: deliveryPackages.value.filter(item => item.status === 'in_progress').length,
   overdue: deliveryPackages.value.filter(item => deliveryOverdueCount(item) > 0).length,
+  addressUnlocked: deliveryPackages.value.filter(item => isAddressDelivery(item) && !activeAddressLock(item)).length,
   done: deliveryPackages.value.filter(item => item.status === 'done').length,
   pending: deliveryPackages.value.filter(item => item.status !== 'done').length
 }))
@@ -1598,6 +1600,7 @@ const deliveryFilterOptions = computed(() => [
   { label: `待启动 ${deliveryStats.value.notStarted}`, value: 'not_started' },
   { label: `进行中 ${deliveryStats.value.inProgress}`, value: 'in_progress' },
   { label: `有逾期 ${deliveryStats.value.overdue}`, value: 'overdue' },
+  { label: `待锁地址 ${deliveryStats.value.addressUnlocked}`, value: 'address_unlocked' },
   { label: `已完成 ${deliveryStats.value.done}`, value: 'done' }
 ] as const)
 const deliveryFilterHint = computed(() => ({
@@ -1605,12 +1608,14 @@ const deliveryFilterHint = computed(() => ({
   not_started: '已创建但任务还没启动的交付包,需要当天确认资料、回款和责任人。',
   in_progress: '已经开始推进的交付包,重点看最晚节点和剩余任务。',
   overdue: '存在逾期任务的交付包,需要主管介入处理。',
+  address_unlocked: '地址类业务还没有锁定资源池,需要渠道或交付先确认可售地址。',
   done: '已完成交付包,用于回访、续费和服务质量复盘。'
 } as Record<DeliveryFilter, string>)[deliveryFilter.value])
 const filteredDeliveryPackages = computed(() => deliveryPackages.value.filter(item => {
   if (deliveryFilter.value === 'not_started') return item.status === 'created' && deliveryProgress(item) === 0
   if (deliveryFilter.value === 'in_progress') return item.status === 'in_progress'
   if (deliveryFilter.value === 'overdue') return deliveryOverdueCount(item) > 0
+  if (deliveryFilter.value === 'address_unlocked') return isAddressDelivery(item) && !activeAddressLock(item)
   if (deliveryFilter.value === 'done') return item.status === 'done'
   return true
 }))
@@ -2800,9 +2805,16 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
-.delivery-summary,
 .follow-summary {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.delivery-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.delivery-summary,
+.follow-summary {
 
   div {
     display: grid;

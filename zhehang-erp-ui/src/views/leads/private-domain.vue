@@ -1068,7 +1068,28 @@
                 >
                   资源池 {{ formatAddressResourceNo(activeAddressLock(deliveryDrawer.row)?.resourceId) }}
                 </button>
-                <div v-else class="address-bind-repair">
+                <div class="address-lock-linkage">
+                  <div>
+                    <span>库存来源</span>
+                    <b>{{ addressInventorySource(activeAddressLock(deliveryDrawer.row)) }}</b>
+                  </div>
+                  <div>
+                    <span>资源池状态</span>
+                    <b>{{ addressResourceStatusText(activeAddressLock(deliveryDrawer.row)) }}</b>
+                  </div>
+                  <div>
+                    <span>渠道应收</span>
+                    <b>{{ addressLockSettlementText(deliveryDrawer.row, activeAddressLock(deliveryDrawer.row)) }}</b>
+                  </div>
+                  <div>
+                    <span>毛利测算</span>
+                    <b>{{ addressLockMarginText(activeAddressLock(deliveryDrawer.row)) }}</b>
+                  </div>
+                </div>
+                <p class="address-lock-note">
+                  {{ addressLockLinkageTip(deliveryDrawer.row, activeAddressLock(deliveryDrawer.row)) }}
+                </p>
+                <div v-if="!activeAddressLock(deliveryDrawer.row)?.resourceId" class="address-bind-repair">
                   <div class="address-bind-tip">
                     <el-tag type="warning" size="small">未绑定资源池</el-tag>
                     <span>这条历史锁定缺少 ADR 编号,请补选一个可用地址。</span>
@@ -1840,6 +1861,61 @@ function addressResourceNo(row: PrivateDeliveryPackage) {
 
 function addressLockRemark(row: PrivateDeliveryPackage) {
   return activeAddressLock(row)?.remark || '地址已锁定'
+}
+
+function addressInventoryOf(lock?: PrivateAddressLock) {
+  return lock ? addressInventory.value.find(item => item.id === lock.inventoryId) : undefined
+}
+
+function addressResourceOf(lock?: PrivateAddressLock) {
+  if (!lock?.resourceId) return undefined
+  return addressResourceOptions.value.find(item => Number(item.id) === Number(lock.resourceId))
+}
+
+function channelAddressStatusText(status?: BizAddressResource['status']) {
+  if (!status) return '待同步'
+  return ({
+    available: '未使用',
+    reserved: '已预留',
+    sold: '已使用',
+    expired: '已到期',
+    abnormal: '异常'
+  } as Record<string, string>)[status] || status
+}
+
+function addressInventorySource(lock?: PrivateAddressLock) {
+  const inventory = addressInventoryOf(lock)
+  if (!inventory) return '待匹配库存口径'
+  return `${inventory.city}${inventory.district} · ${inventory.addressType} · ${inventory.supplierName}`
+}
+
+function addressResourceStatusText(lock?: PrivateAddressLock) {
+  if (!lock?.resourceId) return '未绑定 ADR'
+  const resource = addressResourceOf(lock)
+  if (!resource) return `${formatAddressResourceNo(lock.resourceId)} · 待同步资源池`
+  return `${resource.resourceNo} · ${channelAddressStatusText(resource.status)}`
+}
+
+function addressLockMarginText(lock?: PrivateAddressLock) {
+  const inventory = addressInventoryOf(lock)
+  if (!inventory) return '待匹配库存'
+  const gross = Number(inventory.channelPrice || 0) - Number(inventory.monthlyCost || 0)
+  const rate = inventory.channelPrice ? Math.round(gross / inventory.channelPrice * 100) : 0
+  return `¥${gross}/月 · ${rate}%`
+}
+
+function addressLockSettlementText(row: PrivateDeliveryPackage, lock?: PrivateAddressLock) {
+  const channel = row.serviceLine || '同行渠道'
+  const contact = lock?.channelName && lock.channelName !== channel ? ` · ${lock.channelName}` : ''
+  const payment = paymentMethodText(row.paymentMethod)
+  return `${channel}${contact} · ${payment} · ${row.paymentTimeReq || '待补收款要求'}`
+}
+
+function addressLockLinkageTip(row: PrivateDeliveryPackage, lock?: PrivateAddressLock) {
+  if (!lock) return '当前交付包还没有锁定地址,请先从库存中锁定可售地址。'
+  if (!lock.resourceId) return '当前锁定缺少 ADR 资源编号,资源池无法反查客户和渠道应收,请优先补绑定。'
+  if (!row.orderNo) return `已绑定 ${formatAddressResourceNo(lock.resourceId)},但来源提单未关联,建议补齐订单后再交付。`
+  return `已和提单 ${row.orderNo}、资源 ${formatAddressResourceNo(lock.resourceId)} 形成闭环,可回资源池复核客户、成本和渠道应收。`
 }
 
 function normalizeCityText(value?: string) {
@@ -3218,6 +3294,45 @@ watch(() => route.fullPath, applyRouteQueue)
     border-color: #93c5fd;
     background: #dbeafe;
   }
+}
+
+.address-lock-linkage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 9px;
+
+  div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.86);
+  }
+
+  span {
+    color: #64748b;
+    font-size: 11px;
+  }
+
+  b {
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.address-lock-note {
+  margin-top: 8px !important;
+  padding: 8px 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #166534 !important;
 }
 
 .address-bind-repair {

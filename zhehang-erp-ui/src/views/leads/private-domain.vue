@@ -1061,6 +1061,54 @@
           </div>
         </div>
 
+        <template v-if="isAddressDelivery(deliveryDrawer.row)">
+          <div class="bd-section-title mt">地址库存锁定</div>
+          <div class="address-lock-panel">
+            <div v-if="activeAddressLock(deliveryDrawer.row)" class="address-lock-current">
+              <div>
+                <strong>{{ activeAddressLock(deliveryDrawer.row)?.remark }}</strong>
+                <p>
+                  已锁定给 {{ activeAddressLock(deliveryDrawer.row)?.companyName }} ·
+                  {{ activeAddressLock(deliveryDrawer.row)?.lockedAt }} 至 {{ activeAddressLock(deliveryDrawer.row)?.releaseAt }}
+                </p>
+              </div>
+              <el-button
+                text
+                type="danger"
+                size="small"
+                :loading="isReleasingAddress(activeAddressLock(deliveryDrawer.row)?.id || 0)"
+                @click.stop="releaseActiveAddress(deliveryDrawer.row)"
+              >
+                释放
+              </el-button>
+            </div>
+            <div class="address-inventory-list">
+              <div v-for="item in addressInventory" :key="item.id" class="address-inventory-item" :class="item.status">
+                <div class="address-inventory-head">
+                  <strong>{{ item.city }}{{ item.district }} · {{ item.addressType }}</strong>
+                  <el-tag :type="addressStatusTag(item.status)" size="small">{{ addressStatusText(item.status) }}</el-tag>
+                </div>
+                <p>{{ item.supplierName }} · {{ item.remark }}</p>
+                <div class="address-inventory-meta">
+                  <span>可售 <b>{{ item.available }}</b></span>
+                  <span>已锁 <b>{{ item.locked }}</b></span>
+                  <span>成本 <b>¥{{ item.monthlyCost }}/月</b></span>
+                  <span>渠道价 <b>¥{{ item.channelPrice }}/月</b></span>
+                </div>
+                <el-button
+                  type="primary"
+                  size="small"
+                  :disabled="!!activeAddressLock(deliveryDrawer.row) || item.status === 'blocked' || item.available <= 0"
+                  :loading="isLockingAddress(item.id)"
+                  @click.stop="lockAddress(deliveryDrawer.row, item)"
+                >
+                  {{ activeAddressLock(deliveryDrawer.row) ? '已锁定' : item.status === 'blocked' ? '不可售' : '锁定到本包' }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <div class="bd-section-title mt">任务清单</div>
         <div class="delivery-task-detail-list">
           <div
@@ -1219,6 +1267,9 @@ import {
   type DailyActionStatus,
   type IntegrationStatus,
   type OpsCheckStatus,
+  type PrivateAddressInventory,
+  type PrivateAddressInventoryStatus,
+  type PrivateAddressLock,
   type PrivateContact,
   type PrivateCompanyVerification,
   type PrivateContactImportRow,
@@ -1261,6 +1312,8 @@ const contacts = ref<PrivateContact[]>([])
 const groups = ref<PrivateGroup[]>([])
 const contents = ref<PrivateContent[]>([])
 const tasks = ref<PrivateTask[]>([])
+const addressInventory = ref<PrivateAddressInventory[]>([])
+const addressLocks = ref<PrivateAddressLock[]>([])
 const integrations = ref<PrivateIntegration[]>([])
 const ownershipRules = ref<PrivateOwnershipRule[]>([])
 const deliveryPackages = ref<PrivateDeliveryPackage[]>([])
@@ -1272,6 +1325,8 @@ const deliveryCreatingIds = ref<number[]>([])
 const deliveryTaskUpdatingIds = ref<number[]>([])
 const supervisorTaskCreatingIds = ref<number[]>([])
 const taskUpdatingIds = ref<number[]>([])
+const addressLockingIds = ref<number[]>([])
+const addressReleasingIds = ref<number[]>([])
 const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
@@ -1619,6 +1674,23 @@ function deliveryRiskText(row: PrivateDeliveryPackage) {
   return '任务已全部完成,可进入回访和续费沉淀'
 }
 
+function addressStatusText(status: PrivateAddressInventoryStatus) {
+  return ({ available: '可售', low: '低库存', blocked: '停售' } as Record<PrivateAddressInventoryStatus, string>)[status]
+}
+
+function addressStatusTag(status: PrivateAddressInventoryStatus): 'success' | 'warning' | 'danger' {
+  return ({ available: 'success', low: 'warning', blocked: 'danger' } as Record<PrivateAddressInventoryStatus, 'success' | 'warning' | 'danger'>)[status]
+}
+
+function isAddressDelivery(row: PrivateDeliveryPackage) {
+  const text = `${row.packageName}${row.serviceLine}${row.orderItemNames?.join('') || ''}`
+  return /同行|挂靠|地址/.test(text)
+}
+
+function activeAddressLock(row: PrivateDeliveryPackage) {
+  return addressLocks.value.find(item => item.packageId === row.id && item.status === 'locked')
+}
+
 function followResultTag(result: PrivateFollowResult) {
   return ({ 无响应: 'info', 已联系: 'primary', 有意向: 'warning', 已报价: 'warning', 已成交: 'success', 暂缓: 'info', 流失: 'danger' } as Record<PrivateFollowResult, any>)[result]
 }
@@ -1727,6 +1799,14 @@ function isUpdatingTask(id: number) {
   return taskUpdatingIds.value.includes(id)
 }
 
+function isLockingAddress(id: number) {
+  return addressLockingIds.value.includes(id)
+}
+
+function isReleasingAddress(id: number) {
+  return addressReleasingIds.value.includes(id)
+}
+
 function hasDeliveryPackage(contactId: number) {
   return deliveryPackages.value.some(item => item.contactId === contactId)
 }
@@ -1757,6 +1837,8 @@ async function loadDashboard() {
   ownershipRules.value = data.ownershipRules
   deliveryPackages.value = data.deliveryPackages
   followRecords.value = data.followRecords
+  addressInventory.value = data.addressInventory || []
+  addressLocks.value = data.addressLocks || []
   opsChecks.value = data.opsChecks
   dailyActions.value = data.dailyActions
   Object.assign(wecomConfig, data.wecomConfig)
@@ -2170,6 +2252,40 @@ async function createSupervisorTask(row: PrivateDeliveryPackage, task: PrivateTa
     ElMessage.error(error?.message || '生成督办任务失败')
   } finally {
     supervisorTaskCreatingIds.value = supervisorTaskCreatingIds.value.filter(id => id !== task.id)
+  }
+}
+
+async function lockAddress(row: PrivateDeliveryPackage, item: PrivateAddressInventory) {
+  if (isLockingAddress(item.id)) return
+  addressLockingIds.value = [...addressLockingIds.value, item.id]
+  try {
+    const result = await privateDomainApi.lockAddressForDelivery(row.id, item.id)
+    await loadDashboard()
+    ElMessage.success(result.reused ? '该交付包已有锁定地址' : `已锁定地址: ${result.lock.remark}`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '锁定地址失败')
+  } finally {
+    addressLockingIds.value = addressLockingIds.value.filter(id => id !== item.id)
+  }
+}
+
+async function releaseActiveAddress(row: PrivateDeliveryPackage) {
+  const lock = activeAddressLock(row)
+  if (!lock) return
+  await releaseAddress(lock)
+}
+
+async function releaseAddress(lock: PrivateAddressLock) {
+  if (isReleasingAddress(lock.id)) return
+  addressReleasingIds.value = [...addressReleasingIds.value, lock.id]
+  try {
+    await privateDomainApi.releaseAddressLock(lock.id)
+    await loadDashboard()
+    ElMessage.success('地址锁定已释放')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '释放地址失败')
+  } finally {
+    addressReleasingIds.value = addressReleasingIds.value.filter(id => id !== lock.id)
   }
 }
 
@@ -2753,6 +2869,106 @@ watch(() => route.fullPath, applyRouteQueue)
 
 .delivery-check-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.address-lock-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.address-lock-current {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+
+  strong {
+    color: #166534;
+    font-size: 13px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.address-inventory-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.address-inventory-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.low {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.blocked {
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.address-inventory-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.address-inventory-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+
+  span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 6px;
+    border-radius: 6px;
+    background: rgba(248, 250, 252, 0.9);
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    overflow: hidden;
+    color: #111827;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .delivery-task-detail-list {
@@ -3425,6 +3641,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .delivery-summary,
   .delivery-progress-stats,
   .delivery-check-grid,
+  .address-inventory-list,
   .verify-detail-grid,
   .config-meta {
     grid-template-columns: 1fr;

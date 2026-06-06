@@ -15,6 +15,8 @@ export type PrivateDeliveryStatus = 'created' | 'in_progress' | 'done'
 export type PrivateFollowMethod = '企微' | '电话' | '微信' | '短信' | '社群' | '线下' | '其他'
 export type PrivateFollowResult = '无响应' | '已联系' | '有意向' | '已报价' | '已成交' | '暂缓' | '流失'
 export type PrivateTimelineType = 'contact' | 'verify' | 'follow' | 'task' | 'delivery'
+export type PrivateAddressInventoryStatus = 'available' | 'low' | 'blocked'
+export type PrivateAddressLockStatus = 'locked' | 'released'
 
 export interface PrivateOwnershipRule {
   id: number
@@ -68,6 +70,34 @@ export interface PrivateDeliveryPackage {
   dueDate: string
   taskIds: number[]
   tasks: PrivateTask[]
+}
+
+export interface PrivateAddressInventory {
+  id: number
+  city: string
+  district: string
+  addressType: '园区地址' | '商用地址' | '集群地址'
+  supplierName: string
+  total: number
+  available: number
+  locked: number
+  monthlyCost: number
+  channelPrice: number
+  status: PrivateAddressInventoryStatus
+  remark: string
+}
+
+export interface PrivateAddressLock {
+  id: number
+  inventoryId: number
+  packageId: number
+  companyName: string
+  channelName: string
+  ownerName: string
+  lockedAt: string
+  releaseAt: string
+  status: PrivateAddressLockStatus
+  remark: string
 }
 
 export interface PrivateBossMetric {
@@ -331,6 +361,8 @@ const OWNERSHIP_RULE_KEY = 'biz_private_ownership_rules'
 const WECOM_CONFIG_KEY = 'biz_private_wecom_config'
 const DELIVERY_PACKAGE_KEY = 'biz_private_delivery_packages'
 const FOLLOW_KEY = 'biz_private_follow_records'
+const ADDRESS_INVENTORY_KEY = 'biz_private_address_inventory'
+const ADDRESS_LOCK_KEY = 'biz_private_address_locks'
 const PRIVATE_SOURCE_OPTIONS: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
 const PRIVATE_STAGE_OPTIONS: PrivateStage[] = ['new', 'nurturing', 'intent', 'quoted', 'ordered', 'silent']
 const ANSWER_OPTIONS = {
@@ -794,6 +826,15 @@ function ensureSeeds() {
   if (!readList<PrivateOwnershipRule>(OWNERSHIP_RULE_KEY).length) writeOwnershipRules(defaultOwnershipRules())
   if (!localStorage.getItem(WECOM_CONFIG_KEY)) writeWecomConfig(defaultWecomConfig())
   if (!localStorage.getItem(DELIVERY_PACKAGE_KEY)) writeList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY, [])
+  if (!readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY).length) {
+    writeList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY, [
+      { id: 1, city: '杭州', district: '上城区', addressType: '园区地址', supplierName: '钱塘商务园', total: 20, available: 7, locked: 13, monthlyCost: 180, channelPrice: 380, status: 'available', remark: '适合一般服务业,可开票,月结' },
+      { id: 2, city: '杭州', district: '拱墅区', addressType: '集群地址', supplierName: '运河企服园', total: 16, available: 2, locked: 14, monthlyCost: 160, channelPrice: 360, status: 'low', remark: '库存偏低,优先给高价渠道单' },
+      { id: 3, city: '杭州', district: '滨江区', addressType: '商用地址', supplierName: '滨江数创中心', total: 12, available: 5, locked: 7, monthlyCost: 260, channelPrice: 520, status: 'available', remark: '适合科技/软件类客户' },
+      { id: 4, city: '义乌', district: '稠城街道', addressType: '园区地址', supplierName: '义乌云商园', total: 10, available: 0, locked: 10, monthlyCost: 140, channelPrice: 320, status: 'blocked', remark: '暂停售卖,等待供应商补资料' }
+    ])
+  }
+  if (!localStorage.getItem(ADDRESS_LOCK_KEY)) writeList<PrivateAddressLock>(ADDRESS_LOCK_KEY, [])
   if (!readList<PrivateFollowRecord>(FOLLOW_KEY).length) {
     writeList<PrivateFollowRecord>(FOLLOW_KEY, [
       {
@@ -1650,6 +1691,8 @@ export const privateDomainApi = {
     const ownershipRules = readOwnershipRules()
     const wecomConfig = readWecomConfig()
     const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    const addressInventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
+    const addressLocks = readList<PrivateAddressLock>(ADDRESS_LOCK_KEY)
     const deliveryPackages = await hydrateDeliveryPackages(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY), followRecords)
     const opsProfile = readProfile()
     const summary = calcSummary(contacts, groups, deliveryPackages, followRecords)
@@ -1664,6 +1707,8 @@ export const privateDomainApi = {
       wecomConfig,
       deliveryPackages,
       followRecords,
+      addressInventory,
+      addressLocks,
       bossMetrics: buildBossMetrics(summary),
       opsProfile,
       opsChecks: buildOpsChecks(opsProfile, integrations, ownershipRules, deliveryPackages, followRecords),
@@ -2030,6 +2075,67 @@ export const privateDomainApi = {
     }
     writeList(TASK_KEY, [supervisorTask, ...tasks])
     return delay({ task: supervisorTask, reused: false })
+  },
+  async lockAddressForDelivery(packageId: number, inventoryId: number) {
+    ensureSeeds()
+    const currentPackage = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY).find(item => item.id === packageId)
+    if (!currentPackage) throw new Error('交付包不存在')
+    const inventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
+    const inventoryIdx = inventory.findIndex(item => item.id === inventoryId)
+    if (inventoryIdx < 0) throw new Error('地址库存不存在')
+    const address = inventory[inventoryIdx]
+    if (address.status === 'blocked' || address.available <= 0) throw new Error('该地址暂无可售库存')
+
+    const locks = readList<PrivateAddressLock>(ADDRESS_LOCK_KEY)
+    const existed = locks.find(item => item.packageId === packageId && item.status === 'locked')
+    if (existed) return delay({ lock: existed, inventory, reused: true })
+
+    const lock: PrivateAddressLock = {
+      id: maxId(locks) + 1,
+      inventoryId,
+      packageId,
+      companyName: currentPackage.companyName,
+      channelName: currentPackage.contactName,
+      ownerName: currentPackage.ownerName,
+      lockedAt: ts(),
+      releaseAt: ts(30, 18, 0),
+      status: 'locked',
+      remark: `${address.city}${address.district}${address.addressType} · ${address.supplierName}`
+    }
+    const nextAvailable = Math.max(0, address.available - 1)
+    inventory[inventoryIdx] = {
+      ...address,
+      available: nextAvailable,
+      locked: address.locked + 1,
+      status: nextAvailable <= 0 ? 'blocked' : nextAvailable <= 2 ? 'low' : 'available'
+    }
+    writeList(ADDRESS_INVENTORY_KEY, inventory)
+    writeList(ADDRESS_LOCK_KEY, [lock, ...locks])
+    return delay({ lock, inventory, reused: false })
+  },
+  async releaseAddressLock(lockId: number) {
+    ensureSeeds()
+    const locks = readList<PrivateAddressLock>(ADDRESS_LOCK_KEY)
+    const lockIdx = locks.findIndex(item => item.id === lockId)
+    if (lockIdx < 0) throw new Error('地址锁定记录不存在')
+    if (locks[lockIdx].status === 'released') return delay({ lock: locks[lockIdx], reused: true })
+
+    const inventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
+    const inventoryIdx = inventory.findIndex(item => item.id === locks[lockIdx].inventoryId)
+    if (inventoryIdx >= 0) {
+      const address = inventory[inventoryIdx]
+      const nextAvailable = address.available + 1
+      inventory[inventoryIdx] = {
+        ...address,
+        available: nextAvailable,
+        locked: Math.max(0, address.locked - 1),
+        status: nextAvailable <= 2 ? 'low' : 'available'
+      }
+      writeList(ADDRESS_INVENTORY_KEY, inventory)
+    }
+    locks[lockIdx] = { ...locks[lockIdx], status: 'released', releaseAt: ts() }
+    writeList(ADDRESS_LOCK_KEY, locks)
+    return delay({ lock: locks[lockIdx], inventory, reused: false })
   },
   async bossSnapshot() {
     ensureSeeds()

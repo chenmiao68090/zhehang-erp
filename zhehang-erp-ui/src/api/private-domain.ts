@@ -53,6 +53,8 @@ export interface PrivateDeliveryPackage {
   contactId: number
   companyName: string
   contactName: string
+  orderId?: number
+  orderNo?: string
   serviceLine: string
   packageName: string
   ownerName: string
@@ -1508,7 +1510,7 @@ function buildContactTimeline(
         id: `delivery-${item.id}`,
         type: 'delivery',
         title: `生成${item.packageName}`,
-        content: `${item.serviceLine} · 自动拆解 ${item.taskIds.length} 个交付任务 · 最晚节点 ${item.dueDate}`,
+        content: `${item.orderNo ? `来源提单:${item.orderNo} · ` : ''}${item.serviceLine} · 自动拆解 ${item.taskIds.length} 个交付任务 · 最晚节点 ${item.dueDate}`,
         operatorName: item.ownerName,
         time: item.createdAt,
         statusText: item.status === 'done' ? '已完成' : item.status === 'in_progress' ? '进行中' : '已创建',
@@ -1811,6 +1813,9 @@ export const privateDomainApi = {
     const existed = packages.find(item => item.contactId === id)
     if (existed) return delay({ package: existed, reused: true })
 
+    const latestOrderRecord = readList<PrivateFollowRecord>(FOLLOW_KEY)
+      .filter(item => item.contactId === id && item.orderNo)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
     const tasks = readList<PrivateTask>(TASK_KEY)
     let nextTaskId = maxId(tasks)
     const plan = deliveryPlanFor(contact)
@@ -1831,6 +1836,8 @@ export const privateDomainApi = {
       contactId: contact.id,
       companyName: contact.companyName,
       contactName: contact.name,
+      orderId: latestOrderRecord?.orderId,
+      orderNo: latestOrderRecord?.orderNo,
       serviceLine: contact.serviceLine,
       packageName: packageNameOf(contact),
       ownerName: contact.ownerName,
@@ -1846,7 +1853,7 @@ export const privateDomainApi = {
       ...contact,
       stage: 'ordered',
       lastTouchAt: ts(),
-      nextAction: `已生成${deliveryPackage.packageName},请交付团队按任务包推进`
+      nextAction: `已生成${deliveryPackage.packageName}${deliveryPackage.orderNo ? `(${deliveryPackage.orderNo})` : ''},请交付团队按任务包推进`
     }
     writeList(CONTACT_KEY, contacts)
     return delay({ package: deliveryPackage, reused: false })

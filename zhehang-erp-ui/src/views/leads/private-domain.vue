@@ -676,6 +676,12 @@
                 </template>
               </el-table-column>
               <el-table-column prop="serviceLine" label="业务线" width="130" />
+              <el-table-column label="来源提单" width="150">
+                <template #default="{ row }">
+                  <el-tag v-if="row.orderNo" type="primary" size="small">{{ row.orderNo }}</el-tag>
+                  <span v-else class="sub-line">未关联</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="ownerName" label="销售/负责人" width="130" />
               <el-table-column prop="createdAt" label="创建时间" width="150" />
               <el-table-column prop="dueDate" label="最晚节点" width="150" />

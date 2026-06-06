@@ -278,6 +278,7 @@
               <div><span>可导入</span><b>{{ previewStats.ready }}</b></div>
               <div><span>重复</span><b>{{ previewStats.duplicate }}</b></div>
               <div><span>错误</span><b>{{ previewStats.error }}</b></div>
+              <div><span>工商命中</span><b>{{ previewStats.verified }}</b></div>
             </div>
             <el-table :data="importPreview" border stripe height="360" empty-text="请先下载模板并导入 CSV 或粘贴 Excel 内容">
               <el-table-column prop="rowNo" label="行号" width="80" />
@@ -292,6 +293,17 @@
                   <div class="sub-line">{{ row.data.name }} · {{ row.data.phone }}</div>
                 </template>
               </el-table-column>
+              <el-table-column label="工商/撞单" min-width="220">
+                <template #default="{ row }">
+                  <div class="verify-cell">
+                    <el-tag :type="verificationTag(row.verification)" size="small">{{ verificationText(row.verification) }}</el-tag>
+                    <el-tag :type="duplicateRiskTag(row.verification?.duplicateRisk)" size="small" effect="plain">
+                      {{ duplicateRiskText(row.verification?.duplicateRisk) }}
+                    </el-tag>
+                    <span>{{ row.verification?.creditCode || row.verification?.linkageText || '待补全工商信息' }}</span>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column prop="data.source" label="来源" width="120" />
               <el-table-column prop="data.ownerName" label="负责人" width="110" />
               <el-table-column prop="data.serviceLine" label="业务线" width="120" />
@@ -299,7 +311,9 @@
               <el-table-column prop="data.demand" label="客户需求" min-width="240" show-overflow-tooltip />
               <el-table-column label="问题" min-width="260">
                 <template #default="{ row }">
-                  <span v-if="row.status === 'ready'" class="ok-text">可导入</span>
+                  <span v-if="row.status === 'ready'" :class="row.verification?.duplicateRisk === 'possible' ? 'warn-text' : 'ok-text'">
+                    {{ importProblemText(row) }}
+                  </span>
                   <span v-else-if="row.status === 'duplicate'" class="warn-text">{{ row.duplicateText }}</span>
                   <span v-else class="error-text">{{ row.errors.join('；') }}</span>
                 </template>
@@ -328,6 +342,17 @@
                 <div class="sub-line">{{ row.name }} · {{ row.phone }}</div>
               </template>
             </el-table-column>
+            <el-table-column label="工商/撞单" min-width="170">
+              <template #default="{ row }">
+                <div class="verify-cell compact">
+                  <el-tag :type="verificationTag(row.verification)" size="small">{{ verificationText(row.verification) }}</el-tag>
+                  <el-tag :type="duplicateRiskTag(row.verification?.duplicateRisk)" size="small" effect="plain">
+                    {{ duplicateRiskText(row.verification?.duplicateRisk) }}
+                  </el-tag>
+                  <span>{{ row.creditCode || row.verification?.businessStatus || '待核验' }}</span>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column label="私域触点" width="150">
               <template #default="{ row }">
                 <el-tag size="small" effect="plain">{{ row.source }}</el-tag>
@@ -354,9 +379,17 @@
             <el-table-column label="需求" min-width="260" prop="demand" show-overflow-tooltip />
             <el-table-column label="最近互动" width="150" prop="lastTouchAt" />
             <el-table-column label="下一动作" min-width="230" prop="nextAction" show-overflow-tooltip />
-            <el-table-column label="操作" width="260" fixed="right">
+            <el-table-column label="操作" width="330" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click.stop="openContact(row)">详情</el-button>
+                <el-button
+                  link
+                  type="primary"
+                  :loading="isVerifying(row.id)"
+                  @click.stop="verifyContact(row)"
+                >
+                  工商核验
+                </el-button>
                 <el-button
                   link
                   type="success"
@@ -490,6 +523,9 @@
           <div class="bd-kv"><span>客户评分</span><b>{{ drawer.row.score }}</b></div>
           <div class="bd-kv"><span>服务线</span><b>{{ drawer.row.serviceLine }}</b></div>
           <div class="bd-kv"><span>预估金额</span><b>¥{{ formatMoney(drawer.row.estimatedAmount) }}</b></div>
+          <div class="bd-kv"><span>工商状态</span><b>{{ drawer.row.verification?.businessStatus || verificationText(drawer.row.verification) }}</b></div>
+          <div class="bd-kv"><span>撞单风险</span><b>{{ duplicateRiskText(drawer.row.verification?.duplicateRisk) }}</b></div>
+          <div class="bd-kv wide"><span>统一信用代码</span><b>{{ drawer.row.creditCode || drawer.row.verification?.creditCode || '待核验' }}</b></div>
           <div class="bd-kv wide"><span>客户需求</span><b>{{ drawer.row.demand }}</b></div>
           <div class="bd-kv wide"><span>下一动作</span><b>{{ drawer.row.nextAction }}</b></div>
         </div>
@@ -501,12 +537,36 @@
           <el-tag v-for="tag in drawer.row.tags" :key="tag" effect="plain">{{ tag }}</el-tag>
         </div>
 
+        <div class="bd-section-title mt">工商核验</div>
+        <div class="verify-detail-card">
+          <div class="verify-detail-head">
+            <div>
+              <strong>{{ drawer.row.verification?.entityName || drawer.row.companyName }}</strong>
+              <p>{{ drawer.row.verification?.source || '工商查询服务' }} · {{ drawer.row.verification?.confidence || 0 }}% 置信度</p>
+            </div>
+            <div class="verify-tags">
+              <el-tag :type="verificationTag(drawer.row.verification)" size="small">{{ verificationText(drawer.row.verification) }}</el-tag>
+              <el-tag :type="duplicateRiskTag(drawer.row.verification?.duplicateRisk)" size="small" effect="plain">
+                {{ duplicateRiskText(drawer.row.verification?.duplicateRisk) }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="verify-detail-grid">
+            <span>法人 <b>{{ drawer.row.verification?.legalPerson || '-' }}</b></span>
+            <span>注册资本 <b>{{ drawer.row.verification?.registeredCapital || '-' }}</b></span>
+            <span>税务资质 <b>{{ drawer.row.verification?.taxQualification || '-' }}</b></span>
+            <span>成立日期 <b>{{ drawer.row.verification?.establishDate || '-' }}</b></span>
+          </div>
+          <p class="verify-note">{{ drawer.row.verification?.linkageText || '还未核验,建议先点击工商核验。' }}</p>
+          <p class="verify-note">{{ drawer.row.verification?.suggestionText || '待生成服务建议。' }}</p>
+        </div>
+
         <div class="bd-section-title mt">链路勾稽</div>
         <div class="linkage-grid">
           <div><span>私域互动</span><b>{{ drawer.row.touchCount }} 次</b></div>
           <div><span>线索入库</span><b>{{ drawer.row.convertedLeadId ? `已入库 #${drawer.row.convertedLeadId}` : '未入库' }}</b></div>
-          <div><span>归属池</span><b>{{ drawer.row.score >= 85 ? '线上获客公海池' : '新线索池' }}</b></div>
-          <div><span>推荐动作</span><b>{{ drawer.row.stage === 'silent' ? '沉默唤醒' : '销售跟进' }}</b></div>
+          <div><span>主体库</span><b>{{ drawer.row.entityId ? `已挂接 #${drawer.row.entityId}` : '待核验' }}</b></div>
+          <div><span>归属池</span><b>{{ drawer.row.verification?.duplicateRisk === 'hit' ? '撞单仲裁' : drawer.row.score >= 85 ? '线上获客公海池' : '新线索池' }}</b></div>
         </div>
       </div>
 
@@ -522,8 +582,8 @@
           <div class="bd-timeline-item">
             <span class="bd-timeline-dot"></span>
             <div>
-              <strong>系统判断</strong>
-              <p>评分 {{ drawer.row.score }} · 预估 {{ formatMoney(drawer.row.estimatedAmount) }} · 建议进入 {{ drawer.row.score >= 85 ? '高意向优先跟进' : '内容培育' }}</p>
+              <strong>工商/撞单判断</strong>
+              <p>{{ drawer.row.verification?.nextAction || '未核验,建议先补齐工商主体再分配跟进。' }}</p>
             </div>
           </div>
           <div class="bd-timeline-item">
@@ -538,6 +598,13 @@
 
       <template #footer>
         <el-button @click="drawer.visible = false">关闭</el-button>
+        <el-button
+          v-if="drawer.row"
+          :loading="isVerifying(drawer.row.id)"
+          @click.stop="verifyContact(drawer.row)"
+        >
+          工商核验
+        </el-button>
         <el-button v-if="drawer.row" @click.stop="createFollowTask(drawer.row)">生成跟进任务</el-button>
         <el-button
           v-if="drawer.row"
@@ -567,9 +634,11 @@ import {
   type IntegrationStatus,
   type OpsCheckStatus,
   type PrivateContact,
+  type PrivateCompanyVerification,
   type PrivateContactImportRow,
   type PrivateContent,
   type PrivateDailyAction,
+  type PrivateDuplicateRisk,
   type PrivateGroup,
   type PrivateImportPreviewRow,
   type PrivateImportStatus,
@@ -592,6 +661,7 @@ const contents = ref<PrivateContent[]>([])
 const tasks = ref<PrivateTask[]>([])
 const integrations = ref<PrivateIntegration[]>([])
 const convertingIds = ref<number[]>([])
+const verifyingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
@@ -672,7 +742,8 @@ const previewStats = computed(() => ({
   total: importPreview.value.length,
   ready: importPreview.value.filter(item => item.status === 'ready').length,
   duplicate: importPreview.value.filter(item => item.status === 'duplicate').length,
-  error: importPreview.value.filter(item => item.status === 'error').length
+  error: importPreview.value.filter(item => item.status === 'error').length,
+  verified: importPreview.value.filter(item => item.verification?.matched).length
 }))
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
@@ -747,6 +818,31 @@ function importStatusTag(status: PrivateImportStatus): 'success' | 'warning' | '
   return ({ ready: 'success', duplicate: 'warning', error: 'danger' } as Record<PrivateImportStatus, 'success' | 'warning' | 'danger'>)[status]
 }
 
+function duplicateRiskText(risk?: PrivateDuplicateRisk) {
+  return ({ none: '未重复', possible: '疑似重复', hit: '强命中' } as Record<PrivateDuplicateRisk, string>)[risk || 'none']
+}
+
+function duplicateRiskTag(risk?: PrivateDuplicateRisk): 'success' | 'warning' | 'danger' {
+  return ({ none: 'success', possible: 'warning', hit: 'danger' } as Record<PrivateDuplicateRisk, 'success' | 'warning' | 'danger'>)[risk || 'none']
+}
+
+function verificationText(verification?: PrivateCompanyVerification) {
+  if (!verification) return '未核验'
+  return verification.matched ? '已核验' : '待核验'
+}
+
+function verificationTag(verification?: PrivateCompanyVerification): 'success' | 'warning' | 'info' {
+  if (!verification) return 'info'
+  return verification.matched ? 'success' : 'warning'
+}
+
+function importProblemText(row: PrivateImportPreviewRow) {
+  if (!row.verification) return '可导入'
+  if (!row.verification.matched) return '可导入,需后续补工商'
+  if (row.verification.duplicateRisk === 'possible') return `疑似重复: ${row.verification.linkageText}`
+  return `工商已核验: ${row.verification.businessStatus || row.verification.creditCode || '主体命中'}`
+}
+
 function contentRate(row: PrivateContent) {
   if (!row.reachCount) return 0
   return Number((row.leadCount / row.reachCount * 100).toFixed(1))
@@ -754,6 +850,10 @@ function contentRate(row: PrivateContent) {
 
 function isConverting(id: number) {
   return convertingIds.value.includes(id)
+}
+
+function isVerifying(id: number) {
+  return verifyingIds.value.includes(id)
 }
 
 async function loadDashboard() {
@@ -924,6 +1024,21 @@ function resetQuery() {
 function openContact(row: PrivateContact) {
   drawer.row = row
   drawer.visible = true
+}
+
+async function verifyContact(row: PrivateContact) {
+  if (isVerifying(row.id)) return
+  verifyingIds.value = [...verifyingIds.value, row.id]
+  try {
+    const updated = await privateDomainApi.verifyContact(row.id)
+    contacts.value = contacts.value.map(item => item.id === updated.id ? updated : item)
+    if (drawer.row?.id === updated.id) drawer.row = updated
+    ElMessage.success(`工商核验完成: ${verificationText(updated.verification)} / ${duplicateRiskText(updated.verification?.duplicateRisk)}`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '工商核验失败')
+  } finally {
+    verifyingIds.value = verifyingIds.value.filter(id => id !== row.id)
+  }
 }
 
 async function markIntent(row: PrivateContact) {
@@ -1400,7 +1515,7 @@ onMounted(loadContacts)
 
 .preview-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 
@@ -1441,6 +1556,30 @@ onMounted(loadContacts)
 
 .error-text {
   color: #dc2626;
+}
+
+.verify-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+
+  span {
+    width: 100%;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &.compact {
+    align-items: flex-start;
+
+    span {
+      width: 100%;
+    }
+  }
 }
 
 .question-stack {
@@ -1652,6 +1791,70 @@ onMounted(loadContacts)
   margin-top: 14px;
 }
 
+.verify-detail-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.verify-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+  }
+}
+
+.verify-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.verify-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  span {
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    overflow: hidden;
+    color: #111827;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.verify-note {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .linkage-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1712,8 +1915,17 @@ onMounted(loadContacts)
   .config-grid,
   .toolbar,
   .preview-summary,
+  .verify-detail-grid,
   .config-meta {
     grid-template-columns: 1fr;
+  }
+
+  .verify-detail-head {
+    flex-direction: column;
+  }
+
+  .verify-tags {
+    justify-content: flex-start;
   }
 
   .import-hint {

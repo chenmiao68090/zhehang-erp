@@ -1,4 +1,4 @@
-import { onlineLeadApi, type OnlineLeadCreatePayload } from './growth'
+import { enterpriseApi, onlineLeadApi, type CompanyResolveResult, type EnterpriseEntity, type OnlineLeadCreatePayload } from './growth'
 
 export type PrivateSource = '企业微信' | '个人微信' | '微信群' | '朋友圈' | '公众号' | '视频号' | '老客转介绍'
 export type PrivateStage = 'new' | 'nurturing' | 'intent' | 'quoted' | 'ordered' | 'silent'
@@ -7,6 +7,28 @@ export type IntegrationStatus = 'connected' | 'pending' | 'blocked'
 export type OpsCheckStatus = 'ready' | 'partial' | 'missing'
 export type DailyActionStatus = 'todo' | 'doing' | 'blocked' | 'done'
 export type PrivateImportStatus = 'ready' | 'duplicate' | 'error'
+export type PrivateDuplicateRisk = CompanyResolveResult['duplicateRisk']
+
+export interface PrivateCompanyVerification {
+  matched: boolean
+  confidence: number
+  source: string
+  duplicateRisk: PrivateDuplicateRisk
+  entityId?: number
+  entityName?: string
+  creditCode?: string
+  legalPerson?: string
+  registeredCapital?: string
+  establishDate?: string
+  businessStatus?: EnterpriseEntity['businessStatus']
+  taxQualification?: string
+  industry?: string
+  address?: string
+  riskTags: string[]
+  linkageText: string
+  suggestionText: string
+  nextAction: string
+}
 
 export interface PrivateContact {
   id: number
@@ -26,6 +48,9 @@ export interface PrivateContact {
   nextAction: string
   touchCount: number
   convertedLeadId?: number
+  entityId?: number
+  creditCode?: string
+  verification?: PrivateCompanyVerification
 }
 
 export interface PrivateImportTemplateColumn {
@@ -58,6 +83,7 @@ export interface PrivateImportPreviewRow {
   status: PrivateImportStatus
   errors: string[]
   duplicateText?: string
+  verification?: PrivateCompanyVerification
 }
 
 export interface PrivateImportResult {
@@ -513,9 +539,9 @@ function buildOpsChecks(profile: PrivateOpsProfile, integrations: PrivateIntegra
       name: '公司名自动带工商',
       status: 'ready',
       ownerName: '网销运营',
-      current: '网销线索已支持公司名自动核验工商主体、风险标签和查重',
-      next: '把私域入库也强制走工商核验和撞单校验',
-      path: '/leads/online-leads'
+      current: '网销线索和私域导入均已接入工商核验、风险标签和撞单判断',
+      next: '下一步接真实工商接口后,把待核验客户自动补全统一社会信用代码',
+      path: '/customer/enterprise-master'
     },
     {
       id: 'assign',
@@ -669,10 +695,98 @@ function validateImportRow(row: PrivateContactImportRow) {
   return { errors, companyName, name, phone, source }
 }
 
-function buildImportPreview(rows: PrivateContactImportRow[], contacts: PrivateContact[]) {
+function verificationFromResolve(result: CompanyResolveResult): PrivateCompanyVerification {
+  const entity = result.entity
+  const linkage = result.linkage
+  const linkageText = entity
+    ? `线索${linkage.onlineLeads.count} / 客户${linkage.customers.count} / 订单${linkage.orders.count} / 任务${linkage.tasks.count}`
+    : '主体库未命中'
+  return {
+    matched: result.matched,
+    confidence: result.confidence,
+    source: result.source,
+    duplicateRisk: result.duplicateRisk,
+    entityId: entity?.id,
+    entityName: entity?.name,
+    creditCode: entity?.creditCode,
+    legalPerson: entity?.legalPerson,
+    registeredCapital: entity?.registeredCapital,
+    establishDate: entity?.establishDate,
+    businessStatus: entity?.businessStatus,
+    taxQualification: entity?.taxQualification,
+    industry: entity?.industry,
+    address: entity?.address,
+    riskTags: entity?.riskTags?.length ? entity.riskTags : ['待工商核验'],
+    linkageText,
+    suggestionText: result.suggestions.slice(0, 2).map(item => `${item.service}(${item.priority})`).join('、') || '待补充服务建议',
+    nextAction: result.nextActions[0] || (entity ? '可继续入库并按线索分配规则流转。' : '未命中工商库,先作为待核验客户入库。')
+  }
+}
+
+async function resolveCompanyVerification(companyName: string) {
+  try {
+    return verificationFromResolve(await enterpriseApi.resolveCompany(companyName))
+  } catch {
+    return {
+      matched: false,
+      confidence: 0,
+      source: '工商查询服务',
+      duplicateRisk: 'none' as PrivateDuplicateRisk,
+      riskTags: ['待工商核验'],
+      linkageText: '工商服务暂不可用',
+      suggestionText: '待补充服务建议',
+      nextAction: '工商服务暂不可用,先作为待核验客户入库。'
+    }
+  }
+}
+
+function withVerificationTags(tags: string[], verification?: PrivateCompanyVerification) {
+  const merged = new Set(tags)
+  if (verification) {
+    if (verification.matched) {
+      merged.add('已核验工商')
+      verification.riskTags.slice(0, 3).forEach(tag => merged.add(tag))
+    } else {
+      merged.add('待工商核验')
+    }
+    if (verification.duplicateRisk === 'possible') merged.add('疑似重复')
+    if (verification.duplicateRisk === 'hit') merged.add('撞单强命中')
+  }
+  return Array.from(merged).filter(Boolean).slice(0, 8)
+}
+
+function scoreWithVerification(baseScore: number, verification?: PrivateCompanyVerification) {
+  let score = baseScore
+  if (verification?.matched && verification.confidence >= 90) score += 3
+  if (verification?.riskTags.some(tag => /新企|税务|地址|异常|高开票/.test(tag))) score += 5
+  if (verification?.duplicateRisk === 'possible') score -= 5
+  if (verification?.duplicateRisk === 'hit') score -= 12
+  return Math.max(35, Math.min(98, score))
+}
+
+function applyVerification(contact: PrivateContact, verification?: PrivateCompanyVerification): PrivateContact {
+  if (!verification) return contact
+  const tags = withVerificationTags(contact.tags, verification)
+  const nextAction = verification.duplicateRisk === 'hit'
+    ? '先进入撞单管理确认归属,再安排销售跟进'
+    : contact.nextAction
+  return {
+    ...contact,
+    companyName: verification.entityName || contact.companyName,
+    tags,
+    score: scoreWithVerification(contact.score, verification),
+    nextAction,
+    entityId: verification.entityId,
+    creditCode: verification.creditCode,
+    verification
+  }
+}
+
+async function buildImportPreview(rows: PrivateContactImportRow[], contacts: PrivateContact[]) {
   const existingMap = new Map(contacts.map(item => [contactKey(item.companyName, item.phone), item.companyName]))
   const seenMap = new Map<string, number>()
-  return rows.map((raw, idx): PrivateImportPreviewRow => {
+  const preview: PrivateImportPreviewRow[] = []
+  for (const [idx, raw] of rows.entries()) {
     const rowNo = idx + 2
     const data: PrivateContactImportRow = {
       companyName: cleanText(raw.companyName),
@@ -692,28 +806,37 @@ function buildImportPreview(rows: PrivateContactImportRow[], contacts: PrivateCo
     const checked = validateImportRow(data)
     const key = contactKey(checked.companyName, checked.phone)
     let duplicateText = ''
+    let verification: PrivateCompanyVerification | undefined
+    if (!checked.errors.length) {
+      verification = await resolveCompanyVerification(data.companyName)
+    }
     if (!checked.errors.length && existingMap.has(key)) duplicateText = `已存在: ${existingMap.get(key)}`
     if (!checked.errors.length && !duplicateText && seenMap.has(key)) duplicateText = `本次导入第 ${seenMap.get(key)} 行已出现`
+    if (!checked.errors.length && !duplicateText && verification?.duplicateRisk === 'hit') {
+      duplicateText = `工商撞单: ${verification.nextAction}`
+    }
     if (!checked.errors.length && !duplicateText) seenMap.set(key, rowNo)
-    return {
+    preview.push({
       rowNo,
       data,
       status: checked.errors.length ? 'error' : duplicateText ? 'duplicate' : 'ready',
       errors: checked.errors,
-      duplicateText
-    }
-  })
+      duplicateText,
+      verification
+    })
+  }
+  return preview
 }
 
-function contactFromImport(row: PrivateContactImportRow, id: number): PrivateContact {
+function contactFromImport(row: PrivateContactImportRow, id: number, verification?: PrivateCompanyVerification): PrivateContact {
   const stage = normalizeStage(row.stage)
   const tags = tagList(row.tags)
   const source = normalizeSource(row.source) || '企业微信'
   const amount = amountOf(row.estimatedAmount)
-  return {
+  const contact: PrivateContact = {
     id,
     name: cleanText(row.name),
-    companyName: cleanText(row.companyName),
+    companyName: verification?.entityName || cleanText(row.companyName),
     phone: normalizePhone(row.phone),
     source,
     communityName: cleanText(row.communityName) || `${source}导入`,
@@ -728,6 +851,7 @@ function contactFromImport(row: PrivateContactImportRow, id: number): PrivateCon
     nextAction: cleanText(row.nextAction) || '导入后 24 小时内完成首次触达',
     touchCount: 1
   }
+  return applyVerification(contact, verification)
 }
 
 export const privateDomainApi = {
@@ -779,16 +903,16 @@ export const privateDomainApi = {
   async previewImport(rows: PrivateContactImportRow[]) {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)
-    return delay(buildImportPreview(rows, contacts))
+    return delay(await buildImportPreview(rows, contacts))
   },
   async importContacts(rows: PrivateContactImportRow[]): Promise<PrivateImportResult> {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)
-    const preview = buildImportPreview(rows, contacts)
+    const preview = await buildImportPreview(rows, contacts)
     let nextId = maxId(contacts)
     const importedContacts = preview
       .filter(item => item.status === 'ready')
-      .map(item => contactFromImport(item.data, ++nextId))
+      .map(item => contactFromImport(item.data, ++nextId, item.verification))
     if (importedContacts.length) writeList(CONTACT_KEY, [...importedContacts, ...contacts])
     return delay({
       total: preview.length,
@@ -810,6 +934,16 @@ export const privateDomainApi = {
     if (params.stage) contacts = contacts.filter(item => item.stage === params.stage)
     contacts = contacts.sort((a, b) => b.score - a.score || b.lastTouchAt.localeCompare(a.lastTouchAt))
     return delay(contacts)
+  },
+  async verifyContact(id: number) {
+    ensureSeeds()
+    const contacts = readList<PrivateContact>(CONTACT_KEY)
+    const idx = contacts.findIndex(item => item.id === id)
+    if (idx < 0) throw new Error('私域客户不存在')
+    const verification = await resolveCompanyVerification(contacts[idx].companyName)
+    contacts[idx] = applyVerification({ ...contacts[idx], lastTouchAt: ts() }, verification)
+    writeList(CONTACT_KEY, contacts)
+    return delay(contacts[idx])
   },
   async updateStage(id: number, stage: PrivateStage) {
     ensureSeeds()

@@ -557,6 +557,21 @@
                   <span v-else class="sub-line">待报价</span>
                 </template>
               </el-table-column>
+              <el-table-column label="交付" width="130" fixed="right">
+                <template #default="{ row }">
+                  <el-tag v-if="hasDeliveryPackage(row.contactId)" type="success" size="small">已建包</el-tag>
+                  <el-button
+                    v-else-if="canCreateDeliveryFromFollow(row)"
+                    link
+                    type="primary"
+                    :loading="isCreatingDelivery(row.contactId)"
+                    @click="createDeliveryFromFollow(row)"
+                  >
+                    生成交付包
+                  </el-button>
+                  <span v-else class="sub-line">{{ row.orderNo ? '待审批' : '待提单' }}</span>
+                </template>
+              </el-table-column>
             </el-table>
           </div>
         </el-tab-pane>
@@ -1347,6 +1362,14 @@ function isCreatingDelivery(id: number) {
   return deliveryCreatingIds.value.includes(id)
 }
 
+function hasDeliveryPackage(contactId: number) {
+  return deliveryPackages.value.some(item => item.contactId === contactId)
+}
+
+function canCreateDeliveryFromFollow(row: PrivateFollowRecord) {
+  return row.orderStatus === 'completed' && !hasDeliveryPackage(row.contactId)
+}
+
 function isCreatingOrderDraft(id: number) {
   return orderDraftCreatingIds.value.includes(id)
 }
@@ -1693,6 +1716,19 @@ async function createDeliveryPackage(row: PrivateContact) {
   } finally {
     deliveryCreatingIds.value = deliveryCreatingIds.value.filter(id => id !== row.id)
   }
+}
+
+async function createDeliveryFromFollow(row: PrivateFollowRecord) {
+  if (hasDeliveryPackage(row.contactId)) {
+    ElMessage.info('该客户已生成交付包')
+    return
+  }
+  const contact = contacts.value.find(item => item.id === row.contactId)
+  if (!contact) {
+    ElMessage.error('未找到私域客户,请刷新后重试')
+    return
+  }
+  await createDeliveryPackage(contact)
 }
 
 async function createOrderDraft(row: PrivateFollowRecord) {

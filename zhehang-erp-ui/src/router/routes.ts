@@ -37,6 +37,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   { path: '/leads/service-renewal', redirect: '/customer/service-renewal', meta: { hidden: true } },
   { path: '/leads/pool-admin', redirect: '/customer/pool-admin', meta: { hidden: true } },
   { path: '/leads/collision-manage', redirect: '/customer/collision-manage', meta: { hidden: true } },
+  { path: '/scrm/private-domain', redirect: '/leads/private-domain', meta: { hidden: true } },
   { path: '/supply/channel-cost', redirect: '/leads/online-roi', meta: { hidden: true } },
   { path: '/org/dept', redirect: '/hrm/dept', meta: { hidden: true } },
   { path: '/org/post', redirect: '/hrm/post', meta: { hidden: true } },
@@ -106,6 +107,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'OnlineLeads',
         component: () => import('@/views/leads/online-leads.vue'),
         meta: { title: '网销线索', icon: 'Promotion' }
+      },
+      {
+        path: 'private-domain',
+        name: 'PrivateDomain',
+        component: () => import('@/views/leads/private-domain.vue'),
+        meta: { title: '私域运营', icon: 'ChatLineRound' }
       },
       {
         path: 'online-roi',

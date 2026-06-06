@@ -317,22 +317,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { addressApi, supplierApi, type BizAddressResource, type BizSupplier } from '@/api/channel'
 import { privateDomainApi, type PrivateAddressInventory, type PrivateAddressLock, type PrivateAddressInventoryStatus } from '@/api/private-domain'
 
 type AddrStatus = BizAddressResource['status'] | 'abnormal'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const list = ref<(BizAddressResource & { status: AddrStatus })[]>([])
 const suppliers = ref<BizSupplier[]>([])
 const privateAddressInventory = ref<PrivateAddressInventory[]>([])
 const privateAddressLocks = ref<PrivateAddressLock[]>([])
 const statusTab = ref<string>('')
-const query = reactive({ status: [] as string[], district: '', supplierId: undefined as number | undefined, kw: '' })
+const query = reactive({ status: [] as string[], district: '', supplierId: undefined as number | undefined, kw: queryText(route.query.resourceNo) })
+
+function queryText (value: unknown) {
+  if (Array.isArray(value)) return String(value[0] || '')
+  return String(value || '')
+}
 
 const districtOptions = computed(() => Array.from(new Set(list.value.map(a => a.district))))
 
@@ -529,6 +535,10 @@ function recoverAddr (row: any) {
 }
 
 onMounted(loadData)
+watch(() => route.query.resourceNo, value => {
+  const next = queryText(value)
+  if (next) query.kw = next
+})
 </script>
 
 <style scoped>

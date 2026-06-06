@@ -1071,9 +1071,14 @@
                   已锁定给 {{ activeAddressLock(deliveryDrawer.row)?.companyName }} ·
                   {{ activeAddressLock(deliveryDrawer.row)?.lockedAt }} 至 {{ activeAddressLock(deliveryDrawer.row)?.releaseAt }}
                 </p>
-                <span v-if="activeAddressLock(deliveryDrawer.row)?.resourceId" class="address-resource-chip">
+                <button
+                  v-if="activeAddressLock(deliveryDrawer.row)?.resourceId"
+                  type="button"
+                  class="address-resource-chip"
+                  @click.stop="goAddressResource(activeAddressLock(deliveryDrawer.row))"
+                >
                   资源池 {{ formatAddressResourceNo(activeAddressLock(deliveryDrawer.row)?.resourceId) }}
-                </span>
+                </button>
               </div>
               <el-button
                 text
@@ -1719,6 +1724,14 @@ function activeAddressLock(row: PrivateDeliveryPackage) {
 
 function formatAddressResourceNo(resourceId?: number) {
   return resourceId ? `ADR${String(resourceId).padStart(5, '0')}` : '未绑定'
+}
+
+function goAddressResource(lock?: PrivateAddressLock) {
+  if (!lock?.resourceId) return
+  router.push({
+    path: '/supply/receipt',
+    query: { resourceNo: formatAddressResourceNo(lock.resourceId) }
+  }).catch(() => {})
 }
 
 function followResultTag(result: PrivateFollowResult) {
@@ -2965,9 +2978,15 @@ watch(() => route.fullPath, applyRouteQueue)
   border-radius: 999px;
   background: #eff6ff;
   color: #1d4ed8;
+  cursor: pointer;
   font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 12px;
   font-weight: 700;
+
+  &:hover {
+    border-color: #93c5fd;
+    background: #dbeafe;
+  }
 }
 
 .address-inventory-list {

@@ -625,7 +625,15 @@
         </el-tab-pane>
 
         <el-tab-pane label="跟进任务" name="tasks">
-          <el-table :data="tasks" border stripe>
+          <div class="task-filter-bar">
+            <el-radio-group v-model="taskFilter">
+              <el-radio-button v-for="item in taskFilterOptions" :key="item.value" :label="item.value" :value="item.value">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <span>{{ taskFilterHint }} 当前显示 {{ filteredTasks.length }} 条任务。</span>
+          </div>
+          <el-table :data="filteredTasks" border stripe empty-text="当前筛选下暂无任务">
             <el-table-column label="任务" min-width="260">
               <template #default="{ row }">
                 <strong>{{ row.title }}</strong>
@@ -648,6 +656,31 @@
             <el-table-column label="状态" width="110">
               <template #default="{ row }">
                 <el-tag :type="taskStatusTag(row.status)" size="small">{{ taskStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="130" fixed="right" align="center">
+              <template #default="{ row }">
+                <el-button
+                  v-if="row.status !== 'done'"
+                  type="primary"
+                  text
+                  size="small"
+                  :loading="isUpdatingTask(row.id)"
+                  :disabled="isUpdatingTask(row.id)"
+                  @click.stop="updatePrivateTaskStatus(row, 'done')"
+                >
+                  完成
+                </el-button>
+                <el-button
+                  v-else
+                  text
+                  size="small"
+                  :loading="isUpdatingTask(row.id)"
+                  :disabled="isUpdatingTask(row.id)"
+                  @click.stop="updatePrivateTaskStatus(row, 'pending')"
+                >
+                  恢复
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -1218,6 +1251,7 @@ import {
 
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
 type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'done'
+type TaskFilter = 'all' | 'pending' | 'overdue' | 'supervisor' | 'done'
 
 const router = useRouter()
 const route = useRoute()
@@ -1237,6 +1271,7 @@ const verifyingIds = ref<number[]>([])
 const deliveryCreatingIds = ref<number[]>([])
 const deliveryTaskUpdatingIds = ref<number[]>([])
 const supervisorTaskCreatingIds = ref<number[]>([])
+const taskUpdatingIds = ref<number[]>([])
 const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
@@ -1246,6 +1281,7 @@ const wecomSaving = ref(false)
 const followSaving = ref(false)
 const followFilter = ref<FollowFilter>('all')
 const deliveryFilter = ref<DeliveryFilter>('all')
+const taskFilter = ref<TaskFilter>('all')
 const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
 const importFileName = ref('')
@@ -1419,6 +1455,34 @@ const filteredFollowRecords = computed(() => {
     return true
   })
 })
+const taskStats = computed(() => ({
+  all: tasks.value.length,
+  pending: tasks.value.filter(item => item.status === 'pending').length,
+  overdue: tasks.value.filter(item => item.status === 'overdue').length,
+  supervisor: tasks.value.filter(item => isSupervisorTask(item)).length,
+  done: tasks.value.filter(item => item.status === 'done').length
+}))
+const taskFilterOptions = computed(() => [
+  { label: `全部 ${taskStats.value.all}`, value: 'all' },
+  { label: `待处理 ${taskStats.value.pending}`, value: 'pending' },
+  { label: `已逾期 ${taskStats.value.overdue}`, value: 'overdue' },
+  { label: `主管督办 ${taskStats.value.supervisor}`, value: 'supervisor' },
+  { label: `已完成 ${taskStats.value.done}`, value: 'done' }
+] as const)
+const taskFilterHint = computed(() => ({
+  all: '查看所有私域跟进、交付和督办任务。',
+  pending: '待处理任务是当天需要推进的执行清单。',
+  overdue: '逾期任务需要先确认责任人和补救节点。',
+  supervisor: '主管督办用于承接交付异常和跨部门卡点。',
+  done: '已完成任务用于复盘执行闭环。'
+} as Record<TaskFilter, string>)[taskFilter.value])
+const filteredTasks = computed(() => tasks.value.filter(item => {
+  if (taskFilter.value === 'pending') return item.status === 'pending'
+  if (taskFilter.value === 'overdue') return item.status === 'overdue'
+  if (taskFilter.value === 'supervisor') return isSupervisorTask(item)
+  if (taskFilter.value === 'done') return item.status === 'done'
+  return true
+}))
 const deliveryStats = computed(() => ({
   all: deliveryPackages.value.length,
   totalTasks: deliveryPackages.value.reduce((sum, item) => sum + (item.tasks.length || item.taskIds.length), 0),
@@ -1508,6 +1572,10 @@ function taskStatusText(status: PrivateTaskStatus) {
 
 function taskStatusTag(status: PrivateTaskStatus) {
   return ({ pending: 'warning', done: 'success', overdue: 'danger' } as Record<PrivateTaskStatus, any>)[status]
+}
+
+function isSupervisorTask(task: PrivateTask) {
+  return task.title.includes('督办') || task.action.includes('来源交付任务')
 }
 
 function deliveryStatusText(status: PrivateDeliveryStatus) {
@@ -1653,6 +1721,10 @@ function isUpdatingDeliveryTask(id: number) {
 
 function isCreatingSupervisorTask(id: number) {
   return supervisorTaskCreatingIds.value.includes(id)
+}
+
+function isUpdatingTask(id: number) {
+  return taskUpdatingIds.value.includes(id)
 }
 
 function hasDeliveryPackage(contactId: number) {
@@ -2101,6 +2173,20 @@ async function createSupervisorTask(row: PrivateDeliveryPackage, task: PrivateTa
   }
 }
 
+async function updatePrivateTaskStatus(row: PrivateTask, status: PrivateTaskStatus) {
+  if (isUpdatingTask(row.id)) return
+  taskUpdatingIds.value = [...taskUpdatingIds.value, row.id]
+  try {
+    await privateDomainApi.updateTaskStatus(row.id, status)
+    await loadDashboard()
+    ElMessage.success(status === 'done' ? '任务已完成' : '任务已恢复待处理')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '更新任务失败')
+  } finally {
+    taskUpdatingIds.value = taskUpdatingIds.value.filter(id => id !== row.id)
+  }
+}
+
 async function createOrderDraft(row: PrivateFollowRecord) {
   if (row.orderNo) {
     ElMessage.info(`已生成提单草稿 ${row.orderNo}`)
@@ -2523,7 +2609,8 @@ watch(() => route.fullPath, applyRouteQueue)
 }
 
 .follow-filter-bar,
-.delivery-filter-bar {
+.delivery-filter-bar,
+.task-filter-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2536,26 +2623,30 @@ watch(() => route.fullPath, applyRouteQueue)
 }
 
 .follow-filter-bar :deep(.el-radio-group),
-.delivery-filter-bar :deep(.el-radio-group) {
+.delivery-filter-bar :deep(.el-radio-group),
+.task-filter-bar :deep(.el-radio-group) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
 .follow-filter-bar :deep(.el-radio-button__inner),
-.delivery-filter-bar :deep(.el-radio-button__inner) {
+.delivery-filter-bar :deep(.el-radio-button__inner),
+.task-filter-bar :deep(.el-radio-button__inner) {
   border: 1px solid #dbe5f2;
   border-radius: 999px;
   box-shadow: none;
 }
 
 .follow-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner),
-.delivery-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner) {
+.delivery-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner),
+.task-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner) {
   border-left: 1px solid #dbe5f2;
 }
 
 .follow-filter-bar span,
-.delivery-filter-bar span {
+.delivery-filter-bar span,
+.task-filter-bar span {
   max-width: 420px;
   color: #64748b;
   font-size: 12px;
@@ -3348,7 +3439,8 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .follow-filter-bar,
-  .delivery-filter-bar {
+  .delivery-filter-bar,
+  .task-filter-bar {
     align-items: stretch;
     flex-direction: column;
   }

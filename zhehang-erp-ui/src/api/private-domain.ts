@@ -2084,6 +2084,29 @@ export const privateDomainApi = {
     writeList(TASK_KEY, tasks)
     return delay(task)
   },
+  async updateTaskStatus(taskId: number, status: PrivateTaskStatus) {
+    ensureSeeds()
+    const tasks = readList<PrivateTask>(TASK_KEY)
+    const taskIdx = tasks.findIndex(item => item.id === taskId)
+    if (taskIdx < 0) throw new Error('任务不存在')
+    tasks[taskIdx] = { ...tasks[taskIdx], status }
+    writeList(TASK_KEY, tasks)
+
+    const packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+    const packageIdx = packages.findIndex(item => item.tasks.some(task => task.id === taskId))
+    if (packageIdx >= 0) {
+      const currentPackage = packages[packageIdx]
+      const packageTasks = currentPackage.tasks.map(task => task.id === taskId ? { ...task, status } : task)
+      const nextStatus: PrivateDeliveryStatus = packageTasks.every(task => task.status === 'done')
+        ? 'done'
+        : packageTasks.some(task => task.status === 'done' || task.status === 'overdue')
+          ? 'in_progress'
+          : 'created'
+      packages[packageIdx] = { ...currentPackage, status: nextStatus, tasks: packageTasks }
+      writeList(DELIVERY_PACKAGE_KEY, packages)
+    }
+    return delay(tasks[taskIdx])
+  },
   async convertToOnlineLead(id: number) {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)

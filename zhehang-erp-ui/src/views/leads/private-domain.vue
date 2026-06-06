@@ -811,7 +811,7 @@
                       type="warning"
                       text
                       size="small"
-                      @click.stop="openDeliveryPackage(row)"
+                      @click.stop="openDeliveryPackage(row, 'address')"
                     >
                       锁地址
                     </el-button>
@@ -1307,7 +1307,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
@@ -2120,9 +2120,24 @@ function deliveryFollowRecords(row: PrivateDeliveryPackage) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-function openDeliveryPackage(row: PrivateDeliveryPackage) {
+function openDeliveryPackage(row: PrivateDeliveryPackage, focus?: 'address') {
   deliveryDrawer.row = row
   deliveryDrawer.visible = true
+  if (focus === 'address' && isAddressDelivery(row)) {
+    nextTick(() => {
+      ;[160, 520, 900].forEach(delay => window.setTimeout(focusAddressLockSection, delay))
+    })
+  }
+}
+
+function focusAddressLockSection() {
+  const drawer = document.querySelector('.business-detail-drawer.open')
+  const target = Array.from(drawer?.querySelectorAll('.bd-section-title') || [])
+    .find(item => item.textContent?.includes('地址库存锁定')) as HTMLElement | undefined
+  const drawerBody = drawer?.querySelector('.el-drawer__body') as HTMLElement | null
+  if (!target || !drawerBody) return
+  const targetTop = target.getBoundingClientRect().top - drawerBody.getBoundingClientRect().top + drawerBody.scrollTop - 14
+  drawerBody.scrollTo({ top: targetTop, behavior: 'smooth' })
 }
 
 function openDeliveryContact(row: PrivateDeliveryPackage) {

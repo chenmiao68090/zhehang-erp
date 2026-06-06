@@ -1953,6 +1953,35 @@ export const privateDomainApi = {
     writeList(CONTACT_KEY, contacts)
     return delay({ package: deliveryPackage, reused: false })
   },
+  async updateDeliveryTaskStatus(packageId: number, taskId: number, status: PrivateTaskStatus) {
+    ensureSeeds()
+    const packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+    const packageIdx = packages.findIndex(item => item.id === packageId)
+    if (packageIdx < 0) throw new Error('交付包不存在')
+    const currentPackage = packages[packageIdx]
+    const packageTasks = currentPackage.tasks.map(task => task.id === taskId ? { ...task, status } : task)
+    if (!packageTasks.some(task => task.id === taskId)) throw new Error('交付任务不存在')
+    const nextStatus: PrivateDeliveryStatus = packageTasks.every(task => task.status === 'done')
+      ? 'done'
+      : packageTasks.some(task => task.status === 'done' || task.status === 'overdue')
+        ? 'in_progress'
+        : 'created'
+    const nextPackage: PrivateDeliveryPackage = {
+      ...currentPackage,
+      status: nextStatus,
+      tasks: packageTasks
+    }
+    packages[packageIdx] = nextPackage
+    writeList(DELIVERY_PACKAGE_KEY, packages)
+
+    const tasks = readList<PrivateTask>(TASK_KEY)
+    const taskIdx = tasks.findIndex(item => item.id === taskId)
+    if (taskIdx >= 0) {
+      tasks[taskIdx] = { ...tasks[taskIdx], status }
+      writeList(TASK_KEY, tasks)
+    }
+    return delay(nextPackage)
+  },
   async bossSnapshot() {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)

@@ -724,7 +724,21 @@
               <el-table-column label="任务拆解" min-width="320">
                 <template #default="{ row }">
                   <div class="package-task-list">
-                    <span v-for="task in row.tasks.slice(0, 4)" :key="task.id">{{ task.title.replace(row.companyName + ' - ', '') }}</span>
+                    <div
+                      v-for="task in row.tasks.slice(0, 4)"
+                      :key="task.id"
+                      class="package-task-item"
+                      :class="{ done: task.status === 'done', overdue: task.status === 'overdue' }"
+                    >
+                      <el-checkbox
+                        :model-value="task.status === 'done'"
+                        :disabled="isUpdatingDeliveryTask(task.id)"
+                        size="small"
+                        @change="checked => toggleDeliveryTask(row, task, Boolean(checked))"
+                      />
+                      <span>{{ task.title.replace(row.companyName + ' - ', '') }}</span>
+                    </div>
+                    <em v-if="row.tasks.length > 4" class="package-task-more">+{{ row.tasks.length - 4 }}</em>
                   </div>
                 </template>
               </el-table-column>
@@ -1064,6 +1078,7 @@ const drawerTimeline = ref<PrivateTimelineItem[]>([])
 const convertingIds = ref<number[]>([])
 const verifyingIds = ref<number[]>([])
 const deliveryCreatingIds = ref<number[]>([])
+const deliveryTaskUpdatingIds = ref<number[]>([])
 const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
@@ -1420,6 +1435,10 @@ function isVerifying(id: number) {
 
 function isCreatingDelivery(id: number) {
   return deliveryCreatingIds.value.includes(id)
+}
+
+function isUpdatingDeliveryTask(id: number) {
+  return deliveryTaskUpdatingIds.value.includes(id)
 }
 
 function hasDeliveryPackage(contactId: number) {
@@ -1789,6 +1808,22 @@ async function createDeliveryFromFollow(row: PrivateFollowRecord) {
     return
   }
   await createDeliveryPackage(contact)
+}
+
+async function toggleDeliveryTask(row: PrivateDeliveryPackage, task: PrivateTask, checked: boolean) {
+  if (isUpdatingDeliveryTask(task.id)) return
+  deliveryTaskUpdatingIds.value = [...deliveryTaskUpdatingIds.value, task.id]
+  try {
+    const nextPackage = await privateDomainApi.updateDeliveryTaskStatus(row.id, task.id, checked ? 'done' : 'pending')
+    const idx = deliveryPackages.value.findIndex(item => item.id === row.id)
+    if (idx >= 0) deliveryPackages.value[idx] = nextPackage
+    await loadDashboard()
+    ElMessage.success(checked ? '交付任务已完成' : '交付任务已恢复待处理')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '更新交付任务失败')
+  } finally {
+    deliveryTaskUpdatingIds.value = deliveryTaskUpdatingIds.value.filter(id => id !== task.id)
+  }
 }
 
 async function createOrderDraft(row: PrivateFollowRecord) {
@@ -2253,15 +2288,44 @@ watch(() => route.fullPath, applyRouteQueue)
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
+}
+
+.package-task-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid #c7d9ff;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #245bdb;
+  font-size: 12px;
 
   span {
-    padding: 4px 8px;
-    border: 1px solid #c7d9ff;
-    border-radius: 999px;
-    background: #eef4ff;
-    color: #245bdb;
-    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
+
+  &.done {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #15803d;
+  }
+
+  &.overdue {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+}
+
+.package-task-more {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
 }
 
 .delivery-order-summary {

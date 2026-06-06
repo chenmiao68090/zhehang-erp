@@ -1384,7 +1384,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 import { addressApi, type BizAddressResource } from '@/api/channel'
@@ -2015,6 +2015,22 @@ function addressResourceCandidateHint(lock?: PrivateAddressLock) {
   return hasStrongMatch
     ? `已按 ${inventory.district} / ${inventory.supplierName} 优先推荐,当前可选 ${candidates.length} 个资源。`
     : `未找到完全同区同供应商资源,已按相似区域、供应商和成本排序,当前可选 ${candidates.length} 个资源。`
+}
+
+function selectedAddressResource(lock: PrivateAddressLock, resourceId: number) {
+  return addressResourceOptions.value.find(item => Number(item.id) === Number(resourceId))
+}
+
+function addressResourceConfirmMessage(lock: PrivateAddressLock, resourceId: number, resource?: BizAddressResource) {
+  const inventory = addressInventoryOf(lock)
+  const resourceText = resource
+    ? `${resource.resourceNo} · ${resource.district} · ${resource.supplierName} · 成本¥${formatMoney(resource.yearlyCost || 0)}/年 · ${resource.detailAddress}`
+    : `资源 ID ${resourceId}`
+  return [
+    `确认将 ${resourceText} 补绑定到「${lock.companyName}」的地址交付锁定吗?`,
+    `锁定库存: ${inventory ? `${inventory.city}${inventory.district} · ${inventory.addressType} · ${inventory.supplierName}` : '待匹配库存'}`,
+    '绑定后资源池会按该 ADR 反查客户和渠道应收,请确认没有选错地址。'
+  ].join('\n')
 }
 
 function goAddressResource(lock?: PrivateAddressLock) {
@@ -2656,6 +2672,16 @@ async function bindAddressResource(lock?: PrivateAddressLock) {
   const resourceId = selectedAddressResourceIds[lock.id]
   if (!resourceId) {
     ElMessage.warning('请先选择一个可用地址资源')
+    return
+  }
+  const resource = selectedAddressResource(lock, resourceId)
+  try {
+    await ElMessageBox.confirm(addressResourceConfirmMessage(lock, resourceId, resource), '确认补绑定地址资源', {
+      confirmButtonText: '确认绑定',
+      cancelButtonText: '再看看',
+      type: 'warning'
+    })
+  } catch {
     return
   }
   addressResourceBindingIds.value = [...addressResourceBindingIds.value, lock.id]

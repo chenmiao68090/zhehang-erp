@@ -90,6 +90,7 @@ export interface PrivateAddressInventory {
 export interface PrivateAddressLock {
   id: number
   inventoryId: number
+  resourceId?: number
   packageId: number
   companyName: string
   channelName: string
@@ -374,6 +375,7 @@ const DELIVERY_PACKAGE_KEY = 'biz_private_delivery_packages'
 const FOLLOW_KEY = 'biz_private_follow_records'
 const ADDRESS_INVENTORY_KEY = 'biz_private_address_inventory'
 const ADDRESS_LOCK_KEY = 'biz_private_address_locks'
+const CHANNEL_ADDRESS_KEY = 'biz_address_resources'
 const PRIVATE_SOURCE_OPTIONS: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
 const PRIVATE_STAGE_OPTIONS: PrivateStage[] = ['new', 'nurturing', 'intent', 'quoted', 'ordered', 'silent']
 const ANSWER_OPTIONS = {
@@ -483,6 +485,44 @@ function supplierLooksSame(a: string, b: string) {
   if (!left || !right) return false
   if (left === right || left.includes(right) || right.includes(left)) return true
   return ['运河', '钱塘', '滨江', '义乌', '云商'].some(token => left.includes(token) && right.includes(token))
+}
+
+function reserveChannelAddressResource(address: PrivateAddressInventory, currentPackage: PrivateDeliveryPackage, lockedAt: string) {
+  const resources = readList<any>(CHANNEL_ADDRESS_KEY)
+  const city = normalizeCityName(address.city)
+  const idx = resources.findIndex(item =>
+    item.status === 'available' &&
+    normalizeCityName(item.city || '') === city &&
+    item.district === address.district &&
+    supplierLooksSame(item.supplierName || '', address.supplierName)
+  )
+  if (idx < 0) return 0
+  resources[idx] = {
+    ...resources[idx],
+    status: 'reserved',
+    reservedBy: currentPackage.id,
+    reservedByName: currentPackage.companyName,
+    reservedTime: lockedAt,
+    remark: `${resources[idx].remark || ''} 私域交付包 ${currentPackage.id} 锁定`.trim()
+  }
+  writeList(CHANNEL_ADDRESS_KEY, resources)
+  return Number(resources[idx].id || 0)
+}
+
+function releaseChannelAddressResource(lock: PrivateAddressLock) {
+  if (!lock.resourceId) return
+  const resources = readList<any>(CHANNEL_ADDRESS_KEY)
+  const idx = resources.findIndex(item => Number(item.id) === Number(lock.resourceId))
+  if (idx < 0 || resources[idx].status !== 'reserved') return
+  resources[idx] = {
+    ...resources[idx],
+    status: 'available',
+    reservedBy: 0,
+    reservedByName: '',
+    reservedTime: '',
+    remark: `${resources[idx].remark || ''} 私域交付包 ${lock.packageId} 已释放`.trim()
+  }
+  writeList(CHANNEL_ADDRESS_KEY, resources)
 }
 
 export function syncPrivateAddressInventoryFromStockIn(payload: PrivateAddressStockInPayload) {
@@ -2205,6 +2245,8 @@ export const privateDomainApi = {
       status: 'locked',
       remark: `${address.city}${address.district}${address.addressType} · ${address.supplierName}`
     }
+    const resourceId = reserveChannelAddressResource(address, currentPackage, lock.lockedAt)
+    if (resourceId) lock.resourceId = resourceId
     const nextAvailable = Math.max(0, address.available - 1)
     inventory[inventoryIdx] = {
       ...address,
@@ -2225,6 +2267,7 @@ export const privateDomainApi = {
 
     const inventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
     const inventoryIdx = inventory.findIndex(item => item.id === locks[lockIdx].inventoryId)
+    releaseChannelAddressResource(locks[lockIdx])
     if (inventoryIdx >= 0) {
       const address = inventory[inventoryIdx]
       const nextAvailable = address.available + 1

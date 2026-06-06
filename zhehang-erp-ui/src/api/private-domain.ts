@@ -1997,6 +1997,40 @@ export const privateDomainApi = {
     }
     return delay(nextPackage)
   },
+  async createDeliverySupervisorTask(packageId: number, taskId: number) {
+    ensureSeeds()
+    const packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+    const currentPackage = packages.find(item => item.id === packageId)
+    if (!currentPackage) throw new Error('交付包不存在')
+    const overdueTask = currentPackage.tasks.find(task => task.id === taskId)
+    if (!overdueTask) throw new Error('交付任务不存在')
+    if (overdueTask.status !== 'overdue') throw new Error('只有逾期任务才能生成督办')
+
+    const tasks = readList<PrivateTask>(TASK_KEY)
+    const actionKey = `来源交付任务 #${overdueTask.id}`
+    const existingTask = tasks.find(item =>
+      item.companyName === currentPackage.companyName &&
+      item.title.includes('督办逾期交付') &&
+      item.action.includes(actionKey) &&
+      item.status !== 'done'
+    )
+    if (existingTask) return delay({ task: existingTask, reused: true })
+
+    const taskTitle = overdueTask.title.replace(`${currentPackage.companyName} - `, '')
+    const supervisorTask: PrivateTask = {
+      id: maxId(tasks) + 1,
+      title: `${currentPackage.companyName} - 督办逾期交付`,
+      contactName: currentPackage.contactName,
+      companyName: currentPackage.companyName,
+      ownerName: '交付主管',
+      dueTime: ts(0, 18, 0),
+      priority: '高',
+      status: 'pending',
+      action: `${actionKey} · ${taskTitle} 已逾期,请协调 ${overdueTask.ownerName} 当天确认补救节点、客户预期和责任人。`
+    }
+    writeList(TASK_KEY, [supervisorTask, ...tasks])
+    return delay({ task: supervisorTask, reused: false })
+  },
   async bossSnapshot() {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)

@@ -1066,6 +1066,17 @@
                 >
                   恢复待处理
                 </el-button>
+                <el-button
+                  v-if="task.status === 'overdue'"
+                  type="warning"
+                  text
+                  size="small"
+                  :loading="isCreatingSupervisorTask(task.id)"
+                  :disabled="isCreatingSupervisorTask(task.id)"
+                  @click.stop="deliveryDrawer.row && createSupervisorTask(deliveryDrawer.row, task)"
+                >
+                  生成督办
+                </el-button>
               </div>
               <p>{{ task.dueTime }} · {{ task.ownerName }} · {{ task.action }}</p>
             </div>
@@ -1225,6 +1236,7 @@ const convertingIds = ref<number[]>([])
 const verifyingIds = ref<number[]>([])
 const deliveryCreatingIds = ref<number[]>([])
 const deliveryTaskUpdatingIds = ref<number[]>([])
+const supervisorTaskCreatingIds = ref<number[]>([])
 const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
@@ -1637,6 +1649,10 @@ function isCreatingDelivery(id: number) {
 
 function isUpdatingDeliveryTask(id: number) {
   return deliveryTaskUpdatingIds.value.includes(id)
+}
+
+function isCreatingSupervisorTask(id: number) {
+  return supervisorTaskCreatingIds.value.includes(id)
 }
 
 function hasDeliveryPackage(contactId: number) {
@@ -2069,6 +2085,20 @@ async function markDeliveryTaskOverdue(row: PrivateDeliveryPackage, task: Privat
 
 async function restoreDeliveryTask(row: PrivateDeliveryPackage, task: PrivateTask) {
   await updateDeliveryTaskState(row, task, 'pending', '交付任务已恢复待处理')
+}
+
+async function createSupervisorTask(row: PrivateDeliveryPackage, task: PrivateTask) {
+  if (isCreatingSupervisorTask(task.id)) return
+  supervisorTaskCreatingIds.value = [...supervisorTaskCreatingIds.value, task.id]
+  try {
+    const result = await privateDomainApi.createDeliverySupervisorTask(row.id, task.id)
+    await loadDashboard()
+    ElMessage.success(result.reused ? '该逾期任务已有未完成督办' : `已生成督办任务: ${result.task.title}`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '生成督办任务失败')
+  } finally {
+    supervisorTaskCreatingIds.value = supervisorTaskCreatingIds.value.filter(id => id !== task.id)
+  }
 }
 
 async function createOrderDraft(row: PrivateFollowRecord) {

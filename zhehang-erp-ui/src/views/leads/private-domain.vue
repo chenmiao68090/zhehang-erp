@@ -811,7 +811,7 @@
                       type="warning"
                       text
                       size="small"
-                      @click.stop="openDeliveryPackage(row, 'address')"
+                      @click.stop="openDeliveryPackage(row)"
                     >
                       锁地址
                     </el-button>
@@ -1040,61 +1040,9 @@
       size="720px"
     >
       <template #meta>
-        <div v-if="deliveryDrawer.row" class="bd-kv-grid">
-          <div class="bd-kv"><span>业务线</span><b>{{ deliveryDrawer.row.serviceLine }}</b></div>
-          <div class="bd-kv"><span>负责人</span><b>{{ deliveryDrawer.row.ownerName }}</b></div>
-          <div class="bd-kv"><span>来源提单</span><b>{{ deliveryDrawer.row.orderNo || '未关联' }}</b></div>
-          <div class="bd-kv"><span>订单状态</span><b>{{ orderStatusText(deliveryDrawer.row.orderStatus) }}</b></div>
-          <div class="bd-kv"><span>订单金额</span><b>¥{{ formatMoney(deliveryDrawer.row.orderAmount || 0) }}</b></div>
-          <div class="bd-kv"><span>付款方式</span><b>{{ paymentMethodText(deliveryDrawer.row.paymentMethod) }}</b></div>
-          <div class="bd-kv"><span>创建时间</span><b>{{ deliveryDrawer.row.createdAt }}</b></div>
-          <div class="bd-kv"><span>最晚节点</span><b>{{ deliveryDrawer.row.dueDate }}</b></div>
-          <div class="bd-kv wide"><span>服务项目</span><b>{{ deliveryDrawer.row.orderItemNames?.join('、') || deliveryDrawer.row.serviceLine }}</b></div>
-          <div class="bd-kv wide"><span>收款要求</span><b>{{ deliveryDrawer.row.paymentTimeReq || '未填写收款要求' }}</b></div>
-        </div>
-      </template>
-
-      <div v-if="deliveryDrawer.row" class="delivery-detail-body">
-        <div class="bd-section-title">交付进度</div>
-        <div class="delivery-detail-progress">
-          <div class="delivery-progress-main">
-            <el-progress
-              :percentage="deliveryProgress(deliveryDrawer.row)"
-              :status="deliveryProgressStatus(deliveryDrawer.row)"
-              :stroke-width="10"
-            />
-          </div>
-          <div class="delivery-progress-stats">
-            <span><b>{{ deliveryDoneCount(deliveryDrawer.row) }}</b>已完成</span>
-            <span><b>{{ deliveryPendingCount(deliveryDrawer.row) }}</b>待处理</span>
-            <span><b>{{ deliveryOverdueCount(deliveryDrawer.row) }}</b>已逾期</span>
-            <span><b>{{ deliveryDrawer.row.tasks.length }}</b>任务总数</span>
-          </div>
-        </div>
-
-        <div class="bd-section-title mt">交付核对</div>
-        <div class="delivery-check-grid">
-          <div>
-            <span>成交来源</span>
-            <b>{{ deliveryDrawer.row.orderNo ? '订单审批完成后生成' : '私域客户手动生成' }}</b>
-          </div>
-          <div>
-            <span>交付风险</span>
-            <b>{{ deliveryRiskText(deliveryDrawer.row) }}</b>
-          </div>
-          <div>
-            <span>回款核对</span>
-            <b>{{ deliveryDrawer.row.paymentTimeReq || '先核对回款/合同/资料' }}</b>
-          </div>
-          <div>
-            <span>客户入口</span>
-            <b>{{ deliveryDrawer.row.companyName }} · {{ deliveryDrawer.row.contactName }}</b>
-          </div>
-        </div>
-
-        <template v-if="isAddressDelivery(deliveryDrawer.row)">
-          <div class="bd-section-title mt">地址库存锁定</div>
-          <div class="address-lock-panel">
+        <template v-if="deliveryDrawer.row && isAddressDelivery(deliveryDrawer.row)">
+          <div class="bd-section-title">地址库存锁定</div>
+          <div class="address-lock-panel address-lock-priority">
             <div v-if="activeAddressLock(deliveryDrawer.row)" class="address-lock-current">
               <div>
                 <strong>{{ activeAddressLock(deliveryDrawer.row)?.remark }}</strong>
@@ -1160,6 +1108,57 @@
             </div>
           </div>
         </template>
+        <div v-if="deliveryDrawer.row" class="bd-kv-grid">
+          <div class="bd-kv"><span>业务线</span><b>{{ deliveryDrawer.row.serviceLine }}</b></div>
+          <div class="bd-kv"><span>负责人</span><b>{{ deliveryDrawer.row.ownerName }}</b></div>
+          <div class="bd-kv"><span>来源提单</span><b>{{ deliveryDrawer.row.orderNo || '未关联' }}</b></div>
+          <div class="bd-kv"><span>订单状态</span><b>{{ orderStatusText(deliveryDrawer.row.orderStatus) }}</b></div>
+          <div class="bd-kv"><span>订单金额</span><b>¥{{ formatMoney(deliveryDrawer.row.orderAmount || 0) }}</b></div>
+          <div class="bd-kv"><span>付款方式</span><b>{{ paymentMethodText(deliveryDrawer.row.paymentMethod) }}</b></div>
+          <div class="bd-kv"><span>创建时间</span><b>{{ deliveryDrawer.row.createdAt }}</b></div>
+          <div class="bd-kv"><span>最晚节点</span><b>{{ deliveryDrawer.row.dueDate }}</b></div>
+          <div class="bd-kv wide"><span>服务项目</span><b>{{ deliveryDrawer.row.orderItemNames?.join('、') || deliveryDrawer.row.serviceLine }}</b></div>
+          <div class="bd-kv wide"><span>收款要求</span><b>{{ deliveryDrawer.row.paymentTimeReq || '未填写收款要求' }}</b></div>
+        </div>
+      </template>
+
+      <div v-if="deliveryDrawer.row" class="delivery-detail-body">
+        <div class="bd-section-title mt">交付进度</div>
+        <div class="delivery-detail-progress">
+          <div class="delivery-progress-main">
+            <el-progress
+              :percentage="deliveryProgress(deliveryDrawer.row)"
+              :status="deliveryProgressStatus(deliveryDrawer.row)"
+              :stroke-width="10"
+            />
+          </div>
+          <div class="delivery-progress-stats">
+            <span><b>{{ deliveryDoneCount(deliveryDrawer.row) }}</b>已完成</span>
+            <span><b>{{ deliveryPendingCount(deliveryDrawer.row) }}</b>待处理</span>
+            <span><b>{{ deliveryOverdueCount(deliveryDrawer.row) }}</b>已逾期</span>
+            <span><b>{{ deliveryDrawer.row.tasks.length }}</b>任务总数</span>
+          </div>
+        </div>
+
+        <div class="bd-section-title mt">交付核对</div>
+        <div class="delivery-check-grid">
+          <div>
+            <span>成交来源</span>
+            <b>{{ deliveryDrawer.row.orderNo ? '订单审批完成后生成' : '私域客户手动生成' }}</b>
+          </div>
+          <div>
+            <span>交付风险</span>
+            <b>{{ deliveryRiskText(deliveryDrawer.row) }}</b>
+          </div>
+          <div>
+            <span>回款核对</span>
+            <b>{{ deliveryDrawer.row.paymentTimeReq || '先核对回款/合同/资料' }}</b>
+          </div>
+          <div>
+            <span>客户入口</span>
+            <b>{{ deliveryDrawer.row.companyName }} · {{ deliveryDrawer.row.contactName }}</b>
+          </div>
+        </div>
 
         <div class="bd-section-title mt">任务清单</div>
         <div class="delivery-task-detail-list">
@@ -1307,7 +1306,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
@@ -2120,24 +2119,9 @@ function deliveryFollowRecords(row: PrivateDeliveryPackage) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-function openDeliveryPackage(row: PrivateDeliveryPackage, focus?: 'address') {
+function openDeliveryPackage(row: PrivateDeliveryPackage) {
   deliveryDrawer.row = row
   deliveryDrawer.visible = true
-  if (focus === 'address' && isAddressDelivery(row)) {
-    nextTick(() => {
-      ;[160, 520, 900].forEach(delay => window.setTimeout(focusAddressLockSection, delay))
-    })
-  }
-}
-
-function focusAddressLockSection() {
-  const drawer = document.querySelector('.business-detail-drawer.open')
-  const target = Array.from(drawer?.querySelectorAll('.bd-section-title') || [])
-    .find(item => item.textContent?.includes('地址库存锁定')) as HTMLElement | undefined
-  const drawerBody = drawer?.querySelector('.el-drawer__body') as HTMLElement | null
-  if (!target || !drawerBody) return
-  const targetTop = target.getBoundingClientRect().top - drawerBody.getBoundingClientRect().top + drawerBody.scrollTop - 14
-  drawerBody.scrollTo({ top: targetTop, behavior: 'smooth' })
 }
 
 function openDeliveryContact(row: PrivateDeliveryPackage) {
@@ -3016,6 +3000,12 @@ watch(() => route.fullPath, applyRouteQueue)
 .address-lock-panel {
   display: grid;
   gap: 10px;
+}
+
+.address-lock-priority {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf2f7;
 }
 
 .address-lock-current {

@@ -1067,6 +1067,38 @@
                 >
                   资源池 {{ formatAddressResourceNo(activeAddressLock(deliveryDrawer.row)?.resourceId) }}
                 </button>
+                <div v-else class="address-bind-repair">
+                  <div class="address-bind-tip">
+                    <el-tag type="warning" size="small">未绑定资源池</el-tag>
+                    <span>这条历史锁定缺少 ADR 编号,请补选一个可用地址。</span>
+                  </div>
+                  <div class="address-bind-row">
+                    <el-select
+                      v-model="selectedAddressResourceIds[activeAddressLock(deliveryDrawer.row)?.id || 0]"
+                      placeholder="选择可用地址资源"
+                      filterable
+                      size="small"
+                      :loading="addressResourceLoading"
+                      @focus="loadAddressResourceOptions"
+                    >
+                      <el-option
+                        v-for="resource in addressResourceCandidates(activeAddressLock(deliveryDrawer.row))"
+                        :key="resource.id"
+                        :label="addressResourceOptionLabel(resource)"
+                        :value="resource.id"
+                      />
+                    </el-select>
+                    <el-button
+                      type="primary"
+                      size="small"
+                      :loading="isBindingAddressResource(activeAddressLock(deliveryDrawer.row)?.id || 0)"
+                      :disabled="!selectedAddressResourceIds[activeAddressLock(deliveryDrawer.row)?.id || 0]"
+                      @click.stop="bindAddressResource(activeAddressLock(deliveryDrawer.row))"
+                    >
+                      补绑定
+                    </el-button>
+                  </div>
+                </div>
               </div>
               <el-button
                 text
@@ -1320,6 +1352,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
+import { addressApi, type BizAddressResource } from '@/api/channel'
 import {
   privateImportTemplateColumns,
   privateImportTemplateSamples,
@@ -1374,6 +1407,7 @@ const contents = ref<PrivateContent[]>([])
 const tasks = ref<PrivateTask[]>([])
 const addressInventory = ref<PrivateAddressInventory[]>([])
 const addressLocks = ref<PrivateAddressLock[]>([])
+const addressResourceOptions = ref<BizAddressResource[]>([])
 const integrations = ref<PrivateIntegration[]>([])
 const ownershipRules = ref<PrivateOwnershipRule[]>([])
 const deliveryPackages = ref<PrivateDeliveryPackage[]>([])
@@ -1387,9 +1421,11 @@ const supervisorTaskCreatingIds = ref<number[]>([])
 const taskUpdatingIds = ref<number[]>([])
 const addressLockingIds = ref<number[]>([])
 const addressReleasingIds = ref<number[]>([])
+const addressResourceBindingIds = ref<number[]>([])
 const addressReplenishCreatingIds = ref<number[]>([])
 const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
+const addressResourceLoading = ref(false)
 const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
@@ -1423,6 +1459,7 @@ const summary = reactive<PrivateSummary>({
   funnel: [],
   sourceStats: []
 })
+const selectedAddressResourceIds = reactive<Record<number, number | undefined>>({})
 const query = reactive<{ keyword: string; source: '' | PrivateSource; stage: '' | PrivateStage }>({
   keyword: '',
   source: '',
@@ -1795,6 +1832,37 @@ function addressLockRemark(row: PrivateDeliveryPackage) {
   return activeAddressLock(row)?.remark || '地址已锁定'
 }
 
+function normalizeCityText(value?: string) {
+  return (value || '').replace(/市$/, '')
+}
+
+function supplierLooksClose(left?: string, right?: string) {
+  const a = left || ''
+  const b = right || ''
+  if (!a || !b) return false
+  if (a === b || a.includes(b) || b.includes(a)) return true
+  return ['运河', '钱塘', '滨江', '义乌', '云商'].some(token => a.includes(token) && b.includes(token))
+}
+
+function addressResourceCandidates(lock?: PrivateAddressLock) {
+  if (!lock) return addressResourceOptions.value
+  const inventory = addressInventory.value.find(item => item.id === lock.inventoryId)
+  if (!inventory) return addressResourceOptions.value
+  const matched = addressResourceOptions.value.filter(resource => {
+    const city = normalizeCityText(resource.city)
+    const inventoryCity = normalizeCityText(inventory.city)
+    const cityMatched = !inventoryCity || city.includes(inventoryCity) || inventoryCity.includes(city)
+    const districtMatched = !inventory.district || resource.district === inventory.district
+    const supplierMatched = supplierLooksClose(resource.supplierName, inventory.supplierName)
+    return cityMatched && districtMatched && supplierMatched
+  })
+  return matched.length ? matched : addressResourceOptions.value
+}
+
+function addressResourceOptionLabel(resource: BizAddressResource) {
+  return `${resource.resourceNo} · ${resource.district} · ${resource.detailAddress}`
+}
+
 function goAddressResource(lock?: PrivateAddressLock) {
   if (!lock?.resourceId) return
   router.push({
@@ -1923,6 +1991,10 @@ function isReleasingAddress(id: number) {
   return addressReleasingIds.value.includes(id)
 }
 
+function isBindingAddressResource(id: number) {
+  return addressResourceBindingIds.value.includes(id)
+}
+
 function isCreatingAddressReplenish(id: number) {
   return addressReplenishCreatingIds.value.includes(id)
 }
@@ -1964,6 +2036,17 @@ async function loadDashboard() {
   Object.assign(wecomConfig, data.wecomConfig)
   Object.assign(opsProfile, data.opsProfile)
   opsProfile.answers = { sourceTruth: '', ownerRule: '', successMetric: '', dataImport: '', ...(data.opsProfile.answers || {}) }
+  await loadAddressResourceOptions()
+}
+
+async function loadAddressResourceOptions() {
+  if (addressResourceLoading.value) return
+  addressResourceLoading.value = true
+  try {
+    addressResourceOptions.value = await addressApi.available()
+  } finally {
+    addressResourceLoading.value = false
+  }
 }
 
 async function loadContacts() {
@@ -2406,6 +2489,26 @@ async function releaseAddress(lock: PrivateAddressLock) {
     ElMessage.error(error?.message || '释放地址失败')
   } finally {
     addressReleasingIds.value = addressReleasingIds.value.filter(id => id !== lock.id)
+  }
+}
+
+async function bindAddressResource(lock?: PrivateAddressLock) {
+  if (!lock || isBindingAddressResource(lock.id)) return
+  const resourceId = selectedAddressResourceIds[lock.id]
+  if (!resourceId) {
+    ElMessage.warning('请先选择一个可用地址资源')
+    return
+  }
+  addressResourceBindingIds.value = [...addressResourceBindingIds.value, lock.id]
+  try {
+    const result = await privateDomainApi.bindAddressResourceForLock(lock.id, resourceId)
+    delete selectedAddressResourceIds[lock.id]
+    await loadDashboard()
+    ElMessage.success(result.reused ? '该锁定记录已绑定资源池' : `已补绑定资源: ${formatAddressResourceNo(result.lock.resourceId)}`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '补绑定资源失败')
+  } finally {
+    addressResourceBindingIds.value = addressResourceBindingIds.value.filter(id => id !== lock.id)
   }
 }
 
@@ -3076,6 +3179,32 @@ watch(() => route.fullPath, applyRouteQueue)
     border-color: #93c5fd;
     background: #dbeafe;
   }
+}
+
+.address-bind-repair {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px dashed #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+}
+
+.address-bind-tip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: #92400e;
+  font-size: 12px;
+}
+
+.address-bind-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
 }
 
 .address-inventory-list {

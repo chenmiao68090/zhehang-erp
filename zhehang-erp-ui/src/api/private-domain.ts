@@ -525,6 +525,27 @@ function releaseChannelAddressResource(lock: PrivateAddressLock) {
   writeList(CHANNEL_ADDRESS_KEY, resources)
 }
 
+function bindChannelAddressResource(lock: PrivateAddressLock, resourceId: number) {
+  const resources = readList<any>(CHANNEL_ADDRESS_KEY)
+  const idx = resources.findIndex(item => Number(item.id) === Number(resourceId))
+  if (idx < 0) throw new Error('地址资源不存在')
+  const resource = resources[idx]
+  const reservedBySamePackage = resource.status === 'reserved' && Number(resource.reservedBy) === Number(lock.packageId)
+  if (resource.status !== 'available' && !reservedBySamePackage) {
+    throw new Error('该地址资源已被占用,请选择可用地址')
+  }
+  resources[idx] = {
+    ...resource,
+    status: 'reserved',
+    reservedBy: lock.packageId,
+    reservedByName: lock.companyName,
+    reservedTime: lock.lockedAt,
+    remark: `${resource.remark || ''} 私域交付包 ${lock.packageId} 补绑定`.trim()
+  }
+  writeList(CHANNEL_ADDRESS_KEY, resources)
+  return resources[idx]
+}
+
 export function syncPrivateAddressInventoryFromStockIn(payload: PrivateAddressStockInPayload) {
   ensureSeeds()
   const quantity = Math.max(1, Number(payload.quantity || 0))
@@ -2282,6 +2303,19 @@ export const privateDomainApi = {
     locks[lockIdx] = { ...locks[lockIdx], status: 'released', releaseAt: ts() }
     writeList(ADDRESS_LOCK_KEY, locks)
     return delay({ lock: locks[lockIdx], inventory, reused: false })
+  },
+  async bindAddressResourceForLock(lockId: number, resourceId: number) {
+    ensureSeeds()
+    const locks = readList<PrivateAddressLock>(ADDRESS_LOCK_KEY)
+    const lockIdx = locks.findIndex(item => item.id === lockId)
+    if (lockIdx < 0) throw new Error('地址锁定记录不存在')
+    const lock = locks[lockIdx]
+    if (lock.status !== 'locked') throw new Error('仅已锁定记录可补绑定资源')
+    if (lock.resourceId) return delay({ lock, resource: null, reused: true })
+    const resource = bindChannelAddressResource(lock, Number(resourceId || 0))
+    locks[lockIdx] = { ...lock, resourceId: Number(resource.id || resourceId) }
+    writeList(ADDRESS_LOCK_KEY, locks)
+    return delay({ lock: locks[lockIdx], resource, reused: false })
   },
   async createAddressReplenishTask(inventoryId: number) {
     ensureSeeds()

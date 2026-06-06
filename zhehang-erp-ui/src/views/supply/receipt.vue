@@ -138,7 +138,7 @@
             <span class="card-sub">共 {{ filteredList.length }} 条</span>
           </div>
         </template>
-        <el-table :data="filteredList" v-loading="loading" stripe height="560">
+        <el-table :data="filteredList" v-loading="loading" stripe height="560" :row-class-name="addressRowClassName">
           <el-table-column prop="resourceNo" label="资源编号" width="110" />
           <el-table-column label="地址" min-width="240">
             <template #default="{ row }">
@@ -392,6 +392,7 @@ const stats = computed(() => {
 })
 
 const lowStock = computed(() => stats.value.available < 5)
+const targetResourceNo = computed(() => queryText(route.query.resourceNo))
 const privateAddressRisks = computed(() => privateAddressInventory.value.filter(item => item.status === 'blocked' || item.available <= 2))
 const privateAddressStats = computed(() => ({
   available: privateAddressInventory.value.reduce((sum, item) => sum + item.available, 0),
@@ -428,6 +429,10 @@ function expiryOf (a: BizAddressResource) {
 function statusType (s: string): any { return ({ available: 'success', reserved: 'warning', sold: 'primary', expired: 'info', abnormal: 'danger' } as any)[s] }
 function statusLabel (s: string) { return ({ available: '未使用', reserved: '已预留', sold: '已使用', expired: '已到期', abnormal: '异常' } as any)[s] }
 function formatNum (n: number) { return (n || 0).toLocaleString('zh-CN') }
+
+function addressRowClassName ({ row }: { row: BizAddressResource }) {
+  return targetResourceNo.value && row.resourceNo === targetResourceNo.value ? 'target-address-row' : ''
+}
 
 function goPurchase () {
   router.push('/supply/purchase').catch(() => {})
@@ -622,6 +627,10 @@ watch(() => route.query.resourceNo, value => {
 .ms-row { display: flex; justify-content: space-between; padding: 6px 10px; font-size: 13px; color: #475569; border-radius: 4px; }
 .ms-row.highlight { background: linear-gradient(90deg, #fef3c7, #fde68a); color: #b45309; font-weight: 600; }
 :deep(.el-table .cell) { font-size: 12.5px; }
+:deep(.target-address-row) {
+  --el-table-tr-bg-color: #eff6ff;
+  box-shadow: inset 4px 0 0 #2563eb;
+}
 
 @media (max-width: 1200px) {
   .main-grid { grid-template-columns: 1fr; }

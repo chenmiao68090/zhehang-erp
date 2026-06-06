@@ -1106,7 +1106,7 @@
                       <el-option
                         v-for="resource in addressResourceCandidates(activeAddressLock(deliveryDrawer.row))"
                         :key="resource.id"
-                        :label="addressResourceOptionLabel(resource)"
+                        :label="addressResourceOptionLabel(resource, activeAddressLock(deliveryDrawer.row))"
                         :value="resource.id"
                       />
                     </el-select>
@@ -1119,6 +1119,9 @@
                     >
                       补绑定
                     </el-button>
+                  </div>
+                  <div class="address-bind-hint">
+                    {{ addressResourceCandidateHint(activeAddressLock(deliveryDrawer.row)) }}
                   </div>
                 </div>
               </div>
@@ -1961,23 +1964,55 @@ function supplierLooksClose(left?: string, right?: string) {
   return ['运河', '钱塘', '滨江', '义乌', '云商'].some(token => a.includes(token) && b.includes(token))
 }
 
+function addressResourceMatch(resource: BizAddressResource, inventory?: PrivateAddressInventory) {
+  if (!inventory) return { cityMatched: false, districtMatched: false, supplierMatched: false, score: 0 }
+  const city = normalizeCityText(resource.city)
+  const inventoryCity = normalizeCityText(inventory.city)
+  const cityMatched = !inventoryCity || city.includes(inventoryCity) || inventoryCity.includes(city)
+  const districtMatched = !inventory.district || resource.district === inventory.district
+  const supplierMatched = supplierLooksClose(resource.supplierName, inventory.supplierName)
+  const score = (districtMatched ? 70 : 0) + (cityMatched ? 20 : 0) + (supplierMatched ? 30 : 0)
+  return { cityMatched, districtMatched, supplierMatched, score }
+}
+
+function sortAddressResourcesByInventory(resources: BizAddressResource[], inventory?: PrivateAddressInventory) {
+  return resources.slice().sort((left, right) => {
+    const leftScore = addressResourceMatch(left, inventory).score
+    const rightScore = addressResourceMatch(right, inventory).score
+    if (leftScore !== rightScore) return rightScore - leftScore
+    if (left.district !== right.district) return left.district.localeCompare(right.district, 'zh-CN')
+    return Number(left.yearlyCost || 0) - Number(right.yearlyCost || 0)
+  })
+}
+
 function addressResourceCandidates(lock?: PrivateAddressLock) {
   if (!lock) return addressResourceOptions.value
   const inventory = addressInventory.value.find(item => item.id === lock.inventoryId)
   if (!inventory) return addressResourceOptions.value
-  const matched = addressResourceOptions.value.filter(resource => {
-    const city = normalizeCityText(resource.city)
-    const inventoryCity = normalizeCityText(inventory.city)
-    const cityMatched = !inventoryCity || city.includes(inventoryCity) || inventoryCity.includes(city)
-    const districtMatched = !inventory.district || resource.district === inventory.district
-    const supplierMatched = supplierLooksClose(resource.supplierName, inventory.supplierName)
-    return cityMatched && districtMatched && supplierMatched
+  const sorted = sortAddressResourcesByInventory(addressResourceOptions.value, inventory)
+  const matched = sorted.filter(resource => {
+    const match = addressResourceMatch(resource, inventory)
+    return match.cityMatched && match.districtMatched && match.supplierMatched
   })
-  return matched.length ? matched : addressResourceOptions.value
+  return matched.length ? matched : sorted
 }
 
-function addressResourceOptionLabel(resource: BizAddressResource) {
-  return `${resource.resourceNo} · ${resource.district} · ${resource.detailAddress}`
+function addressResourceOptionLabel(resource: BizAddressResource, lock?: PrivateAddressLock) {
+  const inventory = addressInventoryOf(lock)
+  const prefix = addressResourceMatch(resource, inventory).score >= 90 ? '推荐 · ' : ''
+  return `${prefix}${resource.resourceNo} · ${resource.district} · ${resource.detailAddress}`
+}
+
+function addressResourceCandidateHint(lock?: PrivateAddressLock) {
+  const inventory = addressInventoryOf(lock)
+  const candidates = addressResourceCandidates(lock)
+  if (!lock) return '先锁定地址后,系统会按区域、供应商和成本推荐可补绑定资源。'
+  if (!inventory) return `当前有 ${candidates.length} 个可用地址资源,请按区域和供应商人工选择。`
+  const top = candidates[0]
+  const hasStrongMatch = Boolean(top && addressResourceMatch(top, inventory).score >= 90)
+  return hasStrongMatch
+    ? `已按 ${inventory.district} / ${inventory.supplierName} 优先推荐,当前可选 ${candidates.length} 个资源。`
+    : `未找到完全同区同供应商资源,已按相似区域、供应商和成本排序,当前可选 ${candidates.length} 个资源。`
 }
 
 function goAddressResource(lock?: PrivateAddressLock) {
@@ -3390,6 +3425,12 @@ watch(() => route.fullPath, applyRouteQueue)
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+
+.address-bind-hint {
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .address-inventory-list {

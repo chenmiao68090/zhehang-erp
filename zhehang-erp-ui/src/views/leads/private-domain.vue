@@ -738,6 +738,25 @@
                   <span v-else class="sub-line">未关联订单</span>
                 </template>
               </el-table-column>
+              <el-table-column label="锁定地址" width="170">
+                <template #default="{ row }">
+                  <div v-if="activeAddressLock(row)" class="address-lock-cell">
+                    <el-button
+                      v-if="hasBoundAddressResource(row)"
+                      type="primary"
+                      link
+                      size="small"
+                      @click.stop="goAddressResource(activeAddressLock(row))"
+                    >
+                      {{ addressResourceNo(row) }}
+                    </el-button>
+                    <el-tag v-else type="warning" size="small" effect="plain">未绑定资源池</el-tag>
+                    <span>{{ addressLockRemark(row) }}</span>
+                  </div>
+                  <el-tag v-else-if="isAddressDelivery(row)" type="warning" size="small" effect="plain">待锁定</el-tag>
+                  <span v-else class="sub-line">不涉及</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="ownerName" label="销售/负责人" width="130" />
               <el-table-column prop="createdAt" label="创建时间" width="150" />
               <el-table-column prop="dueDate" label="最晚节点" width="150" />
@@ -1724,6 +1743,18 @@ function activeAddressLock(row: PrivateDeliveryPackage) {
 
 function formatAddressResourceNo(resourceId?: number) {
   return resourceId ? `ADR${String(resourceId).padStart(5, '0')}` : '未绑定'
+}
+
+function hasBoundAddressResource(row: PrivateDeliveryPackage) {
+  return Boolean(activeAddressLock(row)?.resourceId)
+}
+
+function addressResourceNo(row: PrivateDeliveryPackage) {
+  return formatAddressResourceNo(activeAddressLock(row)?.resourceId)
+}
+
+function addressLockRemark(row: PrivateDeliveryPackage) {
+  return activeAddressLock(row)?.remark || '地址已锁定'
 }
 
 function goAddressResource(lock?: PrivateAddressLock) {
@@ -3120,6 +3151,26 @@ watch(() => route.fullPath, applyRouteQueue)
 .delivery-order-summary {
   display: grid;
   gap: 4px;
+}
+
+.address-lock-cell {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+
+  :deep(.el-button) {
+    height: auto;
+    padding: 0;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.35;
+  }
 }
 
 .delivery-progress-cell {

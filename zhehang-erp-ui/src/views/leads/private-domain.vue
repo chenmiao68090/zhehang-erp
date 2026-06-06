@@ -703,6 +703,19 @@
               <el-table-column label="任务数" width="90" align="center">
                 <template #default="{ row }">{{ row.taskIds.length }}</template>
               </el-table-column>
+              <el-table-column label="交付进度" width="150">
+                <template #default="{ row }">
+                  <div class="delivery-progress-cell">
+                    <el-progress
+                      :percentage="deliveryProgress(row)"
+                      :status="deliveryProgressStatus(row)"
+                      :stroke-width="8"
+                      :show-text="false"
+                    />
+                    <span>{{ deliveryProgress(row) }}%</span>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
                   <el-tag :type="deliveryStatusTag(row.status)" size="small">{{ deliveryStatusText(row.status) }}</el-tag>
@@ -1297,6 +1310,20 @@ function deliveryStatusText(status: PrivateDeliveryStatus) {
 
 function deliveryStatusTag(status: PrivateDeliveryStatus) {
   return ({ created: 'warning', in_progress: 'primary', done: 'success' } as Record<PrivateDeliveryStatus, any>)[status]
+}
+
+function deliveryProgress(row: PrivateDeliveryPackage) {
+  const taskCount = row.tasks.length || row.taskIds.length
+  if (!taskCount) return 0
+  const doneCount = row.tasks.filter(task => task.status === 'done').length
+  return Math.round(doneCount / taskCount * 100)
+}
+
+function deliveryProgressStatus(row: PrivateDeliveryPackage): 'success' | 'exception' | 'warning' | undefined {
+  if (deliveryProgress(row) >= 100 || row.status === 'done') return 'success'
+  if (row.tasks.some(task => task.status === 'overdue')) return 'exception'
+  if (row.status === 'created') return 'warning'
+  return undefined
 }
 
 function followResultTag(result: PrivateFollowResult) {
@@ -2240,6 +2267,19 @@ watch(() => route.fullPath, applyRouteQueue)
 .delivery-order-summary {
   display: grid;
   gap: 4px;
+}
+
+.delivery-progress-cell {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+    text-align: right;
+  }
 }
 
 .order-summary-main {

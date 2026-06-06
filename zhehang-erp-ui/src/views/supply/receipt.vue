@@ -43,6 +43,49 @@
       </div>
     </div>
 
+    <el-card shadow="never" class="private-sync-card">
+      <template #header>
+        <div class="card-header">
+          <span class="card-title">私域地址库存联动</span>
+          <span class="card-sub">成交交付包锁定口径</span>
+        </div>
+      </template>
+      <div class="private-sync-layout">
+        <div class="private-sync-metrics">
+          <div>
+            <span>私域可售</span>
+            <b>{{ privateAddressStats.available }}</b>
+          </div>
+          <div>
+            <span>已锁定</span>
+            <b>{{ privateAddressStats.locked }}</b>
+          </div>
+          <div :class="{ danger: privateAddressStats.blocked > 0 }">
+            <span>库存预警</span>
+            <b>{{ privateAddressStats.risk }}</b>
+          </div>
+          <div>
+            <span>锁定记录</span>
+            <b>{{ privateAddressStats.activeLocks }}</b>
+          </div>
+        </div>
+        <div class="private-risk-list">
+          <div v-if="privateAddressRisks.length === 0" class="private-risk-empty">私域地址库存正常</div>
+          <div v-for="item in privateAddressRisks" :key="item.id" class="private-risk-item" :class="item.status">
+            <div>
+              <strong>{{ item.city }}{{ item.district }} · {{ item.addressType }}</strong>
+              <p>{{ item.supplierName }} · 可售 {{ item.available }} / 已锁 {{ item.locked }}</p>
+            </div>
+            <el-tag :type="privateAddressStatusType(item.status)" size="small">{{ privateAddressStatusLabel(item.status) }}</el-tag>
+          </div>
+        </div>
+        <div class="private-sync-actions">
+          <el-button type="primary" plain size="small" @click="goPrivateDelivery">查看交付包</el-button>
+          <el-button type="warning" plain size="small" @click="goPrivateAddressTasks">处理补货任务</el-button>
+        </div>
+      </div>
+    </el-card>
+
     <!-- 状态 Tab + 筛选 -->
     <el-card shadow="never" class="filter-card">
       <el-tabs v-model="statusTab" class="status-tabs" @tab-change="onTabChange">
@@ -278,6 +321,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { addressApi, supplierApi, type BizAddressResource, type BizSupplier } from '@/api/channel'
+import { privateDomainApi, type PrivateAddressInventory, type PrivateAddressLock, type PrivateAddressInventoryStatus } from '@/api/private-domain'
 
 type AddrStatus = BizAddressResource['status'] | 'abnormal'
 
@@ -285,6 +329,8 @@ const router = useRouter()
 const loading = ref(false)
 const list = ref<(BizAddressResource & { status: AddrStatus })[]>([])
 const suppliers = ref<BizSupplier[]>([])
+const privateAddressInventory = ref<PrivateAddressInventory[]>([])
+const privateAddressLocks = ref<PrivateAddressLock[]>([])
 const statusTab = ref<string>('')
 const query = reactive({ status: [] as string[], district: '', supplierId: undefined as number | undefined, kw: '' })
 
@@ -293,12 +339,15 @@ const districtOptions = computed(() => Array.from(new Set(list.value.map(a => a.
 async function loadData () {
   loading.value = true
   try {
-    const [aRes, sRes] = await Promise.all([
+    const [aRes, sRes, privateData] = await Promise.all([
       addressApi.list({ pageSize: 500 }),
-      supplierApi.list({ pageSize: 200 })
+      supplierApi.list({ pageSize: 200 }),
+      privateDomainApi.dashboard()
     ])
     list.value = ((aRes as any).list as BizAddressResource[]).map(a => ({ ...a }))
     suppliers.value = (sRes as any).list as BizSupplier[]
+    privateAddressInventory.value = privateData.addressInventory || []
+    privateAddressLocks.value = privateData.addressLocks || []
   } finally { loading.value = false }
 }
 function resetQuery () {
@@ -337,6 +386,21 @@ const stats = computed(() => {
 })
 
 const lowStock = computed(() => stats.value.available < 5)
+const privateAddressRisks = computed(() => privateAddressInventory.value.filter(item => item.status === 'blocked' || item.available <= 2))
+const privateAddressStats = computed(() => ({
+  available: privateAddressInventory.value.reduce((sum, item) => sum + item.available, 0),
+  locked: privateAddressInventory.value.reduce((sum, item) => sum + item.locked, 0),
+  risk: privateAddressRisks.value.length,
+  blocked: privateAddressRisks.value.filter(item => item.status === 'blocked' || item.available <= 0).length,
+  activeLocks: privateAddressLocks.value.filter(item => item.status === 'locked').length
+}))
+
+function privateAddressStatusLabel (status: PrivateAddressInventoryStatus) {
+  return ({ available: '可售', low: '低库存', blocked: '停售' } as Record<PrivateAddressInventoryStatus, string>)[status]
+}
+function privateAddressStatusType (status: PrivateAddressInventoryStatus) {
+  return ({ available: 'success', low: 'warning', blocked: 'danger' } as Record<PrivateAddressInventoryStatus, any>)[status]
+}
 
 function suggestPrice (a: BizAddressResource) { return Math.round((a.yearlyCost || 0) * 1.6) }
 function actualPrice (a: BizAddressResource) {
@@ -361,6 +425,18 @@ function formatNum (n: number) { return (n || 0).toLocaleString('zh-CN') }
 
 function goPurchase () {
   router.push('/supply/purchase').catch(() => {})
+}
+function goPrivateDelivery () {
+  router.push({
+    path: '/leads/private-domain',
+    query: { tab: 'delivery', deliveryFilter: 'all' }
+  }).catch(() => {})
+}
+function goPrivateAddressTasks () {
+  router.push({
+    path: '/leads/private-domain',
+    query: { tab: 'tasks', taskFilter: 'address_stock' }
+  }).catch(() => {})
 }
 
 const profit = computed(() => {
@@ -471,6 +547,22 @@ onMounted(loadData)
 .stat-expired::before { background: #94a3b8; } .stat-expired .stat-value { color: #64748b; }
 .stat-abnormal::before { background: #ef4444; } .stat-abnormal .stat-value { color: #b91c1c; }
 
+.private-sync-card { margin-bottom: 14px; border-radius: 10px; }
+.private-sync-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr) auto; gap: 12px; align-items: stretch; }
+.private-sync-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.private-sync-metrics div { display: grid; gap: 4px; min-width: 0; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+.private-sync-metrics div.danger { border-color: #fecaca; background: #fff7f7; }
+.private-sync-metrics span { color: #64748b; font-size: 12px; }
+.private-sync-metrics b { color: #0f172a; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 20px; }
+.private-risk-list { display: grid; gap: 8px; }
+.private-risk-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; }
+.private-risk-item.blocked { border-color: #fecaca; background: #fff7f7; }
+.private-risk-item strong { color: #0f172a; font-size: 13px; }
+.private-risk-item p { margin: 4px 0 0; color: #64748b; font-size: 12px; }
+.private-risk-empty { display: grid; place-items: center; min-height: 58px; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; font-size: 13px; }
+.private-sync-actions { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.private-sync-actions :deep(.el-button) { margin-left: 0; }
+
 .filter-card { margin-bottom: 14px; border-radius: 10px; }
 .warn-bar { display: flex; align-items: center; gap: 12px; padding: 12px 18px; margin-bottom: 14px; background: linear-gradient(90deg, #fee2e2, #fecaca); border-left: 4px solid #b91c1c; border-radius: 8px; color: #7f1d1d; box-shadow: 0 2px 8px -4px rgba(185, 28, 28, .3); }
 .warn-bar .wb-icon { font-size: 22px; }
@@ -520,4 +612,16 @@ onMounted(loadData)
 .ms-row { display: flex; justify-content: space-between; padding: 6px 10px; font-size: 13px; color: #475569; border-radius: 4px; }
 .ms-row.highlight { background: linear-gradient(90deg, #fef3c7, #fde68a); color: #b45309; font-weight: 600; }
 :deep(.el-table .cell) { font-size: 12.5px; }
+
+@media (max-width: 1200px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .private-sync-layout { grid-template-columns: 1fr; }
+  .profit-side { display: grid; grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .stat-grid,
+  .private-sync-metrics,
+  .profit-side { grid-template-columns: 1fr; }
+}
 </style>

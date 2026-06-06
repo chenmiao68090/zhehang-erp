@@ -2197,10 +2197,17 @@ export const privateDomainApi = {
     const addressInventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
     const packages = await hydrateDeliveryPackages(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY), followRecords)
     const summary = calcSummary(contacts, groups, packages, followRecords)
+    const addressInventoryStats = {
+      totalAvailable: addressInventory.reduce((sum, item) => sum + item.available, 0),
+      totalLocked: addressInventory.reduce((sum, item) => sum + item.locked, 0),
+      riskCount: addressInventory.filter(item => item.status === 'blocked' || item.available <= 2).length,
+      blockedCount: addressInventory.filter(item => item.status === 'blocked' || item.available <= 0).length
+    }
     return delay({
       summary,
       metrics: buildBossMetrics(summary),
-      risks: buildBossRisks(contacts, packages, followRecords, addressInventory, tasks)
+      risks: buildBossRisks(contacts, packages, followRecords, addressInventory, tasks),
+      addressInventoryStats
     })
   },
   async verifyContact(id: number) {

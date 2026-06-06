@@ -344,6 +344,18 @@ async function loadPrivateBossMetrics() {
     const riskMetric = data.metrics.find(item => item.label === '撞单风险')
     const packageMetric = data.metrics.find(item => item.label === '成交交付包')
     const addressRisk = data.risks.find(item => item.title.includes('地址库存'))
+    const addressStats = data.addressInventoryStats
+    statCards.value = statCards.value.map(item => item.label === '可售地址资源'
+      ? {
+          ...item,
+          value: addressStats.totalAvailable,
+          trend: addressStats.riskCount
+            ? `${addressStats.riskCount} 个库存预警 · 已锁 ${addressStats.totalLocked}`
+            : `已锁 ${addressStats.totalLocked} · 库存正常`,
+          trendType: addressStats.blockedCount ? 'danger' : addressStats.riskCount ? 'warn' : 'up'
+        }
+      : item
+    )
     focusTags.value = [
       data.summary.duplicateRiskCount ? `私域撞单风险 ${data.summary.duplicateRiskCount} 条` : '私域撞单风险正常',
       `私域成交交付包 ${packageMetric?.value || 0} 个`,
@@ -351,7 +363,12 @@ async function loadPrivateBossMetrics() {
       riskMetric?.type === 'danger' ? '需主管仲裁撞单归属' : '归属规则已启用'
     ]
     businessProgress.value = [
-      ...businessProgress.value.filter(item => item.title !== '私域运营').slice(0, 3),
+      ...businessProgress.value
+        .filter(item => item.title !== '私域运营')
+        .map(item => item.title === '挂靠地址'
+          ? { ...item, value: `${addressStats.totalAvailable} 套`, desc: `可售 ${addressStats.totalAvailable}，已锁 ${addressStats.totalLocked}，预警 ${addressStats.riskCount}` }
+          : item
+        ),
       { title: '私域运营', value: `${data.summary.intentCount} 条`, desc: `客户 ${data.summary.contactCount}，核验 ${data.summary.verifiedCount}，交付包 ${data.summary.deliveryPackageCount}` }
     ]
     const privateRisks = (data.risks || []).map((item: PrivateBossRisk) => ({ ...item }))

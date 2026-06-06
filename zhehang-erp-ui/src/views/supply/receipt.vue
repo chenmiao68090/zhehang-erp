@@ -142,6 +142,19 @@
       </el-form>
     </el-card>
 
+    <div v-if="targetResourceNo" class="route-focus-bar">
+      <div>
+        <strong>已定位地址资源 {{ targetResourceNo }}</strong>
+        <span>{{ routeFocusText }}</span>
+      </div>
+      <div class="route-focus-actions">
+        <el-button size="small" @click="clearRouteFocus">清除定位</el-button>
+        <el-button v-if="targetPackageId" type="primary" plain size="small" @click="returnPrivateDeliveryPackage">
+          返回交付包
+        </el-button>
+      </div>
+    </div>
+
     <div class="main-grid">
       <!-- 左侧表格 -->
       <el-card shadow="never" class="table-card">
@@ -345,13 +358,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { addressApi, supplierApi, type BizAddressResource, type BizSupplier } from '@/api/channel'
 import { privateDomainApi, type PrivateAddressInventory, type PrivateAddressLock, type PrivateAddressInventoryStatus } from '@/api/private-domain'
 
 type AddrStatus = BizAddressResource['status'] | 'abnormal'
+type PrivateLockFilter = '' | 'locked' | 'unlocked'
 
 const router = useRouter()
 const route = useRoute()
@@ -365,13 +379,18 @@ const query = reactive({
   status: [] as string[],
   district: '',
   supplierId: undefined as number | undefined,
-  privateLock: '' as '' | 'locked' | 'unlocked',
+  privateLock: queryPrivateLock(route.query.privateLock),
   kw: queryText(route.query.resourceNo)
 })
 
 function queryText (value: unknown) {
   if (Array.isArray(value)) return String(value[0] || '')
   return String(value || '')
+}
+
+function queryPrivateLock (value: unknown): PrivateLockFilter {
+  const text = queryText(value)
+  return text === 'locked' || text === 'unlocked' ? text : ''
 }
 
 const districtOptions = computed(() => Array.from(new Set(list.value.map(a => a.district))))
@@ -388,7 +407,10 @@ async function loadData () {
     suppliers.value = (sRes as any).list as BizSupplier[]
     privateAddressInventory.value = privateData.addressInventory || []
     privateAddressLocks.value = privateData.addressLocks || []
-  } finally { loading.value = false }
+  } finally {
+    loading.value = false
+    scrollTargetTableIntoView()
+  }
 }
 function resetQuery () {
   Object.assign(query, { status: [], district: '', supplierId: undefined, privateLock: '', kw: '' })
@@ -429,6 +451,17 @@ const stats = computed(() => {
 
 const lowStock = computed(() => stats.value.available < 5)
 const targetResourceNo = computed(() => queryText(route.query.resourceNo))
+const targetPackageId = computed(() => {
+  const id = Number(queryText(route.query.packageId))
+  return Number.isFinite(id) && id > 0 ? id : 0
+})
+const routeFocusText = computed(() => {
+  const parts = [queryText(route.query.source) === 'private-domain' ? '来源: 私域交付定位' : '来源: 资源编号定位']
+  if (query.privateLock === 'locked') parts.push('已筛选已锁交付')
+  if (query.privateLock === 'unlocked') parts.push('已筛选未锁交付')
+  if (targetPackageId.value) parts.push(`交付包 #${targetPackageId.value}`)
+  return parts.join(' · ')
+})
 const privateAddressRisks = computed(() => privateAddressInventory.value.filter(item => item.status === 'blocked' || item.available <= 2))
 const privateAddressStats = computed(() => ({
   available: privateAddressInventory.value.reduce((sum, item) => sum + item.available, 0),
@@ -509,6 +542,39 @@ function goPrivateDeliveryPackage (lock?: PrivateAddressLock) {
     path: '/leads/private-domain',
     query: { tab: 'delivery', deliveryFilter: 'all', packageId: String(lock.packageId) }
   }).catch(() => {})
+}
+function returnPrivateDeliveryPackage () {
+  if (!targetPackageId.value) return
+  router.push({
+    path: '/leads/private-domain',
+    query: { tab: 'delivery', deliveryFilter: 'all', packageId: String(targetPackageId.value) }
+  }).catch(() => {})
+}
+function clearRouteFocus () {
+  query.kw = ''
+  query.privateLock = ''
+  const nextQuery = { ...route.query }
+  delete nextQuery.resourceNo
+  delete nextQuery.privateLock
+  delete nextQuery.packageId
+  delete nextQuery.source
+  router.replace({ path: route.path, query: nextQuery }).catch(() => {})
+}
+function applyRouteFocus () {
+  const resourceNo = queryText(route.query.resourceNo)
+  if (resourceNo) query.kw = resourceNo
+  const privateLock = queryPrivateLock(route.query.privateLock)
+  if (privateLock) query.privateLock = privateLock
+  scrollTargetTableIntoView()
+}
+function scrollTargetTableIntoView () {
+  if (!targetResourceNo.value) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      const target = document.querySelector('.route-focus-bar') || document.querySelector('.table-card')
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+  })
 }
 
 const profit = computed(() => {
@@ -601,10 +667,7 @@ function recoverAddr (row: any) {
 }
 
 onMounted(loadData)
-watch(() => route.query.resourceNo, value => {
-  const next = queryText(value)
-  if (next) query.kw = next
-})
+watch(() => [route.query.resourceNo, route.query.privateLock, route.query.packageId], applyRouteFocus)
 </script>
 
 <style scoped>
@@ -655,6 +718,10 @@ watch(() => route.query.resourceNo, value => {
 .tab-count.tc-gray { background: #e2e8f0; color: #64748b; }
 .tab-count.tc-red { background: #fee2e2; color: #b91c1c; }
 .filter-row { padding-top: 6px; border-top: 1px solid #f1f5f9; margin-top: 8px; }
+.route-focus-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; margin: -4px 0 14px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; color: #1e3a8a; scroll-margin-top: 76px; }
+.route-focus-bar strong { display: block; font-size: 13px; color: #1d4ed8; }
+.route-focus-bar span { display: block; margin-top: 2px; font-size: 12px; color: #64748b; }
+.route-focus-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .perm-icon { margin-left: 4px; font-size: 12px; cursor: help; opacity: .7; }
 .profit-cell { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.3; }
 .sub-text { font-size: 11px; color: #94a3b8; margin-top: 2px; }

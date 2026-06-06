@@ -1877,7 +1877,12 @@ function goAddressResource(lock?: PrivateAddressLock) {
   if (!lock?.resourceId) return
   router.push({
     path: '/supply/receipt',
-    query: { resourceNo: formatAddressResourceNo(lock.resourceId) }
+    query: {
+      resourceNo: formatAddressResourceNo(lock.resourceId),
+      privateLock: 'locked',
+      packageId: String(lock.packageId),
+      source: 'private-domain'
+    }
   }).catch(() => {})
 }
 

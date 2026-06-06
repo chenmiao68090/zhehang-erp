@@ -213,7 +213,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
 import { getStorage } from '@/utils/storage'
-import { privateDomainApi, type PrivateBossMetric } from '@/api/private-domain'
+import { privateDomainApi, type PrivateBossMetric, type PrivateBossRisk } from '@/api/private-domain'
 import {
   Calendar, DocumentChecked, Tickets, User as UserIcon,
   TrendCharts, Link, Setting, Money, DataAnalysis,
@@ -292,6 +292,7 @@ const riskAlerts = ref([
   { title: '地址资源余量不足', label: '中', level: 'medium', desc: '西湖区可售资源仅 8 套，按近 7 日消耗预计 4 天用尽。', path: '/supply/receipt' },
   { title: '交付节点临期', label: '中', level: 'medium', desc: '3 个工商注册订单今日需补材料，否则会影响承诺周期。', path: '/task-center/periodic' }
 ])
+const baseRiskAlerts = riskAlerts.value.slice()
 
 const schedules = ref([
   { time: '09:30', title: '营销早会', desc: '复盘昨日线索、成交和投放 ROI' },
@@ -351,6 +352,8 @@ async function loadPrivateBossMetrics() {
       ...businessProgress.value.filter(item => item.title !== '私域运营').slice(0, 3),
       { title: '私域运营', value: `${data.summary.intentCount} 条`, desc: `客户 ${data.summary.contactCount}，核验 ${data.summary.verifiedCount}，交付包 ${data.summary.deliveryPackageCount}` }
     ]
+    const privateRisks = (data.risks || []).map((item: PrivateBossRisk) => ({ ...item }))
+    riskAlerts.value = [...privateRisks, ...baseRiskAlerts].slice(0, 6)
     aiSummary.value = `今日重点：私域客户 ${data.summary.contactCount} 家，高意向 ${data.summary.intentCount} 条，撞单风险 ${data.summary.duplicateRiskCount} 条，成交后交付包 ${data.summary.deliveryPackageCount} 个。`
   } catch {
     privateBossMetrics.value = privateBossMetrics.value.map(item => ({ ...item, trend: '本地私域数据暂不可读' }))

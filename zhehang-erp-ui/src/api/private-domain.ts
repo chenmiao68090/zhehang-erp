@@ -69,6 +69,14 @@ export interface PrivateBossMetric {
   type: 'up' | 'warn' | 'danger'
 }
 
+export interface PrivateBossRisk {
+  title: string
+  label: string
+  level: 'high' | 'medium'
+  desc: string
+  path: string
+}
+
 export interface PrivateFollowRecord {
   id: number
   contactId: number
@@ -1251,6 +1259,67 @@ function buildBossMetrics(summary: PrivateSummary): PrivateBossMetric[] {
   ]
 }
 
+function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPackage[], followRecords: PrivateFollowRecord[]): PrivateBossRisk[] {
+  const risks: PrivateBossRisk[] = []
+  const intentContacts = contacts.filter(item => ['intent', 'quoted'].includes(item.stage))
+  const latestFollowByContact = new Map<number, PrivateFollowRecord>()
+  followRecords
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .forEach(item => {
+      if (!latestFollowByContact.has(item.contactId)) latestFollowByContact.set(item.contactId, item)
+    })
+  const needFollow = intentContacts.filter(item => {
+    const latest = latestFollowByContact.get(item.id)
+    return !latest || ['无响应', '已联系', '有意向', '已报价', '暂缓'].includes(latest.result)
+  })
+  if (needFollow.length) {
+    risks.push({
+      title: '私域高意向待复联',
+      label: needFollow.length >= 3 ? '高' : '中',
+      level: needFollow.length >= 3 ? 'high' : 'medium',
+      desc: `${needFollow.length} 个高意向/已报价私域客户仍需复联,建议今天完成报价反馈、付款节点或成交确认。`,
+      path: '/leads/private-domain'
+    })
+  }
+
+  const duplicateRisk = contacts.filter(item => item.verification?.duplicateRisk && item.verification.duplicateRisk !== 'none')
+  if (duplicateRisk.length) {
+    risks.push({
+      title: '私域撞单待仲裁',
+      label: '高',
+      level: 'high',
+      desc: `${duplicateRisk.length} 个私域客户存在疑似或强命中撞单,需主管确认归属后再继续流转。`,
+      path: '/leads/private-domain'
+    })
+  }
+
+  const silentContacts = contacts.filter(item => item.stage === 'silent')
+  if (silentContacts.length) {
+    risks.push({
+      title: '沉默客户需唤醒',
+      label: '中',
+      level: 'medium',
+      desc: `${silentContacts.length} 个私域客户进入沉默状态,建议按业务线推送唤醒话术或转入回收规则。`,
+      path: '/leads/private-domain'
+    })
+  }
+
+  const packageContactIds = new Set(packages.map(item => item.contactId))
+  const orderedWithoutPackage = contacts.filter(item => item.stage === 'ordered' && !packageContactIds.has(item.id))
+  if (orderedWithoutPackage.length) {
+    risks.push({
+      title: '成交未建交付包',
+      label: '高',
+      level: 'high',
+      desc: `${orderedWithoutPackage.length} 个已成交私域客户还没有交付包,存在销售成交后交付断档风险。`,
+      path: '/leads/private-domain'
+    })
+  }
+
+  return risks.slice(0, 4)
+}
+
 function stageFromFollowResult(result: PrivateFollowResult, current: PrivateStage): PrivateStage {
   const map: Partial<Record<PrivateFollowResult, PrivateStage>> = {
     无响应: current === 'new' ? 'new' : 'silent',
@@ -1631,15 +1700,15 @@ export const privateDomainApi = {
   },
   async bossSnapshot() {
     ensureSeeds()
-    const summary = calcSummary(
-      readList<PrivateContact>(CONTACT_KEY),
-      readList<PrivateGroup>(GROUP_KEY),
-      readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY),
-      readList<PrivateFollowRecord>(FOLLOW_KEY)
-    )
+    const contacts = readList<PrivateContact>(CONTACT_KEY)
+    const groups = readList<PrivateGroup>(GROUP_KEY)
+    const packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
+    const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    const summary = calcSummary(contacts, groups, packages, followRecords)
     return delay({
       summary,
-      metrics: buildBossMetrics(summary)
+      metrics: buildBossMetrics(summary),
+      risks: buildBossRisks(contacts, packages, followRecords)
     })
   },
   async verifyContact(id: number) {

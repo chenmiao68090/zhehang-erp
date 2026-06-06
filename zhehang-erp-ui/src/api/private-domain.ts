@@ -55,6 +55,11 @@ export interface PrivateDeliveryPackage {
   contactName: string
   orderId?: number
   orderNo?: string
+  orderStatus?: BizOrder['status']
+  orderAmount?: number
+  paymentMethod?: BizOrder['paymentMethod']
+  paymentTimeReq?: string
+  orderItemNames?: string[]
   serviceLine: string
   packageName: string
   ownerName: string
@@ -1510,7 +1515,7 @@ function buildContactTimeline(
         id: `delivery-${item.id}`,
         type: 'delivery',
         title: `生成${item.packageName}`,
-        content: `${item.orderNo ? `来源提单:${item.orderNo} · ` : ''}${item.serviceLine} · 自动拆解 ${item.taskIds.length} 个交付任务 · 最晚节点 ${item.dueDate}`,
+        content: `${item.orderNo ? `来源提单:${item.orderNo}${item.orderAmount ? `/¥${item.orderAmount.toLocaleString('zh-CN')}` : ''} · ` : ''}${item.serviceLine} · 自动拆解 ${item.taskIds.length} 个交付任务 · 最晚节点 ${item.dueDate}`,
         operatorName: item.ownerName,
         time: item.createdAt,
         statusText: item.status === 'done' ? '已完成' : item.status === 'in_progress' ? '进行中' : '已创建',
@@ -1536,6 +1541,47 @@ function buildContactTimeline(
   return items.sort((a, b) => b.time.localeCompare(a.time))
 }
 
+async function hydrateDeliveryPackages(
+  packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY),
+  followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
+) {
+  let changed = false
+  const hydrated = await Promise.all(packages.map(async item => {
+    const latestOrderRecord = followRecords
+      .filter(record => record.contactId === item.contactId && (item.orderNo ? record.orderNo === item.orderNo : record.orderNo))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    const orderId = item.orderId || latestOrderRecord?.orderId
+    const orderNo = item.orderNo || latestOrderRecord?.orderNo
+    if (!orderId && !orderNo) return item
+
+    let orderSnapshot: BizOrder | undefined
+    if (orderId) {
+      orderSnapshot = (await orderApi.detail(orderId)) || undefined
+    }
+    if (!orderSnapshot && orderNo) {
+      const orderResp = await orderApi.list({ orderNo, pageSize: 1 })
+      orderSnapshot = orderResp.list.find(order => order.orderNo === orderNo) || orderResp.list[0]
+    }
+
+    const next: PrivateDeliveryPackage = {
+      ...item,
+      orderId: orderSnapshot?.id || orderId,
+      orderNo: orderSnapshot?.orderNo || orderNo,
+      orderStatus: orderSnapshot?.status || item.orderStatus || latestOrderRecord?.orderStatus,
+      orderAmount: orderSnapshot?.finalAmount || item.orderAmount || latestOrderRecord?.quotedAmount || 0,
+      paymentMethod: orderSnapshot?.paymentMethod || item.paymentMethod,
+      paymentTimeReq: orderSnapshot?.paymentTimeReq || item.paymentTimeReq,
+      orderItemNames: orderSnapshot?.items.map(orderItem => orderItem.description).filter(Boolean).slice(0, 3) || item.orderItemNames
+    }
+    const needUpdate = ['orderId', 'orderNo', 'orderStatus', 'orderAmount', 'paymentMethod', 'paymentTimeReq', 'orderItemNames']
+      .some(key => JSON.stringify(next[key as keyof PrivateDeliveryPackage]) !== JSON.stringify(item[key as keyof PrivateDeliveryPackage]))
+    if (needUpdate) changed = true
+    return needUpdate ? next : item
+  }))
+  if (changed) writeList(DELIVERY_PACKAGE_KEY, hydrated)
+  return hydrated
+}
+
 function stageTextForTimeline(stage: PrivateStage) {
   return ({ new: '新触点', nurturing: '培育中', intent: '有意向', quoted: '已报价', ordered: '已成交', silent: '沉默' } as Record<PrivateStage, string>)[stage]
 }
@@ -1556,8 +1602,8 @@ export const privateDomainApi = {
     const integrations = readList<PrivateIntegration>(INTEGRATION_KEY)
     const ownershipRules = readOwnershipRules()
     const wecomConfig = readWecomConfig()
-    const deliveryPackages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
     const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    const deliveryPackages = await hydrateDeliveryPackages(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY), followRecords)
     const opsProfile = readProfile()
     const summary = calcSummary(contacts, groups, deliveryPackages, followRecords)
     return delay({
@@ -1671,7 +1717,7 @@ export const privateDomainApi = {
   },
   async listDeliveryPackages() {
     ensureSeeds()
-    return delay(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY))
+    return delay(await hydrateDeliveryPackages())
   },
   async listFollowRecords(contactId?: number) {
     ensureSeeds()
@@ -1687,7 +1733,7 @@ export const privateDomainApi = {
     return delay(buildContactTimeline(
       contact,
       readList<PrivateFollowRecord>(FOLLOW_KEY),
-      readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY),
+      await hydrateDeliveryPackages(),
       readList<PrivateTask>(TASK_KEY)
     ))
   },
@@ -1811,11 +1857,22 @@ export const privateDomainApi = {
     const contact = contacts[contactIdx]
     const packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
     const existed = packages.find(item => item.contactId === id)
-    if (existed) return delay({ package: existed, reused: true })
+    if (existed) {
+      const hydratedPackages = await hydrateDeliveryPackages(packages, readList<PrivateFollowRecord>(FOLLOW_KEY))
+      return delay({ package: hydratedPackages.find(item => item.id === existed.id) || existed, reused: true })
+    }
 
     const latestOrderRecord = readList<PrivateFollowRecord>(FOLLOW_KEY)
       .filter(item => item.contactId === id && item.orderNo)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    let orderSnapshot: BizOrder | undefined
+    if (latestOrderRecord?.orderId) {
+      orderSnapshot = (await orderApi.detail(latestOrderRecord.orderId)) || undefined
+    }
+    if (!orderSnapshot && latestOrderRecord?.orderNo) {
+      const orderResp = await orderApi.list({ orderNo: latestOrderRecord.orderNo, pageSize: 1 })
+      orderSnapshot = orderResp.list.find(item => item.orderNo === latestOrderRecord.orderNo) || orderResp.list[0]
+    }
     const tasks = readList<PrivateTask>(TASK_KEY)
     let nextTaskId = maxId(tasks)
     const plan = deliveryPlanFor(contact)
@@ -1838,6 +1895,11 @@ export const privateDomainApi = {
       contactName: contact.name,
       orderId: latestOrderRecord?.orderId,
       orderNo: latestOrderRecord?.orderNo,
+      orderStatus: orderSnapshot?.status || latestOrderRecord?.orderStatus,
+      orderAmount: orderSnapshot?.finalAmount || latestOrderRecord?.quotedAmount || contact.estimatedAmount,
+      paymentMethod: orderSnapshot?.paymentMethod,
+      paymentTimeReq: orderSnapshot?.paymentTimeReq,
+      orderItemNames: orderSnapshot?.items.map(item => item.description).filter(Boolean).slice(0, 3),
       serviceLine: contact.serviceLine,
       packageName: packageNameOf(contact),
       ownerName: contact.ownerName,
@@ -1862,8 +1924,8 @@ export const privateDomainApi = {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)
     const groups = readList<PrivateGroup>(GROUP_KEY)
-    const packages = readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY)
     const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    const packages = await hydrateDeliveryPackages(readList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY), followRecords)
     const summary = calcSummary(contacts, groups, packages, followRecords)
     return delay({
       summary,

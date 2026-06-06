@@ -682,6 +682,21 @@
                   <span v-else class="sub-line">未关联</span>
                 </template>
               </el-table-column>
+              <el-table-column label="订单摘要" min-width="280">
+                <template #default="{ row }">
+                  <div v-if="row.orderNo" class="delivery-order-summary">
+                    <div class="order-summary-main">
+                      <strong>¥{{ formatMoney(row.orderAmount || 0) }}</strong>
+                      <el-tag :type="orderStatusTag(row.orderStatus)" size="small" effect="plain">
+                        {{ orderStatusText(row.orderStatus) }}
+                      </el-tag>
+                      <span>{{ paymentMethodText(row.paymentMethod) }}</span>
+                    </div>
+                    <div class="sub-line">{{ row.paymentTimeReq || '未填写收款要求' }}</div>
+                  </div>
+                  <span v-else class="sub-line">未关联订单</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="ownerName" label="销售/负责人" width="130" />
               <el-table-column prop="createdAt" label="创建时间" width="150" />
               <el-table-column prop="dueDate" label="最晚节点" width="150" />
@@ -1312,6 +1327,18 @@ function orderStatusTag(status?: PrivateFollowRecord['orderStatus']): 'success' 
     completed: 'success',
     cancelled: 'info'
   } as Record<NonNullable<PrivateFollowRecord['orderStatus']>, 'success' | 'warning' | 'info' | 'danger' | 'primary'>)[status]
+}
+
+function paymentMethodText(method?: PrivateDeliveryPackage['paymentMethod']) {
+  if (!method) return '未填付款方式'
+  return ({
+    lump_sum: '一次性付款',
+    monthly: '月付',
+    quarterly: '季付',
+    semi_annual: '半年付',
+    annual: '年付',
+    installment: '分期付款'
+  } as Record<NonNullable<PrivateDeliveryPackage['paymentMethod']>, string>)[method]
 }
 
 function priorityTag(priority: PrivateTask['priority']) {
@@ -2206,6 +2233,28 @@ watch(() => route.fullPath, applyRouteQueue)
     border-radius: 999px;
     background: #eef4ff;
     color: #245bdb;
+    font-size: 12px;
+  }
+}
+
+.delivery-order-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.order-summary-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+
+  strong {
+    color: #111827;
+    font-weight: 700;
+  }
+
+  span {
+    color: #64748b;
     font-size: 12px;
   }
 }

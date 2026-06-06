@@ -68,6 +68,10 @@
             <span>锁定记录</span>
             <b>{{ privateAddressStats.activeLocks }}</b>
           </div>
+          <div :class="{ danger: privateAddressStats.unboundLocks > 0 }">
+            <span>待绑资源</span>
+            <b>{{ privateAddressStats.unboundLocks }}</b>
+          </div>
         </div>
         <div class="private-risk-list">
           <div v-if="privateAddressRisks.length === 0" class="private-risk-empty">私域地址库存正常</div>
@@ -82,6 +86,9 @@
         <div class="private-sync-actions">
           <el-button type="primary" plain size="small" @click="goPrivateDelivery">查看交付包</el-button>
           <el-button type="warning" plain size="small" @click="goPrivateAddressTasks">处理补货任务</el-button>
+          <el-button v-if="privateAddressStats.unboundLocks" type="danger" plain size="small" @click="goPrivateAddressUnbound">
+            处理断链
+          </el-button>
         </div>
       </div>
     </el-card>
@@ -117,6 +124,12 @@
         <el-form-item label="地址供应商">
           <el-select v-model="query.supplierId" placeholder="选择地址供应商" clearable style="width: 220px">
             <el-option v-for="s in suppliers" :key="s.id" :label="s.supplierName" :value="s.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="私域锁定">
+          <el-select v-model="query.privateLock" placeholder="全部" clearable style="width: 140px">
+            <el-option label="已锁交付" value="locked" />
+            <el-option label="未锁交付" value="unlocked" />
           </el-select>
         </el-form-item>
         <el-form-item label="搜索">
@@ -348,7 +361,13 @@ const suppliers = ref<BizSupplier[]>([])
 const privateAddressInventory = ref<PrivateAddressInventory[]>([])
 const privateAddressLocks = ref<PrivateAddressLock[]>([])
 const statusTab = ref<string>('')
-const query = reactive({ status: [] as string[], district: '', supplierId: undefined as number | undefined, kw: queryText(route.query.resourceNo) })
+const query = reactive({
+  status: [] as string[],
+  district: '',
+  supplierId: undefined as number | undefined,
+  privateLock: '' as '' | 'locked' | 'unlocked',
+  kw: queryText(route.query.resourceNo)
+})
 
 function queryText (value: unknown) {
   if (Array.isArray(value)) return String(value[0] || '')
@@ -372,7 +391,7 @@ async function loadData () {
   } finally { loading.value = false }
 }
 function resetQuery () {
-  Object.assign(query, { status: [], district: '', supplierId: undefined, kw: '' })
+  Object.assign(query, { status: [], district: '', supplierId: undefined, privateLock: '', kw: '' })
   statusTab.value = ''
 }
 function quickFilter (s: string[]) {
@@ -389,6 +408,8 @@ const filteredList = computed(() => {
     if (statusTab.value && a.status !== statusTab.value) return false
     if (query.district && a.district !== query.district) return false
     if (query.supplierId && a.supplierId !== query.supplierId) return false
+    if (query.privateLock === 'locked' && !addressLockOf(a)) return false
+    if (query.privateLock === 'unlocked' && addressLockOf(a)) return false
     if (query.kw && !(a.resourceNo + a.detailAddress).includes(query.kw)) return false
     return true
   })
@@ -414,7 +435,8 @@ const privateAddressStats = computed(() => ({
   locked: privateAddressInventory.value.reduce((sum, item) => sum + item.locked, 0),
   risk: privateAddressRisks.value.length,
   blocked: privateAddressRisks.value.filter(item => item.status === 'blocked' || item.available <= 0).length,
-  activeLocks: privateAddressLocks.value.filter(item => item.status === 'locked').length
+  activeLocks: privateAddressLocks.value.filter(item => item.status === 'locked').length,
+  unboundLocks: privateAddressLocks.value.filter(item => item.status === 'locked' && !item.resourceId).length
 }))
 
 function privateAddressStatusLabel (status: PrivateAddressInventoryStatus) {
@@ -473,6 +495,12 @@ function goPrivateAddressTasks () {
   router.push({
     path: '/leads/private-domain',
     query: { tab: 'tasks', taskFilter: 'address_stock' }
+  }).catch(() => {})
+}
+function goPrivateAddressUnbound () {
+  router.push({
+    path: '/leads/private-domain',
+    query: { tab: 'delivery', deliveryFilter: 'address_unbound' }
   }).catch(() => {})
 }
 function goPrivateDeliveryPackage (lock?: PrivateAddressLock) {
@@ -597,7 +625,7 @@ watch(() => route.query.resourceNo, value => {
 
 .private-sync-card { margin-bottom: 14px; border-radius: 10px; }
 .private-sync-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr) auto; gap: 12px; align-items: stretch; }
-.private-sync-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.private-sync-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .private-sync-metrics div { display: grid; gap: 4px; min-width: 0; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
 .private-sync-metrics div.danger { border-color: #fecaca; background: #fff7f7; }
 .private-sync-metrics span { color: #64748b; font-size: 12px; }

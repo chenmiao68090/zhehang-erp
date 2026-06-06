@@ -141,6 +141,8 @@ export interface OrderStats {
 }
 
 const STORAGE_KEY = 'biz_orders'
+const PRIVATE_FOLLOW_KEY = 'biz_private_follow_records'
+const PRIVATE_CONTACT_KEY = 'biz_private_contacts'
 
 const delay = <T>(data: T, ms = 120): Promise<T> =>
   new Promise(resolve => setTimeout(() => resolve(data), ms))
@@ -180,6 +182,61 @@ function loadOrders(): BizOrder[] {
 
 function saveOrders(list: BizOrder[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+}
+
+function readLocalList<T>(key: string): T[] {
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]') as T[]
+  } catch {
+    return []
+  }
+}
+
+function writeLocalList<T>(key: string, list: T[]) {
+  localStorage.setItem(key, JSON.stringify(list))
+}
+
+function privateOrderNextAction(status: BizOrder['status'], orderNo: string) {
+  return ({
+    draft: `提单 ${orderNo} 仍为草稿,请销售核对后提交审批`,
+    pending_approval: `提单 ${orderNo} 已提交审批,等待主管审批`,
+    pending_finance: `提单 ${orderNo} 主管已通过,等待财务核对`,
+    pending_boss: `提单 ${orderNo} 财务已确认,等待老板终审`,
+    rejected: `提单 ${orderNo} 已驳回,请根据意见调整报价或资料`,
+    completed: `提单 ${orderNo} 已完成审批,请生成交付包并跟进回款/合同`,
+    cancelled: `提单 ${orderNo} 已取消,请复盘客户需求和取消原因`
+  } as Record<BizOrder['status'], string>)[status]
+}
+
+function syncPrivateOrderStatus(order: BizOrder) {
+  const records = readLocalList<any>(PRIVATE_FOLLOW_KEY)
+  const recordIdx = records.findIndex(item => item.orderId === order.id || item.orderNo === order.orderNo)
+  if (recordIdx < 0) return
+  const now = todayStr()
+  const nextAction = privateOrderNextAction(order.status, order.orderNo)
+  const current = records[recordIdx]
+  records[recordIdx] = {
+    ...current,
+    orderId: order.id,
+    orderNo: order.orderNo,
+    orderStatus: order.status,
+    nextAction
+  }
+  writeLocalList(PRIVATE_FOLLOW_KEY, records)
+
+  const contacts = readLocalList<any>(PRIVATE_CONTACT_KEY)
+  const contactIdx = contacts.findIndex(item => item.id === current.contactId)
+  if (contactIdx < 0) return
+  const contact = contacts[contactIdx]
+  const tags = Array.from(new Set([...(contact.tags || []), order.status === 'completed' ? '提单已完成' : '提单流转中']))
+  contacts[contactIdx] = {
+    ...contact,
+    stage: order.status === 'completed' ? 'ordered' : contact.stage,
+    nextAction,
+    lastTouchAt: now,
+    tags: tags.slice(0, 8)
+  }
+  writeLocalList(PRIVATE_CONTACT_KEY, contacts)
 }
 
 function buildSeedOrders(): BizOrder[] {
@@ -705,6 +762,7 @@ export const orderApi = {
       linkageLogs: [...(cur.linkageLogs || []), log]
     }
     saveOrders(list)
+    syncPrivateOrderStatus(list[idx])
     // CRM 联动：客户状态变为“签约中”且保护期延长至 30 天
     triggerCustomerSigning(list[idx].customerId, list[idx].orderNo)
     return delay(list[idx])
@@ -730,6 +788,7 @@ export const orderApi = {
         approvalOpinion: opinion
       }
       saveOrders(list)
+      syncPrivateOrderStatus(list[idx])
       finalizeCompleted(list[idx])
       return delay(loadOrders().find(o => o.id === payload.id) as BizOrder)
     }
@@ -741,6 +800,7 @@ export const orderApi = {
       approvalOpinion: opinion
     }
     saveOrders(list)
+    syncPrivateOrderStatus(list[idx])
     return delay(list[idx])
   },
 
@@ -777,6 +837,7 @@ export const orderApi = {
       linkageLogs: [...(cur.linkageLogs || []), log]
     }
     saveOrders(list)
+    syncPrivateOrderStatus(list[idx])
     triggerCustomerRejected(cur.customerId, cur.orderNo)
     return delay(list[idx])
   },
@@ -800,6 +861,7 @@ export const orderApi = {
         financeOpinion: opinion
       }
       saveOrders(list)
+      syncPrivateOrderStatus(list[idx])
       return delay(list[idx])
     }
     list[idx] = {
@@ -810,6 +872,7 @@ export const orderApi = {
       financeOpinion: opinion
     }
     saveOrders(list)
+    syncPrivateOrderStatus(list[idx])
     finalizeCompleted(list[idx])
     return delay(loadOrders().find(o => o.id === payload.id) as BizOrder)
   },
@@ -830,6 +893,7 @@ export const orderApi = {
       bossOpinion: payload.opinion || '老板终审通过'
     }
     saveOrders(list)
+    syncPrivateOrderStatus(list[idx])
     finalizeCompleted(list[idx])
     return delay(loadOrders().find(o => o.id === payload.id) as BizOrder)
   },
@@ -847,6 +911,7 @@ export const orderApi = {
       remark: reason ? `${list[idx].remark || ''}【取消原因】${reason}` : list[idx].remark
     }
     saveOrders(list)
+    syncPrivateOrderStatus(list[idx])
     return delay(list[idx])
   },
 

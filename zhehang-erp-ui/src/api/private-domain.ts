@@ -93,6 +93,7 @@ export interface PrivateFollowRecord {
   createdAt: string
   orderId?: number
   orderNo?: string
+  orderStatus?: BizOrder['status']
 }
 
 export interface PrivateFollowCreatePayload {
@@ -1408,6 +1409,18 @@ function serviceTextFromPrivate(serviceType: BizOrderItem['serviceType']) {
   } as Record<BizOrderItem['serviceType'], string>)[serviceType]
 }
 
+function orderStatusTextForTimeline(status: BizOrder['status']) {
+  return ({
+    draft: '草稿',
+    pending_approval: '待主管审批',
+    pending_finance: '待财务确认',
+    pending_boss: '待老板终审',
+    rejected: '已驳回',
+    completed: '已完成',
+    cancelled: '已取消'
+  } as Record<BizOrder['status'], string>)[status]
+}
+
 function buildContactTimeline(
   contact: PrivateContact,
   followRecords: PrivateFollowRecord[],
@@ -1447,7 +1460,7 @@ function buildContactTimeline(
         id: `follow-${item.id}`,
         type: 'follow',
         title: `${item.method}跟进 · ${item.result}`,
-        content: `${item.content}${item.quotedAmount ? ` · 报价¥${item.quotedAmount.toLocaleString('zh-CN')}` : ''}${item.orderNo ? ` · 提单草稿:${item.orderNo}` : ''}${item.nextAction ? ` · 下一步:${item.nextAction}` : ''}`,
+        content: `${item.content}${item.quotedAmount ? ` · 报价¥${item.quotedAmount.toLocaleString('zh-CN')}` : ''}${item.orderNo ? ` · 提单:${item.orderNo}` : ''}${item.orderStatus ? ` · 状态:${orderStatusTextForTimeline(item.orderStatus)}` : ''}${item.nextAction ? ` · 下一步:${item.nextAction}` : ''}`,
         operatorName: item.ownerName,
         time: item.createdAt,
         statusText: item.result,
@@ -1742,7 +1755,7 @@ export const privateDomainApi = {
         itemStatus: 'pending'
       }]
     })
-    const updatedRecord = { ...record, orderId: order.id, orderNo: order.orderNo }
+    const updatedRecord = { ...record, orderId: order.id, orderNo: order.orderNo, orderStatus: order.status }
     records[recordIdx] = updatedRecord
     writeList(FOLLOW_KEY, records)
     contacts[contactIdx] = {

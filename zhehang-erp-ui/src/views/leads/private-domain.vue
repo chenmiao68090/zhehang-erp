@@ -531,7 +531,12 @@
               <el-table-column prop="nextTouchAt" label="下次跟进" width="150" />
               <el-table-column label="提单" width="150" fixed="right">
                 <template #default="{ row }">
-                  <el-tag v-if="row.orderNo" type="success" size="small">{{ row.orderNo }}</el-tag>
+                  <div v-if="row.orderNo" class="order-status-cell">
+                    <el-tag type="success" size="small">{{ row.orderNo }}</el-tag>
+                    <el-tag :type="orderStatusTag(row.orderStatus)" size="small" effect="plain">
+                      {{ orderStatusText(row.orderStatus) }}
+                    </el-tag>
+                  </div>
                   <el-button
                     v-else-if="canCreateOrderDraft(row)"
                     link
@@ -1212,6 +1217,32 @@ function deliveryStatusTag(status: PrivateDeliveryStatus) {
 
 function followResultTag(result: PrivateFollowResult) {
   return ({ 无响应: 'info', 已联系: 'primary', 有意向: 'warning', 已报价: 'warning', 已成交: 'success', 暂缓: 'info', 流失: 'danger' } as Record<PrivateFollowResult, any>)[result]
+}
+
+function orderStatusText(status?: PrivateFollowRecord['orderStatus']) {
+  if (!status) return '草稿'
+  return ({
+    draft: '草稿',
+    pending_approval: '待主管',
+    pending_finance: '待财务',
+    pending_boss: '待老板',
+    rejected: '已驳回',
+    completed: '已完成',
+    cancelled: '已取消'
+  } as Record<NonNullable<PrivateFollowRecord['orderStatus']>, string>)[status]
+}
+
+function orderStatusTag(status?: PrivateFollowRecord['orderStatus']): 'success' | 'warning' | 'info' | 'danger' | 'primary' {
+  if (!status) return 'info'
+  return ({
+    draft: 'info',
+    pending_approval: 'warning',
+    pending_finance: 'primary',
+    pending_boss: 'warning',
+    rejected: 'danger',
+    completed: 'success',
+    cancelled: 'info'
+  } as Record<NonNullable<PrivateFollowRecord['orderStatus']>, 'success' | 'warning' | 'info' | 'danger' | 'primary'>)[status]
 }
 
 function priorityTag(priority: PrivateTask['priority']) {
@@ -2031,6 +2062,12 @@ onMounted(loadContacts)
     color: #245bdb;
     font-size: 12px;
   }
+}
+
+.order-status-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .sync-switches {

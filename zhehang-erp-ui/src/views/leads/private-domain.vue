@@ -1095,15 +1095,28 @@
                   <span>成本 <b>¥{{ item.monthlyCost }}/月</b></span>
                   <span>渠道价 <b>¥{{ item.channelPrice }}/月</b></span>
                 </div>
-                <el-button
-                  type="primary"
-                  size="small"
-                  :disabled="!!activeAddressLock(deliveryDrawer.row) || item.status === 'blocked' || item.available <= 0"
-                  :loading="isLockingAddress(item.id)"
-                  @click.stop="lockAddress(deliveryDrawer.row, item)"
-                >
-                  {{ activeAddressLock(deliveryDrawer.row) ? '已锁定' : item.status === 'blocked' ? '不可售' : '锁定到本包' }}
-                </el-button>
+                <div class="address-inventory-actions">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :disabled="!!activeAddressLock(deliveryDrawer.row) || item.status === 'blocked' || item.available <= 0"
+                    :loading="isLockingAddress(item.id)"
+                    @click.stop="lockAddress(deliveryDrawer.row, item)"
+                  >
+                    {{ activeAddressLock(deliveryDrawer.row) ? '已锁定' : item.status === 'blocked' ? '不可售' : '锁定到本包' }}
+                  </el-button>
+                  <el-button
+                    v-if="item.status !== 'available' || item.available <= 2"
+                    type="warning"
+                    plain
+                    size="small"
+                    :loading="isCreatingAddressReplenish(item.id)"
+                    :disabled="isCreatingAddressReplenish(item.id)"
+                    @click.stop="createAddressReplenishTask(item)"
+                  >
+                    生成补货任务
+                  </el-button>
+                </div>
               </div>
             </div>
           </div>
@@ -1302,7 +1315,7 @@ import {
 
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
 type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'done'
-type TaskFilter = 'all' | 'pending' | 'overdue' | 'supervisor' | 'done'
+type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 
 const router = useRouter()
 const route = useRoute()
@@ -1327,6 +1340,7 @@ const supervisorTaskCreatingIds = ref<number[]>([])
 const taskUpdatingIds = ref<number[]>([])
 const addressLockingIds = ref<number[]>([])
 const addressReleasingIds = ref<number[]>([])
+const addressReplenishCreatingIds = ref<number[]>([])
 const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
@@ -1436,6 +1450,7 @@ const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '�
 const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
 const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
 const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'done']
+const routeTaskFilters: TaskFilter[] = ['all', 'pending', 'overdue', 'address_stock', 'supervisor', 'done']
 const diagnosisQuestions = [
   {
     key: 'sourceTruth',
@@ -1514,6 +1529,7 @@ const taskStats = computed(() => ({
   all: tasks.value.length,
   pending: tasks.value.filter(item => item.status === 'pending').length,
   overdue: tasks.value.filter(item => item.status === 'overdue').length,
+  addressStock: tasks.value.filter(item => isAddressStockTask(item)).length,
   supervisor: tasks.value.filter(item => isSupervisorTask(item)).length,
   done: tasks.value.filter(item => item.status === 'done').length
 }))
@@ -1521,6 +1537,7 @@ const taskFilterOptions = computed(() => [
   { label: `全部 ${taskStats.value.all}`, value: 'all' },
   { label: `待处理 ${taskStats.value.pending}`, value: 'pending' },
   { label: `已逾期 ${taskStats.value.overdue}`, value: 'overdue' },
+  { label: `地址库存 ${taskStats.value.addressStock}`, value: 'address_stock' },
   { label: `主管督办 ${taskStats.value.supervisor}`, value: 'supervisor' },
   { label: `已完成 ${taskStats.value.done}`, value: 'done' }
 ] as const)
@@ -1528,12 +1545,14 @@ const taskFilterHint = computed(() => ({
   all: '查看所有私域跟进、交付和督办任务。',
   pending: '待处理任务是当天需要推进的执行清单。',
   overdue: '逾期任务需要先确认责任人和补救节点。',
+  address_stock: '地址库存任务用于渠道经理补可售量、确认供应商报价和同行账期。',
   supervisor: '主管督办用于承接交付异常和跨部门卡点。',
   done: '已完成任务用于复盘执行闭环。'
 } as Record<TaskFilter, string>)[taskFilter.value])
 const filteredTasks = computed(() => tasks.value.filter(item => {
   if (taskFilter.value === 'pending') return item.status === 'pending'
   if (taskFilter.value === 'overdue') return item.status === 'overdue'
+  if (taskFilter.value === 'address_stock') return isAddressStockTask(item)
   if (taskFilter.value === 'supervisor') return isSupervisorTask(item)
   if (taskFilter.value === 'done') return item.status === 'done'
   return true
@@ -1631,6 +1650,10 @@ function taskStatusTag(status: PrivateTaskStatus) {
 
 function isSupervisorTask(task: PrivateTask) {
   return task.title.includes('督办') || task.action.includes('来源交付任务')
+}
+
+function isAddressStockTask(task: PrivateTask) {
+  return task.title.includes('地址库存补货') || task.action.includes('地址库存 #')
 }
 
 function deliveryStatusText(status: PrivateDeliveryStatus) {
@@ -1805,6 +1828,10 @@ function isLockingAddress(id: number) {
 
 function isReleasingAddress(id: number) {
   return addressReleasingIds.value.includes(id)
+}
+
+function isCreatingAddressReplenish(id: number) {
+  return addressReplenishCreatingIds.value.includes(id)
 }
 
 function hasDeliveryPackage(contactId: number) {
@@ -2289,6 +2316,22 @@ async function releaseAddress(lock: PrivateAddressLock) {
   }
 }
 
+async function createAddressReplenishTask(item: PrivateAddressInventory) {
+  if (isCreatingAddressReplenish(item.id)) return
+  addressReplenishCreatingIds.value = [...addressReplenishCreatingIds.value, item.id]
+  try {
+    const result = await privateDomainApi.createAddressReplenishTask(item.id)
+    await loadDashboard()
+    taskFilter.value = 'address_stock'
+    activeTab.value = 'tasks'
+    ElMessage.success(result.reused ? '该地址已有未完成补货任务' : `已生成补货任务: ${result.task.title}`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '生成补货任务失败')
+  } finally {
+    addressReplenishCreatingIds.value = addressReplenishCreatingIds.value.filter(id => id !== item.id)
+  }
+}
+
 async function updatePrivateTaskStatus(row: PrivateTask, status: PrivateTaskStatus) {
   if (isUpdatingTask(row.id)) return
   taskUpdatingIds.value = [...taskUpdatingIds.value, row.id]
@@ -2377,6 +2420,12 @@ function applyRouteQueue() {
   if (routeDeliveryFilters.includes(deliveryQueue as DeliveryFilter)) {
     deliveryFilter.value = deliveryQueue as DeliveryFilter
     activeTab.value = 'delivery'
+  }
+
+  const taskQueue = queryValue(route.query.taskFilter)
+  if (routeTaskFilters.includes(taskQueue as TaskFilter)) {
+    taskFilter.value = taskQueue as TaskFilter
+    activeTab.value = 'tasks'
   }
 }
 
@@ -2968,6 +3017,16 @@ watch(() => route.fullPath, applyRouteQueue)
     color: #111827;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+.address-inventory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  :deep(.el-button) {
+    margin-left: 0;
   }
 }
 

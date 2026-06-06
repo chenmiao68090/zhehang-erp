@@ -2137,6 +2137,35 @@ export const privateDomainApi = {
     writeList(ADDRESS_LOCK_KEY, locks)
     return delay({ lock: locks[lockIdx], inventory, reused: false })
   },
+  async createAddressReplenishTask(inventoryId: number) {
+    ensureSeeds()
+    const inventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
+    const address = inventory.find(item => item.id === inventoryId)
+    if (!address) throw new Error('地址库存不存在')
+
+    const tasks = readList<PrivateTask>(TASK_KEY)
+    const actionKey = `地址库存 #${address.id}`
+    const existingTask = tasks.find(item =>
+      item.action.includes(actionKey) &&
+      item.status !== 'done'
+    )
+    if (existingTask) return delay({ task: existingTask, reused: true })
+
+    const isBlocked = address.status === 'blocked' || address.available <= 0
+    const task: PrivateTask = {
+      id: maxId(tasks) + 1,
+      title: `${address.city}${address.district}${address.addressType} - 地址库存补货`,
+      contactName: address.supplierName,
+      companyName: '地址库存台账',
+      ownerName: '渠道经理',
+      dueTime: isBlocked ? ts(0, 18, 0) : ts(1, 12, 0),
+      priority: isBlocked ? '高' : '中',
+      status: 'pending',
+      action: `${actionKey} · ${address.supplierName} 当前可售 ${address.available}/${address.total},已锁 ${address.locked},成本 ¥${address.monthlyCost}/月,渠道价 ¥${address.channelPrice}/月;请确认供应商可售量、同行报价和账期。`
+    }
+    writeList(TASK_KEY, [task, ...tasks])
+    return delay({ task, reused: false })
+  },
   async bossSnapshot() {
     ensureSeeds()
     const contacts = readList<PrivateContact>(CONTACT_KEY)

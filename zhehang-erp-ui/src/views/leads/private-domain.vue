@@ -955,8 +955,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
@@ -1000,6 +1000,7 @@ import {
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
 
 const router = useRouter()
+const route = useRoute()
 const activeTab = ref('diagnosis')
 const loading = ref(false)
 const contacts = ref<PrivateContact[]>([])
@@ -1117,6 +1118,8 @@ const collisionPolicyOptions: Array<{ label: string; value: PrivateCollisionPoli
 ]
 const followMethodOptions: PrivateFollowMethod[] = ['企微', '电话', '微信', '短信', '社群', '线下', '其他']
 const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '有意向', '已报价', '已成交', '暂缓', '流失']
+const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
+const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
 const diagnosisQuestions = [
   {
     key: 'sourceTruth',
@@ -1747,7 +1750,28 @@ async function saveOpsProfile() {
   }
 }
 
-onMounted(loadContacts)
+function queryValue(value: unknown) {
+  if (Array.isArray(value)) return String(value[0] || '')
+  return String(value || '')
+}
+
+function applyRouteQueue() {
+  const tab = queryValue(route.query.tab)
+  if (routeTabOptions.includes(tab)) activeTab.value = tab
+
+  const filter = queryValue(route.query.followFilter)
+  if (routeFollowFilters.includes(filter as FollowFilter)) {
+    followFilter.value = filter as FollowFilter
+    activeTab.value = 'follow'
+  }
+}
+
+onMounted(() => {
+  applyRouteQueue()
+  loadContacts()
+})
+
+watch(() => route.fullPath, applyRouteQueue)
 </script>
 
 <style scoped lang="scss">

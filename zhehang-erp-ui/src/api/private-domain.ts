@@ -1295,7 +1295,7 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
       label: needFollow.length >= 3 ? '高' : '中',
       level: needFollow.length >= 3 ? 'high' : 'medium',
       desc: `${needFollow.length} 个高意向/已报价私域客户仍需复联,建议今天完成报价反馈、付款节点或成交确认。`,
-      path: '/leads/private-domain'
+      path: '/leads/private-domain?tab=follow&followFilter=next_touch'
     })
   }
 
@@ -1306,7 +1306,7 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
       label: quotedWithoutOrder.length >= 3 ? '高' : '中',
       level: quotedWithoutOrder.length >= 3 ? 'high' : 'medium',
       desc: `${quotedWithoutOrder.length} 条私域报价还没有生成提单草稿,建议销售当天补提单并确认付款节点。`,
-      path: '/leads/private-domain'
+      path: '/leads/private-domain?tab=follow&followFilter=quote_no_order'
     })
   }
 
@@ -1317,7 +1317,7 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
       label: orderPending.length >= 3 ? '高' : '中',
       level: orderPending.length >= 3 ? 'high' : 'medium',
       desc: `${orderPending.length} 张私域提单仍在草稿/审批/财务/老板节点,需要销售跟进审批时效。`,
-      path: '/leads/private-domain'
+      path: '/leads/private-domain?tab=follow&followFilter=order_pending'
     })
   }
 
@@ -1329,7 +1329,7 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
       label: '高',
       level: 'high',
       desc: `${completedWithoutPackage.length} 张私域提单已完成审批但还没有交付包,存在销售成交后交付断档风险。`,
-      path: '/leads/private-domain'
+      path: '/leads/private-domain?tab=follow&followFilter=completed_no_delivery'
     })
   }
 

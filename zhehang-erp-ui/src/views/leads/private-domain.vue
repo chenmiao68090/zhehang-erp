@@ -95,7 +95,7 @@
     </section>
 
     <section class="main-panel">
-      <el-tabs v-model="activeTab">
+      <el-tabs v-model="activeTab" class="private-domain-tabs">
         <el-tab-pane label="落地问诊" name="diagnosis">
           <div class="diagnosis-layout">
             <div class="profile-form-card">
@@ -1348,7 +1348,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
@@ -2612,35 +2612,55 @@ function queryValue(value: unknown) {
   return String(value || '')
 }
 
+function scrollPrivateTabsIntoView() {
+  nextTick(() => {
+    window.setTimeout(() => {
+      document.querySelector('.private-domain-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+  })
+}
+
 function applyRouteQueue() {
   const tab = queryValue(route.query.tab)
-  if (routeTabOptions.includes(tab)) activeTab.value = tab
+  let shouldScrollToTabs = false
+  if (routeTabOptions.includes(tab)) {
+    activeTab.value = tab
+    shouldScrollToTabs = Boolean(tab)
+  }
 
   const filter = queryValue(route.query.followFilter)
   if (routeFollowFilters.includes(filter as FollowFilter)) {
     followFilter.value = filter as FollowFilter
     activeTab.value = 'follow'
+    shouldScrollToTabs = true
   }
 
   const deliveryQueue = queryValue(route.query.deliveryFilter)
   if (routeDeliveryFilters.includes(deliveryQueue as DeliveryFilter)) {
     deliveryFilter.value = deliveryQueue as DeliveryFilter
     activeTab.value = 'delivery'
+    shouldScrollToTabs = true
   }
   const packageId = Number(queryValue(route.query.packageId))
   focusedDeliveryPackageId.value = Number.isFinite(packageId) && packageId > 0 ? packageId : null
-  if (focusedDeliveryPackageId.value) activeTab.value = 'delivery'
+  if (focusedDeliveryPackageId.value) {
+    activeTab.value = 'delivery'
+    shouldScrollToTabs = true
+  }
 
   const taskQueue = queryValue(route.query.taskFilter)
   if (routeTaskFilters.includes(taskQueue as TaskFilter)) {
     taskFilter.value = taskQueue as TaskFilter
     activeTab.value = 'tasks'
+    shouldScrollToTabs = true
   }
+  if (shouldScrollToTabs) scrollPrivateTabsIntoView()
 }
 
-onMounted(() => {
+onMounted(async () => {
   applyRouteQueue()
-  loadContacts()
+  await loadContacts()
+  applyRouteQueue()
 })
 
 watch(() => route.fullPath, applyRouteQueue)
@@ -2650,6 +2670,10 @@ watch(() => route.fullPath, applyRouteQueue)
 .private-domain-page {
   padding: 20px;
   color: #1f2937;
+}
+
+.private-domain-tabs {
+  scroll-margin-top: 76px;
 }
 
 .pd-head {

@@ -143,6 +143,8 @@ export interface OrderStats {
 const STORAGE_KEY = 'biz_orders'
 const PRIVATE_FOLLOW_KEY = 'biz_private_follow_records'
 const PRIVATE_CONTACT_KEY = 'biz_private_contacts'
+const PRIVATE_TASK_KEY = 'biz_private_tasks'
+const PRIVATE_DELIVERY_PACKAGE_KEY = 'biz_private_delivery_packages'
 
 const delay = <T>(data: T, ms = 120): Promise<T> =>
   new Promise(resolve => setTimeout(() => resolve(data), ms))
@@ -196,6 +198,10 @@ function writeLocalList<T>(key: string, list: T[]) {
   localStorage.setItem(key, JSON.stringify(list))
 }
 
+function nextLocalId(list: Array<{ id: number }>) {
+  return (list.reduce((max, item) => Math.max(max, Number(item.id || 0)), 0) || 0) + 1
+}
+
 function privateOrderNextAction(status: BizOrder['status'], orderNo: string) {
   return ({
     draft: `提单 ${orderNo} 仍为草稿,请销售核对后提交审批`,
@@ -237,6 +243,39 @@ function syncPrivateOrderStatus(order: BizOrder) {
     tags: tags.slice(0, 8)
   }
   writeLocalList(PRIVATE_CONTACT_KEY, contacts)
+  createPrivateDeliveryHandoffTask(order, current)
+}
+
+function createPrivateDeliveryHandoffTask(order: BizOrder, record: any) {
+  if (order.status !== 'completed') return
+  const packages = readLocalList<any>(PRIVATE_DELIVERY_PACKAGE_KEY)
+  const hasPackage = packages.some(item =>
+    item.orderId === order.id ||
+    item.orderNo === order.orderNo ||
+    (record.contactId && item.contactId === record.contactId)
+  )
+  if (hasPackage) return
+
+  const tasks = readLocalList<any>(PRIVATE_TASK_KEY)
+  const duplicated = tasks.some(item =>
+    item.companyName === record.companyName &&
+    item.action?.includes(order.orderNo) &&
+    item.title?.includes('生成成交交付包')
+  )
+  if (duplicated) return
+
+  tasks.unshift({
+    id: nextLocalId(tasks),
+    title: `${record.companyName || order.customerName} - 生成成交交付包`,
+    contactName: record.contactName || '',
+    companyName: record.companyName || order.customerName || '',
+    ownerName: record.ownerName || order.submitterName || '销售顾问',
+    dueTime: todayStr(1),
+    priority: '高',
+    status: 'pending',
+    action: `提单 ${order.orderNo} 已完成审批,请当天生成交付包并核对回款/合同/资料`
+  })
+  writeLocalList(PRIVATE_TASK_KEY, tasks)
 }
 
 function buildSeedOrders(): BizOrder[] {

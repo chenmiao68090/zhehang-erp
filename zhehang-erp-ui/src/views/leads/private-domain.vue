@@ -803,9 +803,20 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="96" fixed="right" align="center">
+              <el-table-column label="操作" width="126" fixed="right" align="center">
                 <template #default="{ row }">
-                  <el-button type="primary" text size="small" @click.stop="openDeliveryPackage(row)">详情</el-button>
+                  <div class="delivery-action-cell">
+                    <el-button
+                      v-if="needsAddressLock(row)"
+                      type="warning"
+                      text
+                      size="small"
+                      @click.stop="openDeliveryPackage(row)"
+                    >
+                      锁地址
+                    </el-button>
+                    <el-button type="primary" text size="small" @click.stop="openDeliveryPackage(row)">详情</el-button>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -1591,7 +1602,7 @@ const deliveryStats = computed(() => ({
   notStarted: deliveryPackages.value.filter(item => item.status === 'created' && deliveryProgress(item) === 0).length,
   inProgress: deliveryPackages.value.filter(item => item.status === 'in_progress').length,
   overdue: deliveryPackages.value.filter(item => deliveryOverdueCount(item) > 0).length,
-  addressUnlocked: deliveryPackages.value.filter(item => isAddressDelivery(item) && !activeAddressLock(item)).length,
+  addressUnlocked: deliveryPackages.value.filter(item => needsAddressLock(item)).length,
   done: deliveryPackages.value.filter(item => item.status === 'done').length,
   pending: deliveryPackages.value.filter(item => item.status !== 'done').length
 }))
@@ -1615,7 +1626,7 @@ const filteredDeliveryPackages = computed(() => deliveryPackages.value.filter(it
   if (deliveryFilter.value === 'not_started') return item.status === 'created' && deliveryProgress(item) === 0
   if (deliveryFilter.value === 'in_progress') return item.status === 'in_progress'
   if (deliveryFilter.value === 'overdue') return deliveryOverdueCount(item) > 0
-  if (deliveryFilter.value === 'address_unlocked') return isAddressDelivery(item) && !activeAddressLock(item)
+  if (deliveryFilter.value === 'address_unlocked') return needsAddressLock(item)
   if (deliveryFilter.value === 'done') return item.status === 'done'
   return true
 }))
@@ -1744,6 +1755,10 @@ function isAddressDelivery(row: PrivateDeliveryPackage) {
 
 function activeAddressLock(row: PrivateDeliveryPackage) {
   return addressLocks.value.find(item => item.packageId === row.id && item.status === 'locked')
+}
+
+function needsAddressLock(row: PrivateDeliveryPackage) {
+  return isAddressDelivery(row) && !activeAddressLock(row)
 }
 
 function formatAddressResourceNo(resourceId?: number) {
@@ -3195,6 +3210,17 @@ watch(() => route.fullPath, applyRouteQueue)
     color: #64748b;
     font-size: 12px;
     text-align: right;
+  }
+}
+
+.delivery-action-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+
+  :deep(.el-button + .el-button) {
+    margin-left: 0;
   }
 }
 

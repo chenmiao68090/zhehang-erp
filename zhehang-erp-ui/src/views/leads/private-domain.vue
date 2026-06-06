@@ -507,7 +507,15 @@
               <div><span>成交记录</span><b>{{ followStats.ordered }}</b></div>
               <div><span>待复联</span><b>{{ followStats.nextTouch }}</b></div>
             </div>
-            <el-table :data="followRecords" border stripe empty-text="暂无跟进记录，请先从客户雷达或详情页记录一次跟进">
+            <div class="follow-filter-bar">
+              <el-radio-group v-model="followFilter">
+                <el-radio-button v-for="item in followFilterOptions" :key="item.value" :label="item.value" :value="item.value">
+                  {{ item.label }}
+                </el-radio-button>
+              </el-radio-group>
+              <span>{{ followFilterHint }}</span>
+            </div>
+            <el-table :data="filteredFollowRecords" border stripe empty-text="当前筛选下暂无跟进记录">
               <el-table-column prop="createdAt" label="记录时间" width="150" />
               <el-table-column label="客户" min-width="240">
                 <template #default="{ row }">
@@ -989,6 +997,8 @@ import {
   type PrivateWecomConfig
 } from '@/api/private-domain'
 
+type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
+
 const router = useRouter()
 const activeTab = ref('diagnosis')
 const loading = ref(false)
@@ -1011,6 +1021,7 @@ const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
 const wecomSaving = ref(false)
 const followSaving = ref(false)
+const followFilter = ref<FollowFilter>('all')
 const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
 const importFileName = ref('')
@@ -1146,6 +1157,40 @@ const followStats = computed(() => ({
   ordered: followRecords.value.filter(item => item.result === '已成交').length,
   nextTouch: followRecords.value.filter(item => item.nextTouchAt && item.result !== '已成交' && item.result !== '流失').length
 }))
+const followQueueCounts = computed(() => {
+  const packageContactIds = new Set(deliveryPackages.value.map(item => item.contactId))
+  return {
+    all: followRecords.value.length,
+    quote_no_order: followRecords.value.filter(item => Number(item.quotedAmount || 0) > 0 && !item.orderNo).length,
+    order_pending: followRecords.value.filter(item => ['draft', 'pending_approval', 'pending_finance', 'pending_boss'].includes(item.orderStatus || '')).length,
+    completed_no_delivery: followRecords.value.filter(item => item.orderStatus === 'completed' && !packageContactIds.has(item.contactId)).length,
+    next_touch: followRecords.value.filter(item => item.nextTouchAt && item.result !== '已成交' && item.result !== '流失').length
+  }
+})
+const followFilterOptions = computed(() => [
+  { label: `全部 ${followQueueCounts.value.all}`, value: 'all' },
+  { label: `已报价未提单 ${followQueueCounts.value.quote_no_order}`, value: 'quote_no_order' },
+  { label: `已提单待审批 ${followQueueCounts.value.order_pending}`, value: 'order_pending' },
+  { label: `已完成待交付 ${followQueueCounts.value.completed_no_delivery}`, value: 'completed_no_delivery' },
+  { label: `待复联 ${followQueueCounts.value.next_touch}`, value: 'next_touch' }
+] as const)
+const followFilterHint = computed(() => ({
+  all: '查看所有私域跟进流水。',
+  quote_no_order: '优先把已报价客户生成提单草稿,避免口头报价后无人推进。',
+  order_pending: '已提单但还在审批/财务/老板节点,需要销售盯进度。',
+  completed_no_delivery: '审批已完成但还没交付包,需要当天交接给财税/工商团队。',
+  next_touch: '有下次跟进时间的客户,用于每天复联排班。'
+} as Record<FollowFilter, string>)[followFilter.value])
+const filteredFollowRecords = computed(() => {
+  const packageContactIds = new Set(deliveryPackages.value.map(item => item.contactId))
+  return followRecords.value.filter(item => {
+    if (followFilter.value === 'quote_no_order') return Number(item.quotedAmount || 0) > 0 && !item.orderNo
+    if (followFilter.value === 'order_pending') return ['draft', 'pending_approval', 'pending_finance', 'pending_boss'].includes(item.orderStatus || '')
+    if (followFilter.value === 'completed_no_delivery') return item.orderStatus === 'completed' && !packageContactIds.has(item.contactId)
+    if (followFilter.value === 'next_touch') return Boolean(item.nextTouchAt && item.result !== '已成交' && item.result !== '流失')
+    return true
+  })
+})
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
   { label: '培育中', value: 'nurturing' },
@@ -2038,6 +2083,41 @@ onMounted(loadContacts)
   b {
     color: #111827;
     font-size: 20px;
+  }
+}
+
+.follow-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  :deep(.el-radio-group) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  :deep(.el-radio-button__inner) {
+    border: 1px solid #dbe5f2;
+    border-radius: 999px;
+    box-shadow: none;
+  }
+
+  :deep(.el-radio-button:first-child .el-radio-button__inner) {
+    border-left: 1px solid #dbe5f2;
+  }
+
+  span {
+    max-width: 420px;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
   }
 }
 

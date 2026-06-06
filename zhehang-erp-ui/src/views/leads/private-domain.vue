@@ -2000,7 +2000,9 @@ function addressResourceCandidates(lock?: PrivateAddressLock) {
 function addressResourceOptionLabel(resource: BizAddressResource, lock?: PrivateAddressLock) {
   const inventory = addressInventoryOf(lock)
   const prefix = addressResourceMatch(resource, inventory).score >= 90 ? '推荐 · ' : ''
-  return `${prefix}${resource.resourceNo} · ${resource.district} · ${resource.detailAddress}`
+  const supplier = resource.supplierName || '未知供应商'
+  const yearlyCost = resource.yearlyCost ? `成本¥${formatMoney(resource.yearlyCost)}/年` : '成本待补'
+  return `${prefix}${resource.resourceNo} · ${resource.district} · ${supplier} · ${yearlyCost} · ${resource.detailAddress}`
 }
 
 function addressResourceCandidateHint(lock?: PrivateAddressLock) {

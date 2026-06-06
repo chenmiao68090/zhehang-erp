@@ -1294,15 +1294,15 @@
 
       <template #timeline>
         <div v-if="deliveryDrawer.row" class="real-timeline">
-          <div v-if="deliveryFollowRecords(deliveryDrawer.row).length === 0" class="empty-timeline">暂无成交前跟进记录</div>
-          <div v-for="item in deliveryFollowRecords(deliveryDrawer.row).slice(0, 5)" :key="item.id" class="bd-timeline-item">
-            <span class="bd-timeline-dot" :class="followResultTag(item.result)"></span>
+          <div v-if="deliveryTimelineItems(deliveryDrawer.row).length === 0" class="empty-timeline">暂无交付时间线记录</div>
+          <div v-for="item in deliveryTimelineItems(deliveryDrawer.row).slice(0, 6)" :key="item.id" class="bd-timeline-item">
+            <span class="bd-timeline-dot" :class="item.statusLevel"></span>
             <div>
               <div class="timeline-title-row">
-                <strong>{{ item.method }} · {{ item.result }}</strong>
-                <el-tag :type="followResultTag(item.result)" size="small" effect="plain">{{ item.result }}</el-tag>
+                <strong>{{ item.title }}</strong>
+                <el-tag :type="item.statusLevel" size="small" effect="plain">{{ item.statusText }}</el-tag>
               </div>
-              <p>{{ item.createdAt }} · {{ item.ownerName }} · {{ item.content }}</p>
+              <p>{{ item.time }} · {{ item.ownerName }} · {{ item.content }}</p>
             </div>
           </div>
         </div>
@@ -2398,6 +2398,53 @@ function deliveryFollowRecords(row: PrivateDeliveryPackage) {
   return followRecords.value
     .filter(item => item.contactId === row.contactId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+function deliveryTimelineItems(row: PrivateDeliveryPackage) {
+  const items: Array<{
+    id: string | number
+    title: string
+    statusText: string
+    statusLevel: 'success' | 'warning' | 'info' | 'danger' | 'primary'
+    time: string
+    ownerName: string
+    content: string
+  }> = []
+  const lock = activeAddressLock(row)
+  if (lock) {
+    items.push({
+      id: `address-lock-${lock.id}`,
+      title: '地址库存锁定',
+      statusText: lock.resourceId ? '已锁定' : '待补 ADR',
+      statusLevel: lock.resourceId ? 'success' : 'warning',
+      time: lock.lockedAt,
+      ownerName: lock.ownerName,
+      content: `锁定 ${addressInventorySource(lock)} 给 ${lock.companyName},释放时间 ${lock.releaseAt}`
+    })
+    items.push({
+      id: `address-resource-${lock.id}`,
+      title: lock.resourceId ? 'ADR 资源绑定' : 'ADR 资源待补绑定',
+      statusText: lock.resourceId ? '已绑定' : '待处理',
+      statusLevel: lock.resourceId ? 'success' : 'warning',
+      time: lock.lockedAt,
+      ownerName: lock.ownerName,
+      content: lock.resourceId
+        ? `${formatAddressResourceNo(lock.resourceId)} 已纳入资源池反查,可复核客户、成本和渠道应收。`
+        : '当前地址锁定缺少 ADR 资源编号,资源池无法反查客户和渠道应收。'
+    })
+  }
+  deliveryFollowRecords(row).forEach(item => {
+    items.push({
+      id: `follow-${item.id}`,
+      title: `${item.method} · ${item.result}`,
+      statusText: item.result,
+      statusLevel: followResultTag(item.result),
+      time: item.createdAt,
+      ownerName: item.ownerName,
+      content: item.content
+    })
+  })
+  return items.sort((a, b) => b.time.localeCompare(a.time))
 }
 
 function openDeliveryPackage(row: PrivateDeliveryPackage) {

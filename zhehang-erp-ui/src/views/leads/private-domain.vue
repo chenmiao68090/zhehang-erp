@@ -721,6 +721,25 @@
               empty-text="当前筛选下暂无交付包"
               :row-class-name="deliveryRowClassName"
             >
+              <template #empty>
+                <div class="delivery-empty-state">
+                  <div class="delivery-empty-copy">
+                    <strong>{{ deliveryEmptyTitle }}</strong>
+                    <p>{{ deliveryEmptyDesc }}</p>
+                  </div>
+                  <div class="delivery-empty-metrics">
+                    <span><b>{{ followQueueCounts.completed_no_delivery }}</b>已完成待交付</span>
+                    <span><b>{{ followQueueCounts.order_pending }}</b>审批中提单</span>
+                    <span><b>{{ followQueueCounts.quote_no_order }}</b>已报价未提单</span>
+                  </div>
+                  <div class="delivery-empty-actions">
+                    <el-button type="primary" @click="goCompletedDeliveryQueue">去生成交付包</el-button>
+                    <el-button v-if="deliveryStats.all > 0" @click="showAllDeliveryPackages">查看全部交付包</el-button>
+                    <el-button @click="goImportPrivateContacts">导入私域客户</el-button>
+                    <el-button @click="syncHint">同步私域数据</el-button>
+                  </div>
+                </div>
+              </template>
               <el-table-column label="交付包" min-width="260">
                 <template #default="{ row }">
                   <strong>{{ row.packageName }}</strong>
@@ -1723,6 +1742,19 @@ const filteredDeliveryPackages = computed(() => {
   if (!focusedDeliveryPackageId.value) return items
   const focused = items.filter(item => item.id === focusedDeliveryPackageId.value)
   return focused.length ? focused : items
+})
+const deliveryEmptyTitle = computed(() => {
+  if (deliveryStats.value.all === 0) return '还没有可推进的交付包'
+  return '当前筛选没有交付包'
+})
+const deliveryEmptyDesc = computed(() => {
+  if (deliveryStats.value.all > 0) return '可以先切回全部交付包,或到成交跟进队列生成新的交付包。'
+  if (followQueueCounts.value.completed_no_delivery > 0) {
+    return `已有 ${followQueueCounts.value.completed_no_delivery} 条审批完成记录还没建交付包,建议今天先补齐。`
+  }
+  if (followQueueCounts.value.order_pending > 0) return '已有提单在审批中,审批完成后应当天生成交付包并交接给工商/财税。'
+  if (followQueueCounts.value.quote_no_order > 0) return '已有报价记录但还没提单,请先在跟进记录里生成提单。'
+  return '先导入或同步私域客户,再完成跟进、提单、审批和交付包流转。'
 })
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
@@ -2802,6 +2834,25 @@ function syncHint() {
   ElMessage.info('请先在接入配置里保存企微参数。接通后会同步外部联系人、客户群、标签和互动记录。')
 }
 
+function goCompletedDeliveryQueue() {
+  activeTab.value = 'follow'
+  followFilter.value = 'completed_no_delivery'
+  scrollPrivateTabsIntoView()
+  if (followQueueCounts.value.completed_no_delivery === 0) {
+    ElMessage.info('当前没有已完成待交付记录,请先导入客户并完成报价、提单和审批。')
+  }
+}
+
+function showAllDeliveryPackages() {
+  deliveryFilter.value = 'all'
+  scrollPrivateTabsIntoView()
+}
+
+function goImportPrivateContacts() {
+  activeTab.value = 'import'
+  scrollPrivateTabsIntoView()
+}
+
 function goOnlineLeads() {
   router.push('/leads/online-leads')
 }
@@ -3209,7 +3260,7 @@ watch(() => route.fullPath, applyRouteQueue)
 }
 
 .delivery-summary {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .delivery-summary,
@@ -3278,6 +3329,65 @@ watch(() => route.fullPath, applyRouteQueue)
   color: #64748b;
   font-size: 12px;
   line-height: 1.6;
+}
+
+.delivery-empty-state {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  padding: 28px 16px;
+  color: #475569;
+}
+
+.delivery-empty-copy {
+  display: grid;
+  max-width: 560px;
+  gap: 6px;
+  text-align: center;
+
+  strong {
+    color: #111827;
+    font-size: 16px;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+}
+
+.delivery-empty-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 1px solid #dbe5f2;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #245bdb;
+    font-size: 14px;
+  }
+}
+
+.delivery-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
 
 .follow-dialog :deep(.el-dialog__body) {

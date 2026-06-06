@@ -1,5 +1,7 @@
 // ===== 渠道管理 API（localStorage Mock 模式） =====
 
+import { syncPrivateAddressInventoryFromStockIn } from './private-domain'
+
 export interface BizSupplier {
   id: number
   supplierNo: string
@@ -174,6 +176,20 @@ function paginate<T>(list: T[], page = 1, pageSize = 10) {
 function genNo(prefix: string, id: number) {
   const d = new Date()
   return `${prefix}${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(id).padStart(4, '0')}`
+}
+
+function inferCityFromAddress(detail: string, district: string) {
+  if (detail.includes('义乌') || district.includes('义乌')) return '金华市'
+  if (detail.includes('宁波') || district.includes('宁波')) return '宁波市'
+  if (detail.includes('温州') || district.includes('温州')) return '温州市'
+  return '杭州市'
+}
+
+function inferDistrictFromAddressParts(parts: string[]) {
+  const first = parts[0] || ''
+  const second = parts[1] || ''
+  if (first.endsWith('市') && second) return second
+  return first.length <= 4 ? first : '萧山区'
 }
 
 function seedSuppliers(): BizSupplier[] {
@@ -759,14 +775,15 @@ export const procurementApi = {
         const detail = lines[i] || `${cur.supplierName || '供应商'} 批量地址 #${i + 1}`
         // 从供应商地址尝试解析区域，否则默认杭州
         const parts = detail.split(/[\s·,，]+/).filter(Boolean)
+        const district = inferDistrictFromAddressParts(parts)
         const addr: BizAddressResource = {
           id: newId,
           resourceNo: `ADR${String(newId).padStart(5, '0')}`,
           supplierId: cur.supplierId,
           supplierName: cur.supplierName || '',
           province: '浙江省',
-          city: '杭州市',
-          district: parts[0]?.length <= 4 ? parts[0] : '萧山区',
+          city: inferCityFromAddress(detail, district),
+          district,
           detailAddress: detail,
           addressType: 'commercial',
           area: 30,
@@ -780,6 +797,15 @@ export const procurementApi = {
         }
         addrList.push(addr)
         stockedIds.push(newId)
+        syncPrivateAddressInventoryFromStockIn({
+          city: addr.city,
+          district: addr.district,
+          addressType: addr.addressType,
+          supplierName: addr.supplierName || cur.supplierName || '',
+          quantity: 1,
+          yearlyCost: addr.yearlyCost,
+          remark: `资源补充单 ${cur.procurementNo} 上架同步`
+        })
       }
       save(AD_KEY, addrList)
     }

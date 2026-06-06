@@ -100,6 +100,17 @@ export interface PrivateAddressLock {
   remark: string
 }
 
+export interface PrivateAddressStockInPayload {
+  city: string
+  district: string
+  addressType: string
+  supplierName: string
+  quantity: number
+  yearlyCost: number
+  channelPrice?: number
+  remark?: string
+}
+
 export interface PrivateBossMetric {
   label: string
   value: string | number
@@ -454,6 +465,76 @@ function writeList<T>(key: string, list: T[]) {
 
 function maxId<T extends { id: number }>(list: T[]) {
   return list.reduce((m, item) => Math.max(m, item.id), 0)
+}
+
+function normalizeCityName(city: string) {
+  return (city || '杭州').replace(/市$/, '')
+}
+
+function normalizePrivateAddressType(type: string): PrivateAddressInventory['addressType'] {
+  if (type === 'park' || type === 'co_working' || type.includes('园区')) return '园区地址'
+  if (type === 'residential' || type.includes('集群')) return '集群地址'
+  return '商用地址'
+}
+
+function supplierLooksSame(a: string, b: string) {
+  const left = a || ''
+  const right = b || ''
+  if (!left || !right) return false
+  if (left === right || left.includes(right) || right.includes(left)) return true
+  return ['运河', '钱塘', '滨江', '义乌', '云商'].some(token => left.includes(token) && right.includes(token))
+}
+
+export function syncPrivateAddressInventoryFromStockIn(payload: PrivateAddressStockInPayload) {
+  ensureSeeds()
+  const quantity = Math.max(1, Number(payload.quantity || 0))
+  const monthlyCost = Math.max(0, Math.round(Number(payload.yearlyCost || 0) / 12))
+  const addressType = normalizePrivateAddressType(payload.addressType)
+  const city = normalizeCityName(payload.city)
+  const district = payload.district || '未分区'
+  const supplierName = payload.supplierName || '地址供应商'
+  const channelPrice = payload.channelPrice || Math.round(monthlyCost * 1.8)
+  const inventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
+  const idx = inventory.findIndex(item =>
+    normalizeCityName(item.city) === city &&
+    item.district === district &&
+    item.addressType === addressType &&
+    supplierLooksSame(item.supplierName, supplierName)
+  )
+
+  let nextItem: PrivateAddressInventory
+  if (idx >= 0) {
+    const current = inventory[idx]
+    const nextAvailable = current.available + quantity
+    nextItem = {
+      ...current,
+      total: current.total + quantity,
+      available: nextAvailable,
+      monthlyCost: monthlyCost || current.monthlyCost,
+      channelPrice: Math.max(current.channelPrice, channelPrice),
+      status: nextAvailable <= 0 ? 'blocked' : nextAvailable <= 2 ? 'low' : 'available',
+      remark: payload.remark || `资源补充单上架同步,新增 ${quantity} 个可售地址`
+    }
+    inventory[idx] = nextItem
+  } else {
+    nextItem = {
+      id: maxId(inventory) + 1,
+      city,
+      district,
+      addressType,
+      supplierName,
+      total: quantity,
+      available: quantity,
+      locked: 0,
+      monthlyCost,
+      channelPrice,
+      status: quantity <= 2 ? 'low' : 'available',
+      remark: payload.remark || '资源补充单上架同步生成'
+    }
+    inventory.unshift(nextItem)
+  }
+  writeList(ADDRESS_INVENTORY_KEY, inventory)
+  return nextItem
 }
 
 function defaultProfile(): PrivateOpsProfile {

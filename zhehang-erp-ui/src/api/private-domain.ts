@@ -1299,6 +1299,40 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
     })
   }
 
+  const quotedWithoutOrder = followRecords.filter(item => Number(item.quotedAmount || 0) > 0 && !item.orderNo)
+  if (quotedWithoutOrder.length) {
+    risks.push({
+      title: '私域已报价未提单',
+      label: quotedWithoutOrder.length >= 3 ? '高' : '中',
+      level: quotedWithoutOrder.length >= 3 ? 'high' : 'medium',
+      desc: `${quotedWithoutOrder.length} 条私域报价还没有生成提单草稿,建议销售当天补提单并确认付款节点。`,
+      path: '/leads/private-domain'
+    })
+  }
+
+  const orderPending = followRecords.filter(item => ['draft', 'pending_approval', 'pending_finance', 'pending_boss'].includes(item.orderStatus || ''))
+  if (orderPending.length) {
+    risks.push({
+      title: '私域提单待审批',
+      label: orderPending.length >= 3 ? '高' : '中',
+      level: orderPending.length >= 3 ? 'high' : 'medium',
+      desc: `${orderPending.length} 张私域提单仍在草稿/审批/财务/老板节点,需要销售跟进审批时效。`,
+      path: '/leads/private-domain'
+    })
+  }
+
+  const packageContactIds = new Set(packages.map(item => item.contactId))
+  const completedWithoutPackage = followRecords.filter(item => item.orderStatus === 'completed' && !packageContactIds.has(item.contactId))
+  if (completedWithoutPackage.length) {
+    risks.push({
+      title: '私域审批完成待交付',
+      label: '高',
+      level: 'high',
+      desc: `${completedWithoutPackage.length} 张私域提单已完成审批但还没有交付包,存在销售成交后交付断档风险。`,
+      path: '/leads/private-domain'
+    })
+  }
+
   const duplicateRisk = contacts.filter(item => item.verification?.duplicateRisk && item.verification.duplicateRisk !== 'none')
   if (duplicateRisk.length) {
     risks.push({
@@ -1321,7 +1355,6 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
     })
   }
 
-  const packageContactIds = new Set(packages.map(item => item.contactId))
   const orderedWithoutPackage = contacts.filter(item => item.stage === 'ordered' && !packageContactIds.has(item.id))
   if (orderedWithoutPackage.length) {
     risks.push({
@@ -1333,7 +1366,7 @@ function buildBossRisks(contacts: PrivateContact[], packages: PrivateDeliveryPac
     })
   }
 
-  return risks.slice(0, 4)
+  return risks.slice(0, 6)
 }
 
 function stageFromFollowResult(result: PrivateFollowResult, current: PrivateStage): PrivateStage {

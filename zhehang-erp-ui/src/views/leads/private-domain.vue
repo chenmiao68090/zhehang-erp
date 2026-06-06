@@ -708,9 +708,18 @@
                   {{ item.label }}
                 </el-radio-button>
               </el-radio-group>
-              <span>{{ deliveryFilterHint }} 当前显示 {{ filteredDeliveryPackages.length }} 个交付包。</span>
+              <span v-if="focusedDeliveryPackage">
+                已定位 {{ focusedDeliveryPackage.companyName }} 的交付包，当前显示 {{ filteredDeliveryPackages.length }} 个。
+              </span>
+              <span v-else>{{ deliveryFilterHint }} 当前显示 {{ filteredDeliveryPackages.length }} 个交付包。</span>
             </div>
-            <el-table :data="filteredDeliveryPackages" border stripe empty-text="当前筛选下暂无交付包">
+            <el-table
+              :data="filteredDeliveryPackages"
+              border
+              stripe
+              empty-text="当前筛选下暂无交付包"
+              :row-class-name="deliveryRowClassName"
+            >
               <el-table-column label="交付包" min-width="260">
                 <template #default="{ row }">
                   <strong>{{ row.packageName }}</strong>
@@ -1388,6 +1397,7 @@ const wecomSaving = ref(false)
 const followSaving = ref(false)
 const followFilter = ref<FollowFilter>('all')
 const deliveryFilter = ref<DeliveryFilter>('all')
+const focusedDeliveryPackageId = ref<number | null>(null)
 const taskFilter = ref<TaskFilter>('all')
 const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
@@ -1621,14 +1631,23 @@ const deliveryFilterHint = computed(() => ({
   address_unlocked: '地址类业务还没有锁定资源池,需要渠道或交付先确认可售地址。',
   done: '已完成交付包,用于回访、续费和服务质量复盘。'
 } as Record<DeliveryFilter, string>)[deliveryFilter.value])
-const filteredDeliveryPackages = computed(() => deliveryPackages.value.filter(item => {
-  if (deliveryFilter.value === 'not_started') return item.status === 'created' && deliveryProgress(item) === 0
-  if (deliveryFilter.value === 'in_progress') return item.status === 'in_progress'
-  if (deliveryFilter.value === 'overdue') return deliveryOverdueCount(item) > 0
-  if (deliveryFilter.value === 'address_unlocked') return needsAddressLock(item)
-  if (deliveryFilter.value === 'done') return item.status === 'done'
-  return true
-}))
+const focusedDeliveryPackage = computed(() => {
+  if (!focusedDeliveryPackageId.value) return null
+  return deliveryPackages.value.find(item => item.id === focusedDeliveryPackageId.value) || null
+})
+const filteredDeliveryPackages = computed(() => {
+  const items = deliveryPackages.value.filter(item => {
+    if (deliveryFilter.value === 'not_started') return item.status === 'created' && deliveryProgress(item) === 0
+    if (deliveryFilter.value === 'in_progress') return item.status === 'in_progress'
+    if (deliveryFilter.value === 'overdue') return deliveryOverdueCount(item) > 0
+    if (deliveryFilter.value === 'address_unlocked') return needsAddressLock(item)
+    if (deliveryFilter.value === 'done') return item.status === 'done'
+    return true
+  })
+  if (!focusedDeliveryPackageId.value) return items
+  const focused = items.filter(item => item.id === focusedDeliveryPackageId.value)
+  return focused.length ? focused : items
+})
 const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '新触点', value: 'new' },
   { label: '培育中', value: 'nurturing' },
@@ -1782,6 +1801,10 @@ function goAddressResource(lock?: PrivateAddressLock) {
     path: '/supply/receipt',
     query: { resourceNo: formatAddressResourceNo(lock.resourceId) }
   }).catch(() => {})
+}
+
+function deliveryRowClassName({ row }: { row: PrivateDeliveryPackage }) {
+  return focusedDeliveryPackageId.value && row.id === focusedDeliveryPackageId.value ? 'target-delivery-row' : ''
 }
 
 function followResultTag(result: PrivateFollowResult) {
@@ -2491,6 +2514,9 @@ function applyRouteQueue() {
     deliveryFilter.value = deliveryQueue as DeliveryFilter
     activeTab.value = 'delivery'
   }
+  const packageId = Number(queryValue(route.query.packageId))
+  focusedDeliveryPackageId.value = Number.isFinite(packageId) && packageId > 0 ? packageId : null
+  if (focusedDeliveryPackageId.value) activeTab.value = 'delivery'
 
   const taskQueue = queryValue(route.query.taskFilter)
   if (routeTaskFilters.includes(taskQueue as TaskFilter)) {
@@ -3203,6 +3229,11 @@ watch(() => route.fullPath, applyRouteQueue)
     font-size: 12px;
     line-height: 1.35;
   }
+}
+
+:deep(.target-delivery-row) {
+  --el-table-tr-bg-color: #eff6ff;
+  box-shadow: inset 4px 0 0 #2563eb;
 }
 
 .delivery-progress-cell {

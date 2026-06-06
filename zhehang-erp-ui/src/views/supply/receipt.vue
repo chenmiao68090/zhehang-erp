@@ -148,6 +148,21 @@
               </div>
             </template>
           </el-table-column>
+          <el-table-column label="私域交付锁定" min-width="210">
+            <template #default="{ row }">
+              <div v-if="addressLockOf(row)" class="delivery-lock-cell">
+                <div class="delivery-lock-head">
+                  <el-tag type="success" size="small">已锁交付</el-tag>
+                  <el-button type="primary" link size="small" @click.stop="goPrivateDeliveryPackage(addressLockOf(row))">
+                    看交付包
+                  </el-button>
+                </div>
+                <strong>{{ addressLockOf(row)?.companyName }}</strong>
+                <span>{{ addressLockOf(row)?.ownerName }} · 到期 {{ addressLockOf(row)?.releaseAt }}</span>
+              </div>
+              <span v-else class="placeholder">—</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="district" label="区域" width="90" />
           <el-table-column label="地址供应商" width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ row.supplierName }}</template>
@@ -434,6 +449,17 @@ function addressRowClassName ({ row }: { row: BizAddressResource }) {
   return targetResourceNo.value && row.resourceNo === targetResourceNo.value ? 'target-address-row' : ''
 }
 
+function formatAddressResourceNo(resourceId?: number) {
+  return resourceId ? `ADR${String(resourceId).padStart(5, '0')}` : ''
+}
+
+function addressLockOf(row: BizAddressResource) {
+  return privateAddressLocks.value.find(item => {
+    if (item.status !== 'locked' || !item.resourceId) return false
+    return item.resourceId === row.id || formatAddressResourceNo(item.resourceId) === row.resourceNo
+  })
+}
+
 function goPurchase () {
   router.push('/supply/purchase').catch(() => {})
 }
@@ -447,6 +473,13 @@ function goPrivateAddressTasks () {
   router.push({
     path: '/leads/private-domain',
     query: { tab: 'tasks', taskFilter: 'address_stock' }
+  }).catch(() => {})
+}
+function goPrivateDeliveryPackage (lock?: PrivateAddressLock) {
+  if (!lock) return
+  router.push({
+    path: '/leads/private-domain',
+    query: { tab: 'delivery', deliveryFilter: 'all', packageId: String(lock.packageId) }
   }).catch(() => {})
 }
 
@@ -615,6 +648,10 @@ watch(() => route.query.resourceNo, value => {
 .num.rate { color: #2563eb; font-weight: 600; }
 .link-cell { color: #2563eb; }
 .link-cell { display: flex; flex-direction: column; line-height: 1.3; }
+.delivery-lock-cell { display: grid; gap: 5px; line-height: 1.3; }
+.delivery-lock-head { display: flex; align-items: center; gap: 8px; }
+.delivery-lock-cell strong { color: #0f172a; font-weight: 600; }
+.delivery-lock-cell span { color: #64748b; font-size: 12px; }
 
 .profit-side { display: flex; flex-direction: column; gap: 12px; }
 .profit-card { border-radius: 10px; }

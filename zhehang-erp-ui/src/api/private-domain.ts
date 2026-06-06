@@ -1,4 +1,5 @@
 import { enterpriseApi, onlineLeadApi, type CompanyResolveResult, type EnterpriseEntity, type OnlineLeadCreatePayload } from './growth'
+import { orderApi, type BizOrder, type BizOrderItem } from './order'
 
 export type PrivateSource = '企业微信' | '个人微信' | '微信群' | '朋友圈' | '公众号' | '视频号' | '老客转介绍'
 export type PrivateStage = 'new' | 'nurturing' | 'intent' | 'quoted' | 'ordered' | 'silent'
@@ -90,6 +91,8 @@ export interface PrivateFollowRecord {
   nextAction: string
   nextTouchAt: string
   createdAt: string
+  orderId?: number
+  orderNo?: string
 }
 
 export interface PrivateFollowCreatePayload {
@@ -112,6 +115,12 @@ export interface PrivateTimelineItem {
   time: string
   statusText: string
   statusLevel: 'success' | 'warning' | 'danger' | 'info' | 'primary'
+}
+
+export interface PrivateOrderDraftResult {
+  order: BizOrder
+  record: PrivateFollowRecord
+  reused: boolean
 }
 
 export interface PrivateCompanyVerification {
@@ -383,6 +392,12 @@ function ts(offsetDays = 0, hour = 10, minute = 0) {
   d.setDate(d.getDate() + offsetDays)
   d.setHours(hour, minute, 0, 0)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function dateOnly(offsetDays = 0) {
+  const d = new Date()
+  d.setDate(d.getDate() + offsetDays)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function readList<T>(key: string): T[] {
@@ -1364,6 +1379,35 @@ function normalizeFollowPayload(payload: PrivateFollowCreatePayload) {
   }
 }
 
+function serviceTypeFromPrivate(contact: PrivateContact): BizOrderItem['serviceType'] {
+  const text = `${contact.serviceLine}${contact.demand}${contact.tags.join('')}`
+  if (/注销/.test(text)) return 'cancellation'
+  if (/注册|设立|工商|地址|挂靠|异常|同行/.test(text)) return 'registration'
+  if (/筹划|体检|税务|退税|稽查/.test(text)) return 'tax_planning'
+  if (/审计|报告/.test(text)) return 'audit'
+  if (/许可|资质/.test(text)) return 'qualification'
+  if (/代理记账|记账|代账/.test(text)) return 'bookkeeping'
+  return 'other'
+}
+
+function servicePeriodFromPrivate(serviceType: BizOrderItem['serviceType']): BizOrderItem['servicePeriod'] {
+  if (serviceType === 'bookkeeping' || serviceType === 'tax_planning') return '1year'
+  if (serviceType === 'qualification') return '3month'
+  return 'one_time'
+}
+
+function serviceTextFromPrivate(serviceType: BizOrderItem['serviceType']) {
+  return ({
+    bookkeeping: '代理记账',
+    registration: '工商注册/地址服务',
+    tax_planning: '财税筹划',
+    qualification: '资质许可',
+    audit: '审计报告',
+    cancellation: '工商注销',
+    other: '综合财税服务'
+  } as Record<BizOrderItem['serviceType'], string>)[serviceType]
+}
+
 function buildContactTimeline(
   contact: PrivateContact,
   followRecords: PrivateFollowRecord[],
@@ -1403,7 +1447,7 @@ function buildContactTimeline(
         id: `follow-${item.id}`,
         type: 'follow',
         title: `${item.method}跟进 · ${item.result}`,
-        content: `${item.content}${item.quotedAmount ? ` · 报价¥${item.quotedAmount.toLocaleString('zh-CN')}` : ''}${item.nextAction ? ` · 下一步:${item.nextAction}` : ''}`,
+        content: `${item.content}${item.quotedAmount ? ` · 报价¥${item.quotedAmount.toLocaleString('zh-CN')}` : ''}${item.orderNo ? ` · 提单草稿:${item.orderNo}` : ''}${item.nextAction ? ` · 下一步:${item.nextAction}` : ''}`,
         operatorName: item.ownerName,
         time: item.createdAt,
         statusText: item.result,
@@ -1647,6 +1691,69 @@ export const privateDomainApi = {
     }
     writeList(CONTACT_KEY, contacts)
     return delay({ record, contact: contacts[contactIdx] })
+  },
+  async createOrderDraftFromFollowRecord(recordId: number): Promise<PrivateOrderDraftResult> {
+    ensureSeeds()
+    const records = readList<PrivateFollowRecord>(FOLLOW_KEY)
+    const recordIdx = records.findIndex(item => item.id === recordId)
+    if (recordIdx < 0) throw new Error('跟进记录不存在')
+    const record = records[recordIdx]
+    if (record.orderId && record.orderNo) {
+      const order = await orderApi.detail(record.orderId)
+      if (order) return delay({ order, record, reused: true })
+    }
+    if (!record.quotedAmount && !['已报价', '已成交'].includes(record.result)) {
+      throw new Error('只有已报价、已成交或带报价金额的跟进记录才能生成提单')
+    }
+    const contacts = readList<PrivateContact>(CONTACT_KEY)
+    const contactIdx = contacts.findIndex(item => item.id === record.contactId)
+    if (contactIdx < 0) throw new Error('私域客户不存在')
+    const contact = contacts[contactIdx]
+    const amount = Number(record.quotedAmount || contact.estimatedAmount || 0)
+    if (amount <= 0) throw new Error('生成提单前需要报价金额')
+    const serviceType = serviceTypeFromPrivate(contact)
+    const servicePeriod = servicePeriodFromPrivate(serviceType)
+    const order = await orderApi.create({
+      customerId: contact.entityId || contact.id,
+      customerName: contact.companyName,
+      submitterId: 1003,
+      submitterName: record.ownerName || contact.ownerName,
+      status: 'draft',
+      paymentMethod: amount > 20000 ? 'installment' : 'lump_sum',
+      paymentTimeReq: amount > 20000 ? '签约后支付首款,尾款按交付节点结清' : '签约后 3 日内一次性付清',
+      commissionRate: contact.source === '老客转介绍' ? 5 : 8,
+      confirmMethod: record.method === '电话' ? 'phone' : record.method === '线下' ? 'meeting' : 'wechat',
+      expectedSignDate: dateOnly(2),
+      specialAgreement: `来源:${contact.source}/${contact.communityName}; 跟进结果:${record.result}; 下一步:${record.nextAction || contact.nextAction}`,
+      remark: `私域跟进自动生成草稿: contactId=${contact.id}; followRecordId=${record.id}`,
+      items: [{
+        id: 0,
+        itemNo: '',
+        orderId: 0,
+        serviceType,
+        servicePeriod,
+        startDate: dateOnly(),
+        endDate: servicePeriod === '1year' ? dateOnly(365) : servicePeriod === '3month' ? dateOnly(90) : dateOnly(30),
+        description: `${serviceTextFromPrivate(serviceType)} - ${contact.serviceLine || contact.demand}`,
+        specialRequirement: record.content,
+        amount,
+        discountRate: 100,
+        finalAmount: amount,
+        itemStatus: 'pending'
+      }]
+    })
+    const updatedRecord = { ...record, orderId: order.id, orderNo: order.orderNo }
+    records[recordIdx] = updatedRecord
+    writeList(FOLLOW_KEY, records)
+    contacts[contactIdx] = {
+      ...contact,
+      stage: contact.stage === 'ordered' ? 'ordered' : 'quoted',
+      estimatedAmount: Math.max(contact.estimatedAmount, amount),
+      nextAction: `已生成提单草稿 ${order.orderNo},请销售核对后提交审批`,
+      lastTouchAt: ts()
+    }
+    writeList(CONTACT_KEY, contacts)
+    return delay({ order, record: updatedRecord, reused: false })
   },
   async createDeliveryPackageFromContact(id: number) {
     ensureSeeds()

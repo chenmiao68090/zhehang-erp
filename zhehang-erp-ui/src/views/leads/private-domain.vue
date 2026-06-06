@@ -529,6 +529,21 @@
               <el-table-column prop="content" label="跟进内容" min-width="280" show-overflow-tooltip />
               <el-table-column prop="nextAction" label="下一动作" min-width="240" show-overflow-tooltip />
               <el-table-column prop="nextTouchAt" label="下次跟进" width="150" />
+              <el-table-column label="提单" width="150" fixed="right">
+                <template #default="{ row }">
+                  <el-tag v-if="row.orderNo" type="success" size="small">{{ row.orderNo }}</el-tag>
+                  <el-button
+                    v-else-if="canCreateOrderDraft(row)"
+                    link
+                    type="primary"
+                    :loading="isCreatingOrderDraft(row.id)"
+                    @click="createOrderDraft(row)"
+                  >
+                    生成提单
+                  </el-button>
+                  <span v-else class="sub-line">待报价</span>
+                </template>
+              </el-table-column>
             </el-table>
           </div>
         </el-tab-pane>
@@ -984,6 +999,7 @@ const drawerTimeline = ref<PrivateTimelineItem[]>([])
 const convertingIds = ref<number[]>([])
 const verifyingIds = ref<number[]>([])
 const deliveryCreatingIds = ref<number[]>([])
+const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
 const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
@@ -1250,6 +1266,14 @@ function isVerifying(id: number) {
 
 function isCreatingDelivery(id: number) {
   return deliveryCreatingIds.value.includes(id)
+}
+
+function isCreatingOrderDraft(id: number) {
+  return orderDraftCreatingIds.value.includes(id)
+}
+
+function canCreateOrderDraft(row: PrivateFollowRecord) {
+  return Boolean(row.orderNo || row.quotedAmount || row.result === '已报价' || row.result === '已成交')
 }
 
 function isRuleSaving(id: number) {
@@ -1589,6 +1613,29 @@ async function createDeliveryPackage(row: PrivateContact) {
     ElMessage.error(error?.message || '生成交付包失败')
   } finally {
     deliveryCreatingIds.value = deliveryCreatingIds.value.filter(id => id !== row.id)
+  }
+}
+
+async function createOrderDraft(row: PrivateFollowRecord) {
+  if (row.orderNo) {
+    ElMessage.info(`已生成提单草稿 ${row.orderNo}`)
+    return
+  }
+  if (isCreatingOrderDraft(row.id)) return
+  orderDraftCreatingIds.value = [...orderDraftCreatingIds.value, row.id]
+  try {
+    const result = await privateDomainApi.createOrderDraftFromFollowRecord(row.id)
+    ElMessage.success(result.reused ? `已存在提单草稿 ${result.order.orderNo}` : `已生成提单草稿 ${result.order.orderNo}`)
+    await loadContacts()
+    activeTab.value = 'follow'
+    if (drawer.row?.id === result.record.contactId) {
+      drawer.row = contacts.value.find(item => item.id === result.record.contactId) || drawer.row
+      await loadDrawerTimeline(result.record.contactId)
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.message || '生成提单失败')
+  } finally {
+    orderDraftCreatingIds.value = orderDraftCreatingIds.value.filter(id => id !== row.id)
   }
 }
 

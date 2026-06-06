@@ -742,6 +742,11 @@
                   </div>
                 </template>
               </el-table-column>
+              <el-table-column label="操作" width="96" fixed="right" align="center">
+                <template #default="{ row }">
+                  <el-button type="primary" text size="small" @click.stop="openDeliveryPackage(row)">详情</el-button>
+                </template>
+              </el-table-column>
             </el-table>
           </div>
         </el-tab-pane>
@@ -951,6 +956,118 @@
       </template>
     </BusinessDetailDrawer>
 
+    <BusinessDetailDrawer
+      v-model="deliveryDrawer.visible"
+      :title="deliveryDrawer.row?.packageName || '交付包详情'"
+      :subtitle="deliveryDrawer.row ? `${deliveryDrawer.row.companyName} · ${deliveryDrawer.row.contactName}` : ''"
+      eyebrow="PRIVATE DELIVERY"
+      :avatar="deliveryDrawer.row?.companyName?.slice(0, 1) || '交'"
+      avatar-class="company"
+      :status-text="deliveryDrawer.row ? deliveryStatusText(deliveryDrawer.row.status) : ''"
+      :status-type="deliveryDrawer.row ? deliveryStatusTag(deliveryDrawer.row.status) : 'info'"
+      size="720px"
+    >
+      <template #meta>
+        <div v-if="deliveryDrawer.row" class="bd-kv-grid">
+          <div class="bd-kv"><span>业务线</span><b>{{ deliveryDrawer.row.serviceLine }}</b></div>
+          <div class="bd-kv"><span>负责人</span><b>{{ deliveryDrawer.row.ownerName }}</b></div>
+          <div class="bd-kv"><span>来源提单</span><b>{{ deliveryDrawer.row.orderNo || '未关联' }}</b></div>
+          <div class="bd-kv"><span>订单状态</span><b>{{ orderStatusText(deliveryDrawer.row.orderStatus) }}</b></div>
+          <div class="bd-kv"><span>订单金额</span><b>¥{{ formatMoney(deliveryDrawer.row.orderAmount || 0) }}</b></div>
+          <div class="bd-kv"><span>付款方式</span><b>{{ paymentMethodText(deliveryDrawer.row.paymentMethod) }}</b></div>
+          <div class="bd-kv"><span>创建时间</span><b>{{ deliveryDrawer.row.createdAt }}</b></div>
+          <div class="bd-kv"><span>最晚节点</span><b>{{ deliveryDrawer.row.dueDate }}</b></div>
+          <div class="bd-kv wide"><span>服务项目</span><b>{{ deliveryDrawer.row.orderItemNames?.join('、') || deliveryDrawer.row.serviceLine }}</b></div>
+          <div class="bd-kv wide"><span>收款要求</span><b>{{ deliveryDrawer.row.paymentTimeReq || '未填写收款要求' }}</b></div>
+        </div>
+      </template>
+
+      <div v-if="deliveryDrawer.row" class="delivery-detail-body">
+        <div class="bd-section-title">交付进度</div>
+        <div class="delivery-detail-progress">
+          <div class="delivery-progress-main">
+            <el-progress
+              :percentage="deliveryProgress(deliveryDrawer.row)"
+              :status="deliveryProgressStatus(deliveryDrawer.row)"
+              :stroke-width="10"
+            />
+          </div>
+          <div class="delivery-progress-stats">
+            <span><b>{{ deliveryDoneCount(deliveryDrawer.row) }}</b>已完成</span>
+            <span><b>{{ deliveryPendingCount(deliveryDrawer.row) }}</b>待处理</span>
+            <span><b>{{ deliveryOverdueCount(deliveryDrawer.row) }}</b>已逾期</span>
+            <span><b>{{ deliveryDrawer.row.tasks.length }}</b>任务总数</span>
+          </div>
+        </div>
+
+        <div class="bd-section-title mt">交付核对</div>
+        <div class="delivery-check-grid">
+          <div>
+            <span>成交来源</span>
+            <b>{{ deliveryDrawer.row.orderNo ? '订单审批完成后生成' : '私域客户手动生成' }}</b>
+          </div>
+          <div>
+            <span>交付风险</span>
+            <b>{{ deliveryRiskText(deliveryDrawer.row) }}</b>
+          </div>
+          <div>
+            <span>回款核对</span>
+            <b>{{ deliveryDrawer.row.paymentTimeReq || '先核对回款/合同/资料' }}</b>
+          </div>
+          <div>
+            <span>客户入口</span>
+            <b>{{ deliveryDrawer.row.companyName }} · {{ deliveryDrawer.row.contactName }}</b>
+          </div>
+        </div>
+
+        <div class="bd-section-title mt">任务清单</div>
+        <div class="delivery-task-detail-list">
+          <div
+            v-for="task in deliveryDrawer.row.tasks"
+            :key="task.id"
+            class="delivery-task-detail"
+            :class="{ done: task.status === 'done', overdue: task.status === 'overdue' }"
+          >
+            <el-checkbox
+              :model-value="task.status === 'done'"
+              :disabled="isUpdatingDeliveryTask(task.id)"
+              @change="checked => deliveryDrawer.row && toggleDeliveryTask(deliveryDrawer.row, task, Boolean(checked))"
+            />
+            <div>
+              <div class="delivery-task-title">
+                <strong>{{ task.title.replace(deliveryDrawer.row.companyName + ' - ', '') }}</strong>
+                <el-tag :type="taskStatusTag(task.status)" size="small">{{ taskStatusText(task.status) }}</el-tag>
+                <el-tag :type="priorityTag(task.priority)" size="small" effect="plain">{{ task.priority }}</el-tag>
+              </div>
+              <p>{{ task.dueTime }} · {{ task.ownerName }} · {{ task.action }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #timeline>
+        <div v-if="deliveryDrawer.row" class="real-timeline">
+          <div v-if="deliveryFollowRecords(deliveryDrawer.row).length === 0" class="empty-timeline">暂无成交前跟进记录</div>
+          <div v-for="item in deliveryFollowRecords(deliveryDrawer.row).slice(0, 5)" :key="item.id" class="bd-timeline-item">
+            <span class="bd-timeline-dot" :class="followResultTag(item.result)"></span>
+            <div>
+              <div class="timeline-title-row">
+                <strong>{{ item.method }} · {{ item.result }}</strong>
+                <el-tag :type="followResultTag(item.result)" size="small" effect="plain">{{ item.result }}</el-tag>
+              </div>
+              <p>{{ item.createdAt }} · {{ item.ownerName }} · {{ item.content }}</p>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <el-button @click="deliveryDrawer.visible = false">关闭</el-button>
+        <el-button v-if="deliveryDrawer.row" @click.stop="openDeliveryContact(deliveryDrawer.row)">查看客户</el-button>
+        <el-button v-if="deliveryDrawer.row?.orderNo" type="primary" @click.stop="openDeliveryOrder(deliveryDrawer.row)">查看提单</el-button>
+      </template>
+    </BusinessDetailDrawer>
+
     <el-dialog v-model="followDialog.visible" title="记录私域跟进" width="640px" class="follow-dialog" append-to-body>
       <el-form label-position="top" class="follow-form">
         <el-row :gutter="12">
@@ -1117,6 +1234,7 @@ const query = reactive<{ keyword: string; source: '' | PrivateSource; stage: '' 
   stage: ''
 })
 const drawer = reactive<{ visible: boolean; row: PrivateContact | null }>({ visible: false, row: null })
+const deliveryDrawer = reactive<{ visible: boolean; row: PrivateDeliveryPackage | null }>({ visible: false, row: null })
 const followDialog = reactive<{ visible: boolean; row: PrivateContact | null }>({ visible: false, row: null })
 const followForm = reactive<PrivateFollowCreatePayload>({
   contactId: 0,
@@ -1334,11 +1452,30 @@ function deliveryProgress(row: PrivateDeliveryPackage) {
   return Math.round(doneCount / taskCount * 100)
 }
 
+function deliveryDoneCount(row: PrivateDeliveryPackage) {
+  return row.tasks.filter(task => task.status === 'done').length
+}
+
+function deliveryPendingCount(row: PrivateDeliveryPackage) {
+  return row.tasks.filter(task => task.status === 'pending').length
+}
+
+function deliveryOverdueCount(row: PrivateDeliveryPackage) {
+  return row.tasks.filter(task => task.status === 'overdue').length
+}
+
 function deliveryProgressStatus(row: PrivateDeliveryPackage): 'success' | 'exception' | 'warning' | undefined {
   if (deliveryProgress(row) >= 100 || row.status === 'done') return 'success'
   if (row.tasks.some(task => task.status === 'overdue')) return 'exception'
   if (row.status === 'created') return 'warning'
   return undefined
+}
+
+function deliveryRiskText(row: PrivateDeliveryPackage) {
+  if (deliveryOverdueCount(row) > 0) return `有 ${deliveryOverdueCount(row)} 个任务逾期,需要主管介入`
+  if (deliveryProgress(row) === 0) return '交付尚未启动,当天需确认资料和责任人'
+  if (deliveryProgress(row) < 100) return '交付推进中,关注最晚节点和回款要求'
+  return '任务已全部完成,可进入回访和续费沉淀'
 }
 
 function followResultTag(result: PrivateFollowResult) {
@@ -1644,6 +1781,40 @@ function openContact(row: PrivateContact) {
   loadDrawerTimeline(row.id)
 }
 
+function deliveryContact(row: PrivateDeliveryPackage) {
+  return contacts.value.find(item => item.id === row.contactId)
+}
+
+function deliveryFollowRecords(row: PrivateDeliveryPackage) {
+  return followRecords.value
+    .filter(item => item.contactId === row.contactId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+function openDeliveryPackage(row: PrivateDeliveryPackage) {
+  deliveryDrawer.row = row
+  deliveryDrawer.visible = true
+}
+
+function openDeliveryContact(row: PrivateDeliveryPackage) {
+  const contact = deliveryContact(row)
+  if (!contact) {
+    ElMessage.warning('未找到关联私域客户,请刷新后重试')
+    return
+  }
+  deliveryDrawer.visible = false
+  openContact(contact)
+}
+
+function openDeliveryOrder(row: PrivateDeliveryPackage) {
+  if (!row.orderNo) {
+    ElMessage.info('该交付包还未关联提单')
+    return
+  }
+  deliveryDrawer.visible = false
+  router.push({ path: '/order/bill', query: { keyword: row.orderNo } })
+}
+
 function padTime(value: number) {
   return String(value).padStart(2, '0')
 }
@@ -1817,6 +1988,7 @@ async function toggleDeliveryTask(row: PrivateDeliveryPackage, task: PrivateTask
     const nextPackage = await privateDomainApi.updateDeliveryTaskStatus(row.id, task.id, checked ? 'done' : 'pending')
     const idx = deliveryPackages.value.findIndex(item => item.id === row.id)
     if (idx >= 0) deliveryPackages.value[idx] = nextPackage
+    if (deliveryDrawer.row?.id === row.id) deliveryDrawer.row = nextPackage
     await loadDashboard()
     ElMessage.success(checked ? '交付任务已完成' : '交付任务已恢复待处理')
   } catch (error: any) {
@@ -2326,6 +2498,102 @@ watch(() => route.fullPath, applyRouteQueue)
   color: #64748b;
   font-size: 12px;
   font-style: normal;
+}
+
+.delivery-detail-body {
+  display: grid;
+  gap: 12px;
+}
+
+.delivery-detail-progress {
+  display: grid;
+  gap: 12px;
+}
+
+.delivery-progress-main {
+  padding: 10px 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.delivery-progress-stats,
+.delivery-check-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.delivery-progress-stats span,
+.delivery-check-grid div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.delivery-progress-stats b,
+.delivery-check-grid b {
+  overflow: hidden;
+  color: #111827;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delivery-check-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.delivery-task-detail-list {
+  display: grid;
+  gap: 8px;
+}
+
+.delivery-task-detail {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.done {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.overdue {
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.delivery-task-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+
+  strong {
+    min-width: 0;
+    color: #111827;
+    font-size: 13px;
+  }
 }
 
 .delivery-order-summary {
@@ -2950,6 +3218,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .toolbar,
   .preview-summary,
   .delivery-summary,
+  .delivery-progress-stats,
+  .delivery-check-grid,
   .verify-detail-grid,
   .config-meta {
     grid-template-columns: 1fr;

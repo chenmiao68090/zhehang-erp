@@ -2712,18 +2712,35 @@ async function batchVerifyContacts() {
     ElMessage.info('当前列表没有待核验客户')
     return
   }
+  try {
+    await ElMessageBox.confirm(
+      `将对当前列表 ${targets.length} 个未核验客户执行工商核验,并更新客户主体信息、重复风险和最近互动时间。`,
+      '确认批量工商核验',
+      {
+        type: 'warning',
+        confirmButtonText: '开始核验',
+        cancelButtonText: '再看看'
+      }
+    )
+  } catch {
+    return
+  }
   const targetIds = targets.map(item => item.id)
   let successCount = 0
+  const updatedContacts: PrivateContact[] = []
   batchVerifyingContacts.value = true
   verifyingIds.value = Array.from(new Set([...verifyingIds.value, ...targetIds]))
   try {
     for (const target of targets) {
       const updated = await privateDomainApi.verifyContact(target.id)
       successCount += 1
+      updatedContacts.push(updated)
       contacts.value = contacts.value.map(item => item.id === updated.id ? updated : item)
       if (drawer.row?.id === updated.id) drawer.row = updated
     }
-    ElMessage.success(`已完成 ${successCount} 个客户工商核验`)
+    const matchedCount = updatedContacts.filter(item => item.verification?.matched).length
+    const duplicateCount = updatedContacts.filter(item => item.verification?.duplicateRisk && item.verification.duplicateRisk !== 'none').length
+    ElMessage.success(`已核验 ${successCount} 个: 命中 ${matchedCount},疑似重复 ${duplicateCount},未命中 ${successCount - matchedCount}`)
   } catch (error: any) {
     ElMessage.error(error?.message || `批量核验中断,已完成 ${successCount} 个客户`)
   } finally {

@@ -60,6 +60,35 @@
       </div>
     </section>
 
+    <section class="starter-strip">
+      <div class="starter-head">
+        <div>
+          <span>今日起步清单</span>
+          <strong>{{ starterProgress.done }}/{{ starterProgress.total }} 已完成</strong>
+        </div>
+        <el-progress
+          :percentage="starterProgress.percent"
+          :stroke-width="8"
+          :show-text="false"
+          :status="starterProgress.percent === 100 ? 'success' : undefined"
+        />
+      </div>
+      <div class="starter-steps">
+        <button
+          v-for="item in starterSteps"
+          :key="item.id"
+          type="button"
+          class="starter-step"
+          :class="{ done: item.done }"
+          @click="goStarterAction(item.action)"
+        >
+          <span>{{ item.done ? '完成' : '待做' }}</span>
+          <strong>{{ item.title }}</strong>
+          <em>{{ item.metric }}</em>
+        </button>
+      </div>
+    </section>
+
     <section class="daily-action-grid">
       <div v-for="item in dailyActions" :key="item.id" class="daily-card" :class="item.status">
         <div class="daily-head">
@@ -1450,6 +1479,7 @@ import {
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
 type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'address_unlocked' | 'address_unbound' | 'done'
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
+type StarterAction = 'import' | 'contacts' | 'follow' | 'quote' | 'delivery'
 
 const router = useRouter()
 const route = useRoute()
@@ -1638,6 +1668,45 @@ const followQueueCounts = computed(() => {
     order_pending: followRecords.value.filter(item => ['draft', 'pending_approval', 'pending_finance', 'pending_boss'].includes(item.orderStatus || '')).length,
     completed_no_delivery: followRecords.value.filter(item => item.orderStatus === 'completed' && !packageContactIds.has(item.contactId)).length,
     next_touch: followRecords.value.filter(item => item.nextTouchAt && item.result !== '已成交' && item.result !== '流失').length
+  }
+})
+const starterSteps = computed<Array<{ id: string; title: string; metric: string; done: boolean; action: StarterAction }>>(() => [
+  {
+    id: 'contacts',
+    title: '私域客户入库',
+    metric: `${summary.contactCount} 个客户`,
+    done: summary.contactCount > 0,
+    action: summary.contactCount > 0 ? 'contacts' : 'import'
+  },
+  {
+    id: 'follow',
+    title: '当天跟进留痕',
+    metric: `${summary.followRecordCount} 次跟进`,
+    done: summary.followRecordCount > 0,
+    action: 'follow'
+  },
+  {
+    id: 'quote',
+    title: '报价提单推进',
+    metric: `报价¥${formatMoney(summary.quoteAmount)} / 提单${followQueueCounts.value.order_pending} 条`,
+    done: summary.quoteAmount > 0 || followQueueCounts.value.order_pending > 0 || summary.orderedCount > 0,
+    action: 'quote'
+  },
+  {
+    id: 'delivery',
+    title: '成交交付建包',
+    metric: `${summary.deliveryPackageCount} 个交付包`,
+    done: summary.deliveryPackageCount > 0,
+    action: 'delivery'
+  }
+])
+const starterProgress = computed(() => {
+  const total = starterSteps.value.length
+  const done = starterSteps.value.filter(item => item.done).length
+  return {
+    total,
+    done,
+    percent: total ? Math.round((done / total) * 100) : 0
   }
 })
 const followFilterOptions = computed(() => [
@@ -2853,6 +2922,24 @@ function goImportPrivateContacts() {
   scrollPrivateTabsIntoView()
 }
 
+function goStarterAction(action: StarterAction) {
+  if (action === 'import') {
+    activeTab.value = 'import'
+  } else if (action === 'contacts') {
+    activeTab.value = 'contacts'
+  } else if (action === 'follow') {
+    activeTab.value = 'follow'
+    followFilter.value = 'all'
+  } else if (action === 'quote') {
+    activeTab.value = 'follow'
+    followFilter.value = followQueueCounts.value.quote_no_order > 0 ? 'quote_no_order' : 'all'
+  } else if (action === 'delivery') {
+    activeTab.value = 'delivery'
+    deliveryFilter.value = 'all'
+  }
+  scrollPrivateTabsIntoView()
+}
+
 function goOnlineLeads() {
   router.push('/leads/online-leads')
 }
@@ -2997,6 +3084,7 @@ watch(() => route.fullPath, applyRouteQueue)
 
 .landing-copy,
 .landing-profile,
+.starter-strip,
 .daily-card,
 .profile-form-card,
 .question-card,
@@ -3108,6 +3196,93 @@ watch(() => route.fullPath, applyRouteQueue)
     color: #111827;
     font-size: 25px;
     line-height: 1.1;
+  }
+}
+
+.starter-strip {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.starter-head {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+
+  div {
+    display: grid;
+    gap: 5px;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 18px;
+  }
+}
+
+.starter-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.starter-step {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &:hover {
+    border-color: #3370ff;
+    box-shadow: 0 8px 20px rgba(51, 112, 255, 0.12);
+    transform: translateY(-1px);
+  }
+
+  span {
+    width: fit-content;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  em {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.5;
+  }
+
+  &.done {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+
+    span {
+      background: #dcfce7;
+      color: #15803d;
+    }
   }
 }
 
@@ -4391,8 +4566,13 @@ watch(() => route.fullPath, applyRouteQueue)
 
   .landing-panel,
   .diagnosis-layout,
-  .import-layout {
+  .import-layout,
+  .starter-strip {
     grid-template-columns: 1fr;
+  }
+
+  .starter-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .toolbar {
@@ -4413,6 +4593,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .connect-strip,
   .metric-grid,
   .daily-action-grid,
+  .starter-steps,
   .group-grid,
   .config-grid,
   .toolbar,

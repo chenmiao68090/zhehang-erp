@@ -441,8 +441,16 @@
             <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
             <el-button type="primary" :icon="Search" @click="loadContacts">查询</el-button>
           </div>
+          <div class="contact-quick-bar">
+            <el-radio-group v-model="contactQuickFilter">
+              <el-radio-button v-for="item in contactQuickOptions" :key="item.value" :label="item.value" :value="item.value">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <span>{{ contactQuickHint }}</span>
+          </div>
 
-          <el-table v-loading="loading" :data="contacts" border stripe height="560">
+          <el-table v-loading="loading" :data="filteredContactRows" border stripe height="560">
             <template #empty>
               <div class="delivery-empty-state contact-empty-state">
                 <div class="delivery-empty-copy">
@@ -1498,6 +1506,7 @@ type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_d
 type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'address_unlocked' | 'address_unbound' | 'done'
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 type StarterAction = 'import' | 'contacts' | 'follow' | 'quote' | 'delivery'
+type ContactQuickFilter = 'all' | 'today_unfollowed' | 'intent' | 'unverified'
 
 const router = useRouter()
 const route = useRoute()
@@ -1533,6 +1542,7 @@ const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
 const wecomSaving = ref(false)
 const followSaving = ref(false)
+const contactQuickFilter = ref<ContactQuickFilter>('all')
 const followFilter = ref<FollowFilter>('all')
 const deliveryFilter = ref<DeliveryFilter>('all')
 const focusedDeliveryPackageId = ref<number | null>(null)
@@ -1567,7 +1577,31 @@ const query = reactive<{ keyword: string; source: '' | PrivateSource; stage: '' 
   source: '',
   stage: ''
 })
-const hasContactFilter = computed(() => Boolean(query.keyword || query.source || query.stage))
+const contactQuickCounts = computed(() => ({
+  all: contacts.value.length,
+  today_unfollowed: contacts.value.filter(isTodayUnfollowed).length,
+  intent: contacts.value.filter(isIntentContact).length,
+  unverified: contacts.value.filter(isUnverifiedContact).length
+}))
+const contactQuickOptions = computed(() => [
+  { label: `全部 ${contactQuickCounts.value.all}`, value: 'all' },
+  { label: `今日未跟进 ${contactQuickCounts.value.today_unfollowed}`, value: 'today_unfollowed' },
+  { label: `高意向 ${contactQuickCounts.value.intent}`, value: 'intent' },
+  { label: `未核验 ${contactQuickCounts.value.unverified}`, value: 'unverified' }
+] as const)
+const contactQuickHint = computed(() => ({
+  all: '查看当前查询下的全部私域客户。',
+  today_unfollowed: '今天还没有触达的客户,适合电销和私域运营优先排班。',
+  intent: '高分或已进入意向/报价/成交阶段的客户,需要优先跟进和提单。',
+  unverified: '还没有完成工商核验的客户,先核公司主体再推进报价。'
+} as Record<ContactQuickFilter, string>)[contactQuickFilter.value])
+const filteredContactRows = computed(() => {
+  if (contactQuickFilter.value === 'today_unfollowed') return contacts.value.filter(isTodayUnfollowed)
+  if (contactQuickFilter.value === 'intent') return contacts.value.filter(isIntentContact)
+  if (contactQuickFilter.value === 'unverified') return contacts.value.filter(isUnverifiedContact)
+  return contacts.value
+})
+const hasContactFilter = computed(() => Boolean(query.keyword || query.source || query.stage || contactQuickFilter.value !== 'all'))
 const contactEmptyTitle = computed(() => (hasContactFilter.value ? '当前筛选没有客户' : '还没有私域客户'))
 const contactEmptyDesc = computed(() => {
   if (hasContactFilter.value) return '可以先重置筛选,或换公司名称、联系人、需求关键词继续查找。'
@@ -1857,6 +1891,23 @@ const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '已成交', value: 'ordered' },
   { label: '沉默', value: 'silent' }
 ]
+
+function todayText() {
+  const d = new Date()
+  return `${d.getFullYear()}-${padTime(d.getMonth() + 1)}-${padTime(d.getDate())}`
+}
+
+function isTodayUnfollowed(row: PrivateContact) {
+  return !row.lastTouchAt || row.lastTouchAt.slice(0, 10) !== todayText()
+}
+
+function isIntentContact(row: PrivateContact) {
+  return row.score >= 80 || ['intent', 'quoted', 'ordered'].includes(row.stage)
+}
+
+function isUnverifiedContact(row: PrivateContact) {
+  return !row.verification?.matched
+}
 
 function formatMoney(value: number) {
   return Number(value || 0).toLocaleString('zh-CN')
@@ -2498,6 +2549,7 @@ async function importValidRows() {
 
 function resetQuery() {
   Object.assign(query, { keyword: '', source: '', stage: '' })
+  contactQuickFilter.value = 'all'
   loadContacts()
 }
 
@@ -3494,6 +3546,7 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.contact-quick-bar,
 .follow-filter-bar,
 .delivery-filter-bar,
 .task-filter-bar {
@@ -3508,6 +3561,7 @@ watch(() => route.fullPath, applyRouteQueue)
   background: #f8fafc;
 }
 
+.contact-quick-bar :deep(.el-radio-group),
 .follow-filter-bar :deep(.el-radio-group),
 .delivery-filter-bar :deep(.el-radio-group),
 .task-filter-bar :deep(.el-radio-group) {
@@ -3516,6 +3570,7 @@ watch(() => route.fullPath, applyRouteQueue)
   gap: 6px;
 }
 
+.contact-quick-bar :deep(.el-radio-button__inner),
 .follow-filter-bar :deep(.el-radio-button__inner),
 .delivery-filter-bar :deep(.el-radio-button__inner),
 .task-filter-bar :deep(.el-radio-button__inner) {
@@ -3524,12 +3579,14 @@ watch(() => route.fullPath, applyRouteQueue)
   box-shadow: none;
 }
 
+.contact-quick-bar :deep(.el-radio-button:first-child .el-radio-button__inner),
 .follow-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner),
 .delivery-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner),
 .task-filter-bar :deep(.el-radio-button:first-child .el-radio-button__inner) {
   border-left: 1px solid #dbe5f2;
 }
 
+.contact-quick-bar span,
 .follow-filter-bar span,
 .delivery-filter-bar span,
 .task-filter-bar span {
@@ -4648,6 +4705,7 @@ watch(() => route.fullPath, applyRouteQueue)
     justify-content: flex-start;
   }
 
+  .contact-quick-bar,
   .follow-filter-bar,
   .delivery-filter-bar,
   .task-filter-bar {

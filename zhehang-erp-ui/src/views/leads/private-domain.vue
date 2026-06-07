@@ -2928,8 +2928,17 @@ function goStarterAction(action: StarterAction) {
   } else if (action === 'contacts') {
     activeTab.value = 'contacts'
   } else if (action === 'follow') {
+    if (!contacts.value.length) {
+      activeTab.value = 'import'
+      scrollPrivateTabsIntoView()
+      ElMessage.info('先导入或同步私域客户,再记录跟进。')
+      return
+    }
     activeTab.value = 'follow'
     followFilter.value = 'all'
+    scrollPrivateTabsIntoView()
+    nextTick(() => openFollowDialog())
+    return
   } else if (action === 'quote') {
     activeTab.value = 'follow'
     followFilter.value = followQueueCounts.value.quote_no_order > 0 ? 'quote_no_order' : 'all'

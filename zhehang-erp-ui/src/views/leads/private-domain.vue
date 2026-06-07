@@ -448,6 +448,16 @@
               </el-radio-button>
             </el-radio-group>
             <span>{{ contactQuickHint }}</span>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :loading="batchVerifyingContacts"
+              :disabled="batchVerifyingContacts || batchVerifiableContacts.length === 0"
+              @click="batchVerifyContacts"
+            >
+              批量核验 {{ batchVerifiableContacts.length }}
+            </el-button>
           </div>
 
           <el-table v-loading="loading" :data="filteredContactRows" border stripe height="560">
@@ -1553,6 +1563,7 @@ const importFileName = ref('')
 const pasteText = ref('')
 const importing = ref(false)
 const fileInputRef = ref<HTMLInputElement>()
+const batchVerifyingContacts = ref(false)
 const summary = reactive<PrivateSummary>({
   contactCount: 0,
   intentCount: 0,
@@ -1601,6 +1612,7 @@ const filteredContactRows = computed(() => {
   if (contactQuickFilter.value === 'unverified') return contacts.value.filter(isUnverifiedContact)
   return contacts.value
 })
+const batchVerifiableContacts = computed(() => filteredContactRows.value.filter(isUnverifiedContact))
 const hasContactFilter = computed(() => Boolean(query.keyword || query.source || query.stage || contactQuickFilter.value !== 'all'))
 const contactEmptyTitle = computed(() => (hasContactFilter.value ? '当前筛选没有客户' : '还没有私域客户'))
 const contactEmptyDesc = computed(() => {
@@ -2690,6 +2702,35 @@ async function verifyContact(row: PrivateContact) {
     ElMessage.error(error?.message || '工商核验失败')
   } finally {
     verifyingIds.value = verifyingIds.value.filter(id => id !== row.id)
+  }
+}
+
+async function batchVerifyContacts() {
+  if (batchVerifyingContacts.value) return
+  const targets = batchVerifiableContacts.value.filter(item => !isVerifying(item.id))
+  if (!targets.length) {
+    ElMessage.info('当前列表没有待核验客户')
+    return
+  }
+  const targetIds = targets.map(item => item.id)
+  let successCount = 0
+  batchVerifyingContacts.value = true
+  verifyingIds.value = Array.from(new Set([...verifyingIds.value, ...targetIds]))
+  try {
+    for (const target of targets) {
+      const updated = await privateDomainApi.verifyContact(target.id)
+      successCount += 1
+      contacts.value = contacts.value.map(item => item.id === updated.id ? updated : item)
+      if (drawer.row?.id === updated.id) drawer.row = updated
+    }
+    ElMessage.success(`已完成 ${successCount} 个客户工商核验`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || `批量核验中断,已完成 ${successCount} 个客户`)
+  } finally {
+    verifyingIds.value = verifyingIds.value.filter(id => !targetIds.includes(id))
+    batchVerifyingContacts.value = false
+    await loadContacts()
+    if (drawer.row && targetIds.includes(drawer.row.id)) await loadDrawerTimeline(drawer.row.id)
   }
 }
 

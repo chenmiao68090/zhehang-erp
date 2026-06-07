@@ -443,6 +443,24 @@
           </div>
 
           <el-table v-loading="loading" :data="contacts" border stripe height="560">
+            <template #empty>
+              <div class="delivery-empty-state contact-empty-state">
+                <div class="delivery-empty-copy">
+                  <strong>{{ contactEmptyTitle }}</strong>
+                  <p>{{ contactEmptyDesc }}</p>
+                </div>
+                <div class="delivery-empty-metrics">
+                  <span><b>{{ summary.contactCount }}</b>私域客户</span>
+                  <span><b>{{ summary.intentCount }}</b>高意向</span>
+                  <span><b>{{ summary.convertedCount }}</b>已入库线索</span>
+                </div>
+                <div class="delivery-empty-actions">
+                  <el-button v-if="hasContactFilter" type="primary" @click="resetQuery">重置筛选</el-button>
+                  <el-button :type="hasContactFilter ? 'default' : 'primary'" @click="goImportPrivateContacts">批量导入</el-button>
+                  <el-button @click="syncHint">同步私域数据</el-button>
+                </div>
+              </div>
+            </template>
             <el-table-column label="客户" min-width="260" fixed="left">
               <template #default="{ row }">
                 <button class="link-btn" @click.stop="openContact(row)">{{ row.companyName }}</button>
@@ -1548,6 +1566,12 @@ const query = reactive<{ keyword: string; source: '' | PrivateSource; stage: '' 
   keyword: '',
   source: '',
   stage: ''
+})
+const hasContactFilter = computed(() => Boolean(query.keyword || query.source || query.stage))
+const contactEmptyTitle = computed(() => (hasContactFilter.value ? '当前筛选没有客户' : '还没有私域客户'))
+const contactEmptyDesc = computed(() => {
+  if (hasContactFilter.value) return '可以先重置筛选,或换公司名称、联系人、需求关键词继续查找。'
+  return '先通过批量导入或企微同步把客户入库,后续才能跟进、报价、提单和交付。'
 })
 const drawer = reactive<{ visible: boolean; row: PrivateContact | null }>({ visible: false, row: null })
 const deliveryDrawer = reactive<{ visible: boolean; row: PrivateDeliveryPackage | null }>({ visible: false, row: null })

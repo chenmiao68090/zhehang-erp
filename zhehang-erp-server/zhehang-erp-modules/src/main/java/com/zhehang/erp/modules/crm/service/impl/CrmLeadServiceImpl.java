@@ -82,6 +82,9 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
         if (lead == null) {
             throw new BusinessException("线索不存在");
         }
+        if (!dataScopeHelper.canAccess(lead.getOwnerId(), lead.getDeptId())) {
+            throw new BusinessException("无权转化该线索(不在你的数据范围内)");
+        }
         if (lead.getStatus() == 3) {
             throw new BusinessException("该线索已转化");
         }

@@ -1728,6 +1728,55 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">SLA 补救记录</div>
+        <div class="delivery-sla-panel" :class="deliverySlaSummary(deliveryDrawer.row).level">
+          <div class="delivery-sla-head">
+            <div>
+              <strong>{{ deliverySlaSummary(deliveryDrawer.row).title }}</strong>
+              <p>{{ deliverySlaSummary(deliveryDrawer.row).hint }}</p>
+            </div>
+            <el-tag :type="deliverySlaTag(deliverySlaSummary(deliveryDrawer.row).level)" effect="plain">
+              {{ deliverySlaSummary(deliveryDrawer.row).statusText }}
+            </el-tag>
+          </div>
+          <div class="delivery-sla-grid">
+            <div v-for="item in deliverySlaItems(deliveryDrawer.row)" :key="item.key" class="delivery-sla-card" :class="item.level">
+              <div class="delivery-sla-card-head">
+                <strong>{{ item.task.title.replace(deliveryDrawer.row.companyName + ' - ', '') }}</strong>
+                <el-tag :type="deliverySlaTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+              </div>
+              <p>{{ item.reason }}</p>
+              <span>{{ item.action }}</span>
+              <div class="delivery-sla-actions">
+                <el-button
+                  v-if="item.task.status === 'overdue'"
+                  type="warning"
+                  size="small"
+                  plain
+                  :loading="isCreatingSupervisorTask(item.task.id)"
+                  :disabled="isCreatingSupervisorTask(item.task.id)"
+                  @click.stop="deliveryDrawer.row && createSupervisorTask(deliveryDrawer.row, item.task)"
+                >
+                  生成督办
+                </el-button>
+                <el-button
+                  v-else-if="item.task.status === 'pending'"
+                  type="danger"
+                  size="small"
+                  plain
+                  :disabled="isUpdatingDeliveryTask(item.task.id)"
+                  @click.stop="deliveryDrawer.row && markDeliveryTaskOverdue(deliveryDrawer.row, item.task)"
+                >
+                  标记逾期
+                </el-button>
+              </div>
+            </div>
+            <div v-if="deliverySlaItems(deliveryDrawer.row).length === 0" class="delivery-sla-empty">
+              当前没有待补救任务,可继续做资料归档和回访续费。
+            </div>
+          </div>
+        </div>
+
         <div class="bd-section-title mt">资料归档</div>
         <div class="delivery-archive-panel">
           <div class="delivery-archive-summary">
@@ -3114,6 +3163,22 @@ interface DeliveryArchiveItem {
   action: DeliveryArchiveAction
 }
 
+interface DeliverySlaItem {
+  key: string
+  task: PrivateTask
+  level: 'success' | 'warning' | 'danger'
+  statusText: string
+  reason: string
+  action: string
+}
+
+interface DeliverySlaSummary {
+  title: string
+  hint: string
+  level: 'success' | 'warning' | 'danger'
+  statusText: string
+}
+
 const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
 const contactTimelineTypeMeta: Record<PrivateTimelineType, { label: string; desc: string }> = {
   verify: { label: '工商核验', desc: '主体、撞单和税务资质' },
@@ -4073,6 +4138,79 @@ function deliveryChecklistItems(row: PrivateDeliveryPackage): DeliveryChecklistI
       desc: deliveryProgress(row) >= 100 ? '可做满意度回访、资料归档、续费提醒和转介绍沉淀。' : '交付未完成前先沉淀资料清单,完成后自动进入回访续费。'
     }
   ]
+}
+
+function deliverySlaTag(level: DeliverySlaItem['level']): 'success' | 'warning' | 'danger' {
+  return level
+}
+
+function deliverySlaReason(task: PrivateTask) {
+  const text = `${task.title} ${task.action}`
+  if (text.includes('地址') || text.includes('挂靠') || text.includes('ADR')) return '疑似卡在地址资源、供应商资料或 ADR 绑定,先确认区域、库存、授权材料和供应商账期。'
+  if (text.includes('渠道') || text.includes('应收') || text.includes('账期')) return '疑似卡在渠道应收、返点、月结额度或财务核对,先拉渠道经理和财务确认责任。'
+  if (text.includes('税') || text.includes('账套') || text.includes('发票') || text.includes('开票')) return '疑似卡在税务资料、账套、发票或电子税务局信息,先补客户授权和资料清单。'
+  if (text.includes('工商') || text.includes('资料') || text.includes('法人') || text.includes('股东')) return '疑似卡在工商资料、法人股东信息或签字材料,先列出客户缺口并约定补齐时间。'
+  return '需要负责人补充办理节点、客户卡点和预计完成时间,避免交付进度只停留在待办状态。'
+}
+
+function deliverySlaAction(task: PrivateTask) {
+  if (task.status === 'overdue') return `补救动作: ${task.ownerName} 当天说明逾期原因,主管督办并同步客户预计完成时间。`
+  if (task.priority === '高') return `补救动作: ${task.ownerName} 今天优先处理,超过节点直接标记逾期并生成督办。`
+  return `补救动作: ${task.ownerName} 明确下一步和预计完成时间,交付负责人复盘。`
+}
+
+function deliverySlaItems(row: PrivateDeliveryPackage): DeliverySlaItem[] {
+  return row.tasks
+    .filter(task => task.status !== 'done')
+    .sort((left, right) => {
+      const statusScore = taskSchedulePriority(right) - taskSchedulePriority(left)
+      if (statusScore !== 0) return statusScore
+      return taskDueSortValue(left) - taskDueSortValue(right)
+    })
+    .map(task => ({
+      key: `sla-${row.id}-${task.id}`,
+      task,
+      level: task.status === 'overdue' ? 'danger' : task.priority === '高' ? 'warning' : 'success',
+      statusText: task.status === 'overdue' ? '已逾期' : task.priority === '高' ? '高优待办' : '待跟进',
+      reason: deliverySlaReason(task),
+      action: deliverySlaAction(task)
+    }))
+}
+
+function deliverySlaSummary(row: PrivateDeliveryPackage): DeliverySlaSummary {
+  const items = deliverySlaItems(row)
+  const overdue = items.filter(item => item.task.status === 'overdue').length
+  const high = items.filter(item => item.task.priority === '高' && item.task.status !== 'overdue').length
+  if (overdue > 0) {
+    return {
+      title: `SLA 已触发 ${overdue} 个逾期补救`,
+      hint: '先生成主管督办,再把逾期原因、预计完成时间和客户同步动作补齐。',
+      level: 'danger',
+      statusText: '需补救'
+    }
+  }
+  if (high > 0) {
+    return {
+      title: `SLA 关注 ${high} 个高优任务`,
+      hint: '高优任务建议当天完成或明确延后原因,避免变成交付逾期。',
+      level: 'warning',
+      statusText: '需盯办'
+    }
+  }
+  if (items.length > 0) {
+    return {
+      title: `SLA 正常推进 ${items.length} 个待办`,
+      hint: '当前没有逾期,继续沉淀每个待办的下一节点和客户资料缺口。',
+      level: 'success',
+      statusText: '推进中'
+    }
+  }
+  return {
+    title: 'SLA 已闭环',
+    hint: '交付任务都已完成,可以进入资料归档、满意度回访和续费提醒。',
+    level: 'success',
+    statusText: '已闭环'
+  }
 }
 
 function deliveryArchiveSummary(row: PrivateDeliveryPackage) {
@@ -7109,6 +7247,123 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.delivery-sla-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+}
+
+.delivery-sla-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.delivery-sla-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.delivery-sla-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+}
+
+.delivery-sla-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.delivery-sla-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.delivery-sla-empty {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
 .delivery-review-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -8715,6 +8970,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .delivery-progress-stats,
   .delivery-check-grid,
   .delivery-checklist,
+  .delivery-sla-grid,
   .delivery-archive-summary,
   .delivery-archive-grid,
   .delivery-review-card,
@@ -8765,6 +9021,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .task-schedule-head {
+    flex-direction: column;
+  }
+
+  .delivery-sla-head {
     flex-direction: column;
   }
 

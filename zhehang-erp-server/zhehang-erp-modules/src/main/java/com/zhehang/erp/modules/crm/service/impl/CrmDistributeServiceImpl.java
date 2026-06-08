@@ -8,6 +8,7 @@ import com.zhehang.erp.modules.crm.domain.entity.CrmLead;
 import com.zhehang.erp.modules.crm.mapper.CrmDistributeLogMapper;
 import com.zhehang.erp.modules.crm.mapper.CrmLeadMapper;
 import com.zhehang.erp.modules.crm.service.ICrmDistributeService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ public class CrmDistributeServiceImpl extends ServiceImpl<CrmDistributeLogMapper
 
     private final CrmDistributeLogMapper distributeLogMapper;
     private final CrmLeadMapper leadMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -37,6 +39,7 @@ public class CrmDistributeServiceImpl extends ServiceImpl<CrmDistributeLogMapper
 
         if (candidateUserId != null) {
             lead.setOwnerId(candidateUserId);
+            lead.setDeptId(dataScopeHelper.deptIdOfUser(candidateUserId));
             lead.setOwnership("private");
             lead.setClaimTime(LocalDateTime.now());
             leadMapper.updateById(lead);
@@ -60,6 +63,7 @@ public class CrmDistributeServiceImpl extends ServiceImpl<CrmDistributeLogMapper
         }
         Long fromUserId = lead.getOwnerId();
         lead.setOwnerId(toUserId);
+        lead.setDeptId(dataScopeHelper.deptIdOfUser(toUserId));
         lead.setOwnership("private");
         lead.setClaimTime(LocalDateTime.now());
         leadMapper.updateById(lead);
@@ -85,6 +89,7 @@ public class CrmDistributeServiceImpl extends ServiceImpl<CrmDistributeLogMapper
             throw new BusinessException("该线索已被领取");
         }
         lead.setOwnerId(userId);
+        lead.setDeptId(dataScopeHelper.deptIdOfUser(userId));
         lead.setOwnership("private");
         lead.setClaimTime(LocalDateTime.now());
         leadMapper.updateById(lead);

@@ -124,6 +124,17 @@ public class CrmLeadController {
         return R.ok();
     }
 
+    /** 给线索写跟进:落库跟进记录并回写最后跟进时间/次数(供回收引擎判超时);仅数据范围内可操作 */
+    @PostMapping("/{id}/follow")
+    @Log(module = "线索管理", type = Log.OperationType.UPDATE)
+    public R<Void> follow(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Integer type = body.get("type") == null ? null : Integer.valueOf(body.get("type").toString());
+        String content = body.get("content") == null ? null : body.get("content").toString();
+        String nextContent = body.get("nextContent") == null ? null : body.get("nextContent").toString();
+        leadService.addFollow(id, type, content, parseDateTime(body.get("nextTime")), nextContent);
+        return R.ok();
+    }
+
     /** 查重(按手机号/名称) */
     @GetMapping("/duplicate")
     public R<List<CrmLead>> duplicate(
@@ -142,6 +153,29 @@ public class CrmLeadController {
     @GetMapping("/stats/stage")
     public R<List<Map<String, Object>>> stageStats() {
         return R.ok(leadService.stageStats());
+    }
+
+    /** 宽松解析下次跟进时间:支持 yyyy-MM-dd / yyyy-MM-dd HH:mm / yyyy-MM-dd HH:mm:ss / 带T,解析失败返回 null */
+    private java.time.LocalDateTime parseDateTime(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.toString().trim().replace('T', ' ');
+        if (s.isEmpty()) {
+            return null;
+        }
+        try {
+            if (s.length() <= 10) {
+                return java.time.LocalDate.parse(s).atStartOfDay();
+            }
+            if (s.length() == 16) {
+                s = s + ":00";
+            }
+            return java.time.LocalDateTime.parse(s,
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** 把前端传来的 ids(List<Integer>/List<Long> 等)统一转成 List<Long> */

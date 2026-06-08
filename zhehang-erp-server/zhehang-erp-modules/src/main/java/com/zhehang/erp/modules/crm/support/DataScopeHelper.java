@@ -62,6 +62,30 @@ public class DataScopeHelper {
         wrapper.eq(ownerColumn, userId);
     }
 
+    /**
+     * 判断当前登录用户能否访问"归属人=ownerId、归属部门=deptId"的一条记录(与 apply 同口径)。
+     * 用于单条操作(如给某线索写跟进)的越权校验。
+     */
+    public boolean canAccess(Long ownerId, Long deptId) {
+        if (SecurityUtils.isCurrentAdmin()) {
+            return true;
+        }
+        Integer scope = SecurityUtils.getCurrentDataScope();
+        if (scope != null && scope == 1) {
+            return true; // 全部
+        }
+        Long myDept = SecurityUtils.getCurrentDeptId();
+        if (myDept != null && deptId != null && scope != null && scope == 3) {
+            return myDept.equals(deptId); // 仅本部门
+        }
+        if (myDept != null && deptId != null && scope != null && scope == 4) {
+            return listSelfAndChildren(myDept).contains(deptId); // 本部门及以下
+        }
+        // 默认仅本人
+        Long uid = SecurityUtils.getCurrentUserId();
+        return uid != null && uid.equals(ownerId);
+    }
+
     /** 查某用户所属部门ID(分配/转化时给新归属记录写 dept_id 用) */
     public Long deptIdOfUser(Long userId) {
         if (userId == null) {

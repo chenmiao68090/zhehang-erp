@@ -8,9 +8,11 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.crm.domain.entity.CrmContact;
 import com.zhehang.erp.modules.crm.domain.entity.CrmCustomer;
+import com.zhehang.erp.modules.crm.domain.entity.CrmFollow;
 import com.zhehang.erp.modules.crm.domain.entity.CrmLead;
 import com.zhehang.erp.modules.crm.mapper.CrmContactMapper;
 import com.zhehang.erp.modules.crm.mapper.CrmCustomerMapper;
+import com.zhehang.erp.modules.crm.mapper.CrmFollowMapper;
 import com.zhehang.erp.modules.crm.mapper.CrmLeadMapper;
 import com.zhehang.erp.modules.crm.service.ICrmHoldingService;
 import com.zhehang.erp.modules.crm.service.ICrmLeadService;
@@ -44,6 +46,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
     private final CrmLeadMapper leadMapper;
     private final CrmCustomerMapper customerMapper;
     private final CrmContactMapper contactMapper;
+    private final CrmFollowMapper followMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final ICrmHoldingService holdingService;
     private final DataScopeHelper dataScopeHelper;
@@ -232,6 +235,34 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
             lead.setClaimTime(LocalDateTime.now());
             leadMapper.updateById(lead);
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void addFollow(Long leadId, Integer type, String content, LocalDateTime nextTime, String nextContent) {
+        CrmLead lead = leadMapper.selectById(leadId);
+        if (lead == null) {
+            throw new BusinessException("线索不存在");
+        }
+        if (!dataScopeHelper.canAccess(lead.getOwnerId(), lead.getDeptId())) {
+            throw new BusinessException("无权跟进该线索(不在你的数据范围内)");
+        }
+        // 1) 落库跟进记录
+        CrmFollow follow = new CrmFollow();
+        follow.setLeadId(leadId);
+        follow.setType(type);
+        follow.setContent(content);
+        follow.setNextTime(nextTime);
+        follow.setNextContent(nextContent);
+        followMapper.insert(follow);
+        // 2) 回写线索:最后跟进时间/内容/次数/下次跟进(回收引擎按 lastFollowTime 判超时,避免误回收活跃客资)
+        lead.setLastFollowTime(LocalDateTime.now());
+        lead.setLastFollowContent(content);
+        lead.setFollowCount(lead.getFollowCount() == null ? 1 : lead.getFollowCount() + 1);
+        if (nextTime != null) {
+            lead.setNextFollowTime(nextTime.toLocalDate());
+        }
+        leadMapper.updateById(lead);
     }
 
     @Override

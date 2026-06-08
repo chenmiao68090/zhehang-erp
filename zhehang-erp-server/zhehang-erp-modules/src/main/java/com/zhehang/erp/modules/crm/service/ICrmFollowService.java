@@ -8,4 +8,7 @@ import java.util.List;
 public interface ICrmFollowService extends IService<CrmFollow> {
     List<CrmFollow> listByCustomerId(Long customerId);
     List<CrmFollow> timeline(Long customerId);
+
+    /** 某线索的跟进时间线 */
+    List<CrmFollow> listByLeadId(Long leadId);
 }

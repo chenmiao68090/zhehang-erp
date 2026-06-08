@@ -32,4 +32,10 @@ public class CrmFollowController {
     public R<List<CrmFollow>> timeline(@PathVariable Long customerId) {
         return R.ok(followService.timeline(customerId));
     }
+
+    /** 某线索的跟进时间线 */
+    @GetMapping("/lead/{leadId}")
+    public R<List<CrmFollow>> listByLead(@PathVariable Long leadId) {
+        return R.ok(followService.listByLeadId(leadId));
+    }
 }

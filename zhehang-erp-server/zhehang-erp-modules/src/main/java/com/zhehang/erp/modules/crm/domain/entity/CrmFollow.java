@@ -11,8 +11,10 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = true)
 @TableName("crm_follow")
 public class CrmFollow extends BaseEntity {
-    /** 客户ID */
+    /** 客户ID(客户跟进时填) */
     private Long customerId;
+    /** 线索ID(线索跟进时填;与 customerId 二选一) */
+    private Long leadId;
     /** 联系人ID */
     private Long contactId;
     /** 跟进方式（1电话 2拜访 3微信 4邮件） */

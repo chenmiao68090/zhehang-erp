@@ -26,6 +26,13 @@ public interface ICrmLeadService extends IService<CrmLead> {
     /** 分配:批量指派负责人并置为 private */
     void distribute(List<Long> ids, Long ownerId);
 
+    /**
+     * 给线索写一条跟进记录,并回写线索的最后跟进时间/跟进次数/下次跟进(供回收引擎判超时)。
+     * 仅当前用户在数据范围内(本人/本部门/管理员)可跟进,否则越权拒绝。
+     */
+    void addFollow(Long leadId, Integer type, String content,
+                   java.time.LocalDateTime nextTime, String nextContent);
+
     /** 查重:按手机号/名称匹配已存在线索 */
     List<CrmLead> checkDuplicate(String phone, String name);
 

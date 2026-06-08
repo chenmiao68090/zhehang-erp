@@ -916,6 +916,36 @@
               <div><span>互动线索</span><b>{{ contentStats.leads }}</b></div>
               <div><span>成交订单</span><b>{{ contentStats.orders }}</b></div>
             </div>
+            <div class="content-coverage-board">
+              <div class="content-coverage-head">
+                <div>
+                  <strong>业务线内容覆盖</strong>
+                  <p>{{ contentCoverageSummary }}</p>
+                </div>
+                <el-tag :type="contentCoverageGaps.length ? 'warning' : 'success'" effect="plain">
+                  {{ contentCoverageGaps.length ? `${contentCoverageGaps.length} 个缺口` : '已覆盖' }}
+                </el-tag>
+              </div>
+              <div class="content-coverage-grid">
+                <div v-for="item in contentCoverageItems.slice(0, 8)" :key="item.serviceLine" class="content-coverage-card" :class="item.level">
+                  <div class="content-coverage-card-head">
+                    <strong>{{ item.serviceLine }}</strong>
+                    <el-tag :type="contentCoverageTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.desc }}</p>
+                  <div class="content-coverage-metrics">
+                    <span>客户 <b>{{ item.contacts }}</b></span>
+                    <span>高意向 <b>{{ item.intents }}</b></span>
+                    <span>素材 <b>{{ item.contentCount }}</b></span>
+                    <span>已发布 <b>{{ item.published }}</b></span>
+                  </div>
+                  <div class="content-coverage-foot">
+                    <em>{{ item.leadCount }} 线索 / {{ item.orderCount }} 成交</em>
+                    <el-button size="small" type="primary" plain @click="openCoverageContentForm(item)">{{ item.actionText }}</el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="wechat-menu-board">
               <div class="wechat-menu-head">
                 <div>
@@ -3558,6 +3588,73 @@ const contentStats = computed(() => ({
   leads: contents.value.reduce((sum, item) => sum + item.leadCount, 0),
   orders: contents.value.reduce((sum, item) => sum + item.orderCount, 0)
 }))
+function contentMatchesService(content: PrivateContent, serviceLine: string) {
+  const text = `${content.title} ${content.target} ${content.relatedService}`
+  return content.relatedService.includes(serviceLine) || serviceLine.includes(content.relatedService) || text.includes(serviceLine)
+}
+
+const contentCoverageItems = computed<ContentCoverageItem[]>(() => {
+  const serviceSet = new Set<string>([
+    ...serviceOptions,
+    ...opsProfile.keyServices,
+    ...contacts.value.map(item => item.serviceLine).filter(Boolean),
+    ...contents.value.map(item => item.relatedService).filter(Boolean)
+  ])
+  return Array.from(serviceSet)
+    .map(serviceLine => {
+      const serviceContacts = contacts.value.filter(item => item.serviceLine.includes(serviceLine) || serviceLine.includes(item.serviceLine))
+      const serviceContents = contents.value.filter(item => contentMatchesService(item, serviceLine))
+      const published = serviceContents.filter(item => item.status === 'published').length
+      const scheduled = serviceContents.filter(item => item.status === 'scheduled').length
+      const intents = serviceContacts.filter(isIntentContact).length
+      const leadCount = serviceContents.reduce((sum, item) => sum + item.leadCount, 0)
+      const orderCount = serviceContents.reduce((sum, item) => sum + item.orderCount, 0)
+      const hasDemand = serviceContacts.length > 0 || opsProfile.keyServices.includes(serviceLine)
+      const level: ContentCoverageItem['level'] = !hasDemand
+        ? 'primary'
+        : !serviceContents.length
+          ? 'danger'
+          : !published
+            ? 'warning'
+            : 'success'
+      const statusText = !hasDemand ? '储备项' : !serviceContents.length ? '缺素材' : !published ? '待发布' : '已覆盖'
+      const desc = !hasDemand
+        ? '当前客户需求较少,可作为内容储备观察。'
+        : !serviceContents.length
+          ? `已有 ${serviceContacts.length} 个客户咨询${serviceLine},但还没有内容素材。`
+          : !published
+            ? `${serviceContents.length} 个素材还未发布,客户详情暂不能直接推荐已发布内容。`
+            : `${published} 个已发布素材覆盖${serviceLine},带来 ${leadCount} 条线索 / ${orderCount} 个成交。`
+      const actionText = !serviceContents.length ? '补第一条素材' : !published ? '发布/完善素材' : intents > 0 ? '复用到高意向客户' : '继续观察'
+      return {
+        serviceLine,
+        contacts: serviceContacts.length,
+        intents,
+        contentCount: serviceContents.length,
+        published,
+        scheduled,
+        leadCount,
+        orderCount,
+        level,
+        statusText,
+        desc,
+        actionText
+      }
+    })
+    .filter(item => item.contacts > 0 || item.contentCount > 0 || opsProfile.keyServices.includes(item.serviceLine))
+    .sort((left, right) => {
+      const levelScore = { danger: 4, warning: 3, primary: 2, success: 1 } as Record<ContentCoverageItem['level'], number>
+      if (levelScore[left.level] !== levelScore[right.level]) return levelScore[right.level] - levelScore[left.level]
+      if (left.intents !== right.intents) return right.intents - left.intents
+      return right.contacts - left.contacts
+    })
+})
+const contentCoverageGaps = computed(() => contentCoverageItems.value.filter(item => item.level === 'danger' || item.level === 'warning'))
+const contentCoverageSummary = computed(() => {
+  if (!contentCoverageItems.value.length) return '先导入客户或新增内容素材,系统会自动识别业务线覆盖缺口。'
+  if (contentCoverageGaps.value.length) return `还有 ${contentCoverageGaps.value.length} 条业务线内容缺口,优先补有客户和高意向的服务线。`
+  return '当前有客户需求的业务线都有已发布素材,客户详情可直接推荐内容。'
+})
 const wechatMenuMappings = computed<WechatMenuMapping[]>(() => wechatMenuMappingDefs.map(def => {
   const matched = contents.value
     .filter(item => {
@@ -4265,6 +4362,21 @@ interface ContactContentSummary {
   desc: string
   level: 'success' | 'warning' | 'danger' | 'primary'
   statusText: string
+}
+
+interface ContentCoverageItem {
+  serviceLine: string
+  contacts: number
+  intents: number
+  contentCount: number
+  published: number
+  scheduled: number
+  leadCount: number
+  orderCount: number
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  statusText: string
+  desc: string
+  actionText: string
 }
 
 interface ContactDutyItem {
@@ -5560,6 +5672,10 @@ function contentStatusTag(status: PrivateContent['status']) {
   return ({ draft: 'info', scheduled: 'warning', published: 'success' } as Record<PrivateContent['status'], any>)[status]
 }
 
+function contentCoverageTag(level: ContentCoverageItem['level']) {
+  return level
+}
+
 function wechatMenuMappingTag(level: WechatMenuMapping['level']) {
   return level
 }
@@ -6468,6 +6584,25 @@ function buildContentForm(row?: PrivateContent, copy = false): ContentFormModel 
 function openContentForm(row?: PrivateContent) {
   Object.assign(contentForm, buildContentForm(row))
   contentDrawer.editingId = row?.id
+  contentDrawer.visible = true
+}
+
+function openCoverageContentForm(item: ContentCoverageItem) {
+  const type: PrivateContent['type'] = item.intents > 0 ? '销售话术' : item.contacts > 0 ? '社群推送' : '公众号文章'
+  Object.assign(contentForm, {
+    title: `${item.serviceLine}${item.intents > 0 ? '高意向客户跟进话术' : '客户常见问题答疑'}`,
+    type,
+    target: item.contacts > 0 ? `${item.serviceLine}客户 / 高意向 ${item.intents} 人` : `${item.serviceLine}潜在客户`,
+    ownerName: '内容运营',
+    publishAt: nextTouchTime(0, 18, 0),
+    status: 'draft',
+    reachCount: 0,
+    interactCount: 0,
+    leadCount: 0,
+    orderCount: 0,
+    relatedService: item.serviceLine
+  })
+  contentDrawer.editingId = undefined
   contentDrawer.visible = true
 }
 
@@ -11252,6 +11387,127 @@ watch(() => route.fullPath, applyRouteQueue)
   gap: 8px;
 }
 
+.content-coverage-board {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.content-coverage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.content-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.content-coverage-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+
+  &.primary {
+    border-left-color: #2563eb;
+  }
+
+  p {
+    min-height: 40px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.content-coverage-card-head,
+.content-coverage-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.content-coverage-card-head {
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.content-coverage-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+
+  span {
+    display: grid;
+    gap: 3px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+  }
+
+  b {
+    color: #0f172a;
+    font-size: 13px;
+  }
+}
+
+.content-coverage-foot {
+  em {
+    min-width: 0;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .wechat-menu-board {
   display: grid;
   gap: 10px;
@@ -12339,6 +12595,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .group-grid,
   .config-grid,
   .content-summary,
+  .content-coverage-grid,
+  .content-coverage-metrics,
   .content-form-metrics,
   .wechat-menu-grid,
   .toolbar,
@@ -12430,6 +12688,11 @@ watch(() => route.fullPath, applyRouteQueue)
 
   .content-panel-actions {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .content-coverage-head,
+  .content-coverage-foot {
     flex-direction: column;
   }
 

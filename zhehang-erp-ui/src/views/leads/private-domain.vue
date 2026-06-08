@@ -1594,6 +1594,31 @@
                 </div>
               </div>
             </div>
+            <div class="integration-toolkit-panel">
+              <div class="integration-toolkit-head">
+                <div>
+                  <strong>联调工具</strong>
+                  <p>复制给技术或服务商时默认使用脱敏摘要,单个字段需要时再点卡片复制。</p>
+                </div>
+                <div class="integration-toolkit-actions">
+                  <el-button size="small" type="primary" plain @click="copyIntegrationToolkitSummary('企业微信', wecomIntegrationToolkit)">复制联调摘要</el-button>
+                  <el-button size="small" @click="copyIntegrationToolkitGaps('企业微信', wecomIntegrationToolkit)">复制缺口清单</el-button>
+                </div>
+              </div>
+              <div class="integration-toolkit-grid">
+                <div v-for="item in wecomIntegrationToolkit" :key="item.key" class="integration-toolkit-card" :class="item.level">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <el-tag :type="wecomCheckTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <span>{{ item.value }}</span>
+                  <p>{{ item.desc }}</p>
+                  <el-button v-if="item.copyText" link size="small" @click="copyIntegrationToolkitItem(item)">
+                    {{ item.secret ? '复制安全参数' : '复制字段' }}
+                  </el-button>
+                </div>
+              </div>
+            </div>
             <div class="profile-actions">
               <span>最近更新：{{ wecomConfig.updatedAt || '-' }}</span>
               <el-button type="primary" :loading="wecomSaving" @click="saveWecomConfig">保存企微配置</el-button>
@@ -1670,6 +1695,31 @@
                     <el-tag :type="wecomCheckTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
                   </div>
                   <p>{{ item.desc }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="integration-toolkit-panel">
+              <div class="integration-toolkit-head">
+                <div>
+                  <strong>联调工具</strong>
+                  <p>对接公众号、微信客服或小程序时,先复制脱敏摘要和缺口清单,避免密钥在群里裸奔。</p>
+                </div>
+                <div class="integration-toolkit-actions">
+                  <el-button size="small" type="primary" plain @click="copyIntegrationToolkitSummary('微信客服/公众号', wechatServiceIntegrationToolkit)">复制联调摘要</el-button>
+                  <el-button size="small" @click="copyIntegrationToolkitGaps('微信客服/公众号', wechatServiceIntegrationToolkit)">复制缺口清单</el-button>
+                </div>
+              </div>
+              <div class="integration-toolkit-grid">
+                <div v-for="item in wechatServiceIntegrationToolkit" :key="item.key" class="integration-toolkit-card" :class="item.level">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <el-tag :type="wecomCheckTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <span>{{ item.value }}</span>
+                  <p>{{ item.desc }}</p>
+                  <el-button v-if="item.copyText" link size="small" @click="copyIntegrationToolkitItem(item)">
+                    {{ item.secret ? '复制安全参数' : '复制字段' }}
+                  </el-button>
                 </div>
               </div>
             </div>
@@ -2732,6 +2782,16 @@ interface WecomCheckItem {
   statusText: string
   desc: string
 }
+interface IntegrationToolkitItem {
+  key: string
+  label: string
+  level: WecomCheckItem['level']
+  statusText: string
+  value: string
+  desc: string
+  copyText: string
+  secret?: boolean
+}
 interface OwnershipImpactItem {
   source: PrivateSource
   enabled: boolean
@@ -3613,6 +3673,133 @@ const wechatServicePrecheckSummary = computed(() => {
   if (wechatServicePrecheckLevel.value === 'warning') return `已完成 ${wechatServiceReadyCount.value}/${total},可以保存配置,但真实联调前仍需补齐警告项。`
   return `已完成 ${total}/${total},微信客服、公众号和留资表单可以进入回调联调。`
 })
+function maskSecretText(value?: string) {
+  if (!value) return '未填写'
+  if (value.length <= 8) return `${value.slice(0, 2)}****`
+  return `${value.slice(0, 4)}****${value.slice(-4)}`
+}
+
+function displayFieldValue(value?: string | number, fallback = '未填写') {
+  if (value === undefined || value === null || value === '') return fallback
+  return String(value)
+}
+
+function toolkitCopyLines(lines: Array<[string, string | number | undefined]>) {
+  return lines
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([label, value]) => `${label}: ${value}`)
+    .join('\n')
+}
+
+const wecomIntegrationToolkit = computed<IntegrationToolkitItem[]>(() => [
+  {
+    key: 'corp',
+    label: '企业身份',
+    level: wecomConfig.corpId ? 'success' : 'danger',
+    statusText: wecomConfig.corpId ? '已填写' : '缺 CorpId',
+    value: displayFieldValue(wecomConfig.corpId),
+    desc: '给技术确认企业微信后台企业 ID 和当前公司主体是否一致。',
+    copyText: wecomConfig.corpId ? `CorpId: ${wecomConfig.corpId}` : ''
+  },
+  {
+    key: 'callback',
+    label: '回调 URL',
+    level: wecomConfig.callbackUrl ? 'success' : 'warning',
+    statusText: wecomConfig.callbackUrl ? '可复制' : '待配置',
+    value: displayFieldValue(wecomConfig.callbackUrl, '建议使用公网 HTTPS 回调'),
+    desc: '配置到企业微信客户联系回调,本地地址不能直接用于生产回调。',
+    copyText: wecomConfig.callbackUrl || ''
+  },
+  {
+    key: 'security',
+    label: '安全参数',
+    level: wecomConfig.contactSecret && wecomConfig.token && wecomConfig.aesKey ? 'success' : 'danger',
+    statusText: wecomConfig.contactSecret && wecomConfig.token && wecomConfig.aesKey ? '已齐' : '缺密钥',
+    value: `Secret ${maskSecretText(wecomConfig.contactSecret)} / Token ${maskSecretText(wecomConfig.token)} / AES ${maskSecretText(wecomConfig.aesKey)}`,
+    desc: '敏感字段默认脱敏显示,只在需要联调验签时单独复制。',
+    copyText: toolkitCopyLines([
+      ['客户联系 Secret', wecomConfig.contactSecret],
+      ['客户群 Secret', wecomConfig.customerGroupSecret],
+      ['Token', wecomConfig.token],
+      ['EncodingAESKey', wecomConfig.aesKey]
+    ]),
+    secret: true
+  },
+  {
+    key: 'scope',
+    label: '同步范围',
+    level: wecomSyncScopes.value.length ? 'success' : 'warning',
+    statusText: wecomSyncScopes.value.length ? `${wecomSyncScopes.value.length} 项` : '未选择',
+    value: wecomSyncScopes.value.join('、') || '未选择',
+    desc: '外部联系人、客户群、标签和互动记录决定哪些数据能进入私域客户池。',
+    copyText: wecomSyncScopes.value.length ? `同步范围: ${wecomSyncScopes.value.join('、')}` : ''
+  },
+  {
+    key: 'owner',
+    label: '责任人与频率',
+    level: wecomConfig.ownerName ? 'success' : 'warning',
+    statusText: wecomConfig.ownerName || '待补负责人',
+    value: `${displayFieldValue(wecomConfig.ownerName, '未指定')} / ${wecomConfig.syncIntervalMinutes || 0} 分钟`,
+    desc: '同步异常时先找责任人,定时同步建议不低于 5 分钟。',
+    copyText: toolkitCopyLines([
+      ['同步负责人', wecomConfig.ownerName],
+      ['同步间隔', `${wecomConfig.syncIntervalMinutes} 分钟`]
+    ])
+  }
+])
+
+const wechatServiceIntegrationToolkit = computed<IntegrationToolkitItem[]>(() => [
+  {
+    key: 'app',
+    label: '应用身份',
+    level: wechatServiceConfig.appId ? 'success' : 'danger',
+    statusText: wechatServiceConfig.appId ? '已填写' : '缺 AppID',
+    value: displayFieldValue(wechatServiceConfig.appId),
+    desc: '用于识别公众号、微信客服或小程序来源。',
+    copyText: wechatServiceConfig.appId ? `AppID: ${wechatServiceConfig.appId}` : ''
+  },
+  {
+    key: 'callback',
+    label: '消息回调 URL',
+    level: wechatServiceConfig.callbackUrl ? 'success' : 'warning',
+    statusText: wechatServiceConfig.callbackUrl ? '可复制' : '待配置',
+    value: displayFieldValue(wechatServiceConfig.callbackUrl, '建议使用公网 HTTPS 回调'),
+    desc: '配置到微信服务器配置,承接消息、菜单事件和留资通知。',
+    copyText: wechatServiceConfig.callbackUrl || ''
+  },
+  {
+    key: 'security',
+    label: '安全参数',
+    level: wechatServiceConfig.appSecret && wechatServiceConfig.token ? 'success' : 'danger',
+    statusText: wechatServiceConfig.appSecret && wechatServiceConfig.token ? '已齐' : '缺密钥',
+    value: `Secret ${maskSecretText(wechatServiceConfig.appSecret)} / Token ${maskSecretText(wechatServiceConfig.token)} / AES ${maskSecretText(wechatServiceConfig.aesKey)}`,
+    desc: 'AppSecret 和 Token 是关键敏感字段,摘要默认脱敏。',
+    copyText: toolkitCopyLines([
+      ['AppSecret', wechatServiceConfig.appSecret],
+      ['Token', wechatServiceConfig.token],
+      ['EncodingAESKey', wechatServiceConfig.aesKey]
+    ]),
+    secret: true
+  },
+  {
+    key: 'scope',
+    label: '同步范围',
+    level: wechatServiceSyncScopes.value.length ? 'success' : 'warning',
+    statusText: wechatServiceSyncScopes.value.length ? `${wechatServiceSyncScopes.value.length} 项` : '未选择',
+    value: wechatServiceSyncScopes.value.join('、') || '未选择',
+    desc: '决定客服会话、留资表单、菜单点击和小程序线索是否自动沉淀。',
+    copyText: wechatServiceSyncScopes.value.length ? `同步范围: ${wechatServiceSyncScopes.value.join('、')}` : ''
+  },
+  {
+    key: 'owner',
+    label: '同步负责人',
+    level: wechatServiceConfig.ownerName ? 'success' : 'warning',
+    statusText: wechatServiceConfig.ownerName || '待补负责人',
+    value: displayFieldValue(wechatServiceConfig.ownerName, '未指定'),
+    desc: '微信侧异常、线索归属和菜单策略都需要明确负责人。',
+    copyText: wechatServiceConfig.ownerName ? `同步负责人: ${wechatServiceConfig.ownerName}` : ''
+  }
+])
 const contentStats = computed(() => ({
   total: contents.value.length,
   published: contents.value.filter(item => item.status === 'published').length,
@@ -6284,12 +6471,12 @@ function deliveryClientBriefItems(row: PrivateDeliveryPackage): DeliveryClientBr
   })
 }
 
-async function copyDeliveryClientBrief(item: DeliveryClientBriefItem) {
+async function copyPlainText(text: string, successMessage: string) {
   try {
-    await navigator.clipboard.writeText(item.content)
+    await navigator.clipboard.writeText(text)
   } catch {
     const input = document.createElement('textarea')
-    input.value = item.content
+    input.value = text
     input.style.position = 'fixed'
     input.style.left = '-9999px'
     document.body.appendChild(input)
@@ -6297,7 +6484,39 @@ async function copyDeliveryClientBrief(item: DeliveryClientBriefItem) {
     document.execCommand('copy')
     document.body.removeChild(input)
   }
-  ElMessage.success('客户同步话术已复制')
+  ElMessage.success(successMessage)
+}
+
+async function copyDeliveryClientBrief(item: DeliveryClientBriefItem) {
+  await copyPlainText(item.content, '客户同步话术已复制')
+}
+
+async function copyIntegrationToolkitItem(item: IntegrationToolkitItem) {
+  if (!item.copyText) {
+    ElMessage.warning('该字段还没有可复制内容')
+    return
+  }
+  await copyPlainText(item.copyText, item.secret ? '安全参数已复制,请只发送给授权联调人员' : '接入字段已复制')
+}
+
+async function copyIntegrationToolkitSummary(channelName: string, items: IntegrationToolkitItem[]) {
+  const lines = [
+    `【${channelName}联调摘要】`,
+    ...items.map(item => `${item.label}: ${item.value} (${item.statusText})`),
+    '说明: 摘要已脱敏,如需真实密钥请在系统内单独点击对应字段复制。'
+  ]
+  await copyPlainText(lines.join('\n'), `${channelName}联调摘要已复制`)
+}
+
+async function copyIntegrationToolkitGaps(channelName: string, items: IntegrationToolkitItem[]) {
+  const gaps = items.filter(item => item.level !== 'success')
+  const lines = gaps.length
+    ? [
+        `【${channelName}接入缺口】`,
+        ...gaps.map(item => `${item.label}: ${item.statusText} - ${item.desc}`)
+      ]
+    : [`【${channelName}接入缺口】`, '当前没有明显缺口,可以进入回调/同步联调。']
+  await copyPlainText(lines.join('\n'), `${channelName}缺口清单已复制`)
 }
 
 function deliveryBriefFollowMethod(item: DeliveryClientBriefItem): PrivateFollowMethod {
@@ -8682,6 +8901,115 @@ watch(() => route.fullPath, applyRouteQueue)
   &.danger {
     border-color: #fecaca;
     background: #fff7f7;
+  }
+}
+
+.integration-toolkit-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.integration-toolkit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.integration-toolkit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+
+  :deep(.el-button) {
+    margin-left: 0;
+  }
+}
+
+.integration-toolkit-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.integration-toolkit-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+
+  > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    min-height: 18px;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  p {
+    min-height: 52px;
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  :deep(.el-button) {
+    justify-self: start;
+    margin-left: 0;
+    padding: 0;
   }
 }
 
@@ -12986,6 +13314,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .follow-funnel-grid,
   .ownership-audit-grid,
   .integration-audit-grid,
+  .integration-toolkit-grid,
   .wecom-check-grid,
   .must-handle-list,
   .must-handle-item,
@@ -13047,6 +13376,11 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .wecom-check-head {
+    flex-direction: column;
+  }
+
+  .integration-toolkit-head,
+  .integration-toolkit-card > div {
     flex-direction: column;
   }
 

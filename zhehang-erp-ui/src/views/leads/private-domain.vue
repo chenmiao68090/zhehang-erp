@@ -1254,6 +1254,26 @@
               <el-button type="primary" :loading="wecomSaving" @click="saveWecomConfig">保存企微配置</el-button>
             </div>
           </div>
+          <div class="integration-audit-panel" :class="integrationAuditLevel">
+            <div class="integration-audit-head">
+              <div>
+                <strong>全渠道接入巡检</strong>
+                <p>{{ integrationAuditSummary }}</p>
+              </div>
+              <el-tag :type="integrationAuditTag(integrationAuditLevel)" effect="plain">{{ integrationAuditStatusText }}</el-tag>
+            </div>
+            <div class="integration-audit-grid">
+              <div v-for="item in integrationAuditItems" :key="item.key" class="integration-audit-card" :class="item.level">
+                <div>
+                  <strong>{{ item.name }}</strong>
+                  <el-tag :type="integrationAuditTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                </div>
+                <p>{{ item.desc }}</p>
+                <span>{{ item.requiredText }}</span>
+                <em>{{ item.ownerText }}</em>
+              </div>
+            </div>
+          </div>
           <div class="config-grid">
             <div v-for="item in integrations" :key="item.key" class="config-card">
               <div class="config-title">
@@ -2044,6 +2064,15 @@ interface OwnershipAuditItem {
   statusText: string
   desc: string
 }
+interface IntegrationAuditItem {
+  key: string
+  name: string
+  level: 'success' | 'warning' | 'danger'
+  statusText: string
+  desc: string
+  requiredText: string
+  ownerText: string
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -2521,6 +2550,50 @@ const wecomPrecheckSummary = computed(() => {
   if (wecomPrecheckLevel.value === 'danger') return `已完成 ${wecomPrecheckReadyCount.value}/${total},还缺 CorpId、Secret 或安全密钥等关键参数。`
   if (wecomPrecheckLevel.value === 'warning') return `已完成 ${wecomPrecheckReadyCount.value}/${total},可以保存配置,但真实联调前仍需补齐警告项。`
   return `已完成 ${total}/${total},参数、范围和责任人都具备,可以进入企微回调/定时同步联调。`
+})
+const integrationAuditItems = computed<IntegrationAuditItem[]>(() => integrations.value.map(item => {
+  const hasOwner = Boolean(item.ownerName)
+  const hasSync = Boolean(item.lastSyncAt && !item.lastSyncAt.includes('待'))
+  const missingRequired = item.required.filter(field => field.includes('app') || field.includes('secret') || field.includes('回调') || field.includes('Token') || field.includes('权限'))
+  const baseLevel: IntegrationAuditItem['level'] = item.status === 'blocked' ? 'danger' : item.status === 'pending' ? 'warning' : 'success'
+  const level: IntegrationAuditItem['level'] = !hasOwner || (item.status === 'connected' && !hasSync) ? 'warning' : baseLevel
+  const statusText = item.status === 'blocked' ? '需处理' : item.status === 'pending' ? '待授权' : !hasOwner || !hasSync ? '需复核' : '已接入'
+  const desc = item.status === 'blocked'
+    ? `${item.description} 当前阻断,先处理权限、回调或账号异常。`
+    : item.status === 'pending'
+      ? `${item.description} 需要补 ${item.required.join('、')} 后才能自动入库。`
+      : !hasSync
+        ? `${item.description} 已配置,但最近同步时间仍需复核。`
+        : `${item.description} 当前可以作为私域客户入库和任务触发来源。`
+  return {
+    key: item.key,
+    name: item.name,
+    level,
+    statusText,
+    desc,
+    requiredText: missingRequired.length ? `关键字段: ${missingRequired.join('、')}` : `配置项: ${item.required.join('、')}`,
+    ownerText: hasOwner ? `负责人 ${item.ownerName} · ${item.scope}` : `缺负责人 · ${item.scope}`
+  }
+}))
+const integrationAuditLevel = computed<IntegrationAuditItem['level']>(() => {
+  if (!integrationAuditItems.value.length) return 'warning'
+  if (integrationAuditItems.value.some(item => item.level === 'danger')) return 'danger'
+  if (integrationAuditItems.value.some(item => item.level === 'warning')) return 'warning'
+  return 'success'
+})
+const integrationAuditStatusText = computed(() => ({
+  danger: '有阻断渠道',
+  warning: '待补授权',
+  success: '渠道健康'
+} as Record<IntegrationAuditItem['level'], string>)[integrationAuditLevel.value])
+const integrationAuditSummary = computed(() => {
+  if (!integrationAuditItems.value.length) return '还没有配置任何私域接入渠道,先补企业微信、公众号、社群和内容触达。'
+  const blocked = integrationAuditItems.value.filter(item => item.level === 'danger').length
+  const warning = integrationAuditItems.value.filter(item => item.level === 'warning').length
+  const ready = integrationAuditItems.value.filter(item => item.level === 'success').length
+  if (blocked > 0) return `${blocked} 个渠道阻断,先处理权限、回调或账号异常,避免客户入库断流。`
+  if (warning > 0) return `${ready}/${integrationAuditItems.value.length} 个渠道可用,还有 ${warning} 个渠道待授权或需复核。`
+  return `${ready}/${integrationAuditItems.value.length} 个渠道健康,可以稳定承接企微、公众号、社群和内容触达。`
 })
 const followStats = computed(() => ({
   total: followRecords.value.length,
@@ -3723,6 +3796,10 @@ function wecomCheckTag(level: WecomCheckItem['level']): 'success' | 'warning' | 
 }
 
 function ownershipAuditTag(level: OwnershipAuditItem['level']) {
+  return level
+}
+
+function integrationAuditTag(level: IntegrationAuditItem['level']) {
   return level
 }
 
@@ -6065,6 +6142,116 @@ watch(() => route.fullPath, applyRouteQueue)
   &.danger {
     border-color: #fecaca;
     background: #fff7f7;
+  }
+}
+
+.integration-audit-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+}
+
+.integration-audit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.integration-audit-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.integration-audit-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f8fff9;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff7f7;
+  }
+
+  > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #1f2937;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  p {
+    min-height: 58px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  span,
+  em {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.45;
+  }
+
+  span {
+    color: #245bdb;
+    font-weight: 700;
   }
 }
 
@@ -8513,6 +8700,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .contact-evidence-grid,
   .follow-funnel-grid,
   .ownership-audit-grid,
+  .integration-audit-grid,
   .wecom-check-grid,
   .must-handle-list,
   .must-handle-item,
@@ -8561,6 +8749,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .wecom-check-head {
+    flex-direction: column;
+  }
+
+  .integration-audit-head {
     flex-direction: column;
   }
 

@@ -80,7 +80,11 @@ export function setupRouterGuard(router: Router) {
         // 重新进入目标路由，确保新增的动态路由生效
         next({ ...to, replace: true })
       } catch (error) {
-        await userStore.logout()
+        try {
+          await userStore.logout()
+        } catch (_logoutError) {
+          userStore.resetState()
+        }
         next(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
       }
     } else {

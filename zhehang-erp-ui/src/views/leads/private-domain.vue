@@ -1126,15 +1126,23 @@
       <template #timeline>
         <div v-if="drawer.row" class="real-timeline">
           <div v-if="drawerTimeline.length === 0" class="empty-timeline">暂无时间线记录</div>
-          <div v-for="item in drawerTimeline" :key="item.id" class="bd-timeline-item">
-            <span class="bd-timeline-dot" :class="item.statusLevel"></span>
-            <div>
-              <div class="timeline-title-row">
-                <strong>{{ item.title }}</strong>
-                <el-tag :type="item.statusLevel" size="small" effect="plain">{{ item.statusText }}</el-tag>
+          <div v-else class="timeline-group-list">
+            <section v-for="group in drawerTimelineGroups()" :key="group.type" class="timeline-group">
+              <div class="timeline-group-head">
+                <strong>{{ group.label }}</strong>
+                <span>{{ group.items.length }} 条 · {{ group.desc }}</span>
               </div>
-              <p>{{ item.time }} · {{ item.operatorName }} · {{ item.content }}</p>
-            </div>
+              <div v-for="item in group.items" :key="item.id" class="bd-timeline-item">
+                <span class="bd-timeline-dot" :class="item.statusLevel"></span>
+                <div>
+                  <div class="timeline-title-row">
+                    <strong>{{ item.title }}</strong>
+                    <el-tag :type="item.statusLevel" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.time }} · {{ item.operatorName }} · {{ item.content }}</p>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </template>
@@ -1556,6 +1564,7 @@ import {
   type PrivateTask,
   type PrivateTaskStatus,
   type PrivateTimelineItem,
+  type PrivateTimelineType,
   type PrivateWecomConfig
 } from '@/api/private-domain'
 
@@ -1957,6 +1966,15 @@ interface ContactActionItem {
   key: ContactActionKey
   label: string
   primary?: boolean
+}
+
+const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
+const contactTimelineTypeMeta: Record<PrivateTimelineType, { label: string; desc: string }> = {
+  verify: { label: '工商核验', desc: '主体、撞单和税务资质' },
+  follow: { label: '跟进报价', desc: '触达、报价、提单和成交' },
+  task: { label: '待办任务', desc: '跟进、督办和补救动作' },
+  delivery: { label: '交付流转', desc: '交付包、任务和最晚节点' },
+  contact: { label: '客户入库', desc: '来源触点和原始需求' }
 }
 
 function todayText() {
@@ -2856,6 +2874,16 @@ async function loadDrawerTimeline(id: number) {
   } catch {
     drawerTimeline.value = []
   }
+}
+
+function drawerTimelineGroups() {
+  return contactTimelineTypeOrder
+    .map(type => ({
+      type,
+      ...contactTimelineTypeMeta[type],
+      items: drawerTimeline.value.filter(item => item.type === type)
+    }))
+    .filter(group => group.items.length > 0)
 }
 
 function openContact(row: PrivateContact) {
@@ -5051,6 +5079,36 @@ watch(() => route.fullPath, applyRouteQueue)
   gap: 12px;
 }
 
+.timeline-group-list,
+.timeline-group {
+  display: grid;
+  gap: 10px;
+}
+
+.timeline-group {
+  padding: 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.timeline-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+}
+
 .timeline-title-row {
   display: flex;
   align-items: center;
@@ -5160,6 +5218,11 @@ watch(() => route.fullPath, applyRouteQueue)
   .contact-next-action-steps {
     justify-content: flex-start;
     max-width: none;
+  }
+
+  .timeline-group-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .import-hint {

@@ -12,6 +12,9 @@ import com.zhehang.erp.modules.contract.mapper.BizContractTemplateMapper;
 import com.zhehang.erp.modules.contract.service.IBizContractService;
 import com.zhehang.erp.modules.order.domain.BizOrder;
 import com.zhehang.erp.modules.order.mapper.BizOrderMapper;
+import com.zhehang.erp.modules.task.domain.BizTask;
+import com.zhehang.erp.modules.task.mapper.BizTaskMapper;
+import com.zhehang.erp.modules.task.service.IBizTaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,11 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
     private final BizContractMapper contractMapper;
     private final BizContractTemplateMapper templateMapper;
     private final BizOrderMapper orderMapper;
+    private final IBizTaskService taskService;
+    private final BizTaskMapper bizTaskMapper;
+
+    /** 合同签署后自动派发的交付任务模板(代账主流程) */
+    private static final String[] DELIVERY_TASKS = {"客户资料收集", "建账初始化", "税务报到"};
 
     @Override
     public IPage<BizContract> selectPage(int pageNum, int pageSize, String contractNo, Long customerId, Integer status) {
@@ -86,6 +94,7 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void confirmSign(Long id, String signerTheirs) {
         BizContract contract = contractMapper.selectById(id);
         if (contract == null) {
@@ -96,6 +105,34 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
         contract.setSignDate(LocalDate.now());
         contract.setConfirmSignTime(LocalDateTime.now());
         contractMapper.updateById(contract);
+        // 签约→自动派发交付任务(同事务,关联合同+客户;防重派发)
+        dispatchDeliveryTasks(contract);
+    }
+
+    /**
+     * 合同生效后自动派生交付任务(客户资料收集/建账初始化/税务报到)。
+     * 任务暂不指定执行人(status=待指派),由交付主管/对应部门认领。已派过则跳过(幂等)。
+     */
+    private void dispatchDeliveryTasks(BizContract contract) {
+        Long existing = bizTaskMapper.selectCount(new LambdaQueryWrapper<BizTask>()
+                .eq(BizTask::getBizId, contract.getId())
+                .eq(BizTask::getBizType, "contract"));
+        if (existing != null && existing > 0) {
+            return;
+        }
+        String prefix = StringUtils.hasText(contract.getCustomerName()) ? contract.getCustomerName() + " - " : "";
+        for (String name : DELIVERY_TASKS) {
+            BizTask task = new BizTask();
+            task.setTitle(prefix + name);
+            task.setTaskType("service");
+            task.setBizId(contract.getId());
+            task.setBizType("contract");
+            task.setCustomerId(contract.getCustomerId());
+            task.setPriority(2);
+            task.setDescription("合同[" + contract.getContractNo() + "]签署后自动派发的交付任务");
+            taskService.createTask(task); // executorId 为空 → 状态置"待指派"
+        }
+        log.info("合同[{}]签署,自动派发 {} 个交付任务", contract.getContractNo(), DELIVERY_TASKS.length);
     }
 
     @Override

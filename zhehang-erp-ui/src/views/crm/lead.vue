@@ -1677,7 +1677,7 @@ const openRules = async () => {
 }
 const openGlobalDistributeConfig = () => {
   rulesDialog.visible = false
-  router.push('/system/distribute-config')
+  router.push('/system/operation?tab=distribution')
 }
 
 const savePoolRules = async () => {

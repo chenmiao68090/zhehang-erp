@@ -220,7 +220,7 @@ const seedNotifications: NotificationItem[] = [
     module: '系统管理',
     scene: '规则引擎',
     sender: '回收规则',
-    link: '/system/recycle-config',
+    link: '/system/operation?tab=recycle',
     actionText: '查看规则',
     tags: ['公海', '回收'],
     isRead: true,

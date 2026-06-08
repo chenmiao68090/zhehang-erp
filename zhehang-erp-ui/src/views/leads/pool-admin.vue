@@ -935,7 +935,7 @@ const resetGrab = () => {
 }
 
 // ============ 路由 ============
-const goBack = () => router.push('/leads/operation')
+const goBack = () => router.push('/system/operation?tab=distribution')
 
 // ============ 初始化 ============
 onMounted(async () => {

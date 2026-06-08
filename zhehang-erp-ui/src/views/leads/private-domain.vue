@@ -8223,7 +8223,7 @@ function goOnlineLeads() {
 }
 
 function goDistribution() {
-  router.push('/system/distribute-config')
+  router.push('/system/operation?tab=distribution')
 }
 
 function goAction(path: string) {

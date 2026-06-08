@@ -713,7 +713,7 @@ async function confirmResolve() {
   }
 }
 
-function back() { router.push('/leads/operation') }
+function back() { router.push('/system/operation?tab=distribution') }
 </script>
 
 <style lang="scss" scoped>

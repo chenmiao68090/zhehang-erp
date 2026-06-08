@@ -486,6 +486,30 @@
               <div><span>错误</span><b>{{ previewStats.error }}</b></div>
               <div><span>工商命中</span><b>{{ previewStats.verified }}</b></div>
             </div>
+            <div v-if="lastImportResult" class="import-next-panel">
+              <div class="import-next-head">
+                <div>
+                  <strong>导入后下一步队列</strong>
+                  <p>本次导入 {{ lastImportResult.imported }} 条,重复 {{ lastImportResult.duplicate }} 条,错误 {{ lastImportResult.failed }} 条。导入后先做核验、触达和意向推进。</p>
+                </div>
+                <el-tag type="success" effect="plain">已导入</el-tag>
+              </div>
+              <div class="import-next-grid">
+                <button
+                  v-for="item in importNextStepItems"
+                  :key="item.key"
+                  type="button"
+                  class="import-next-card"
+                  :class="item.level"
+                  @click="handleImportNextStep(item.action)"
+                >
+                  <span>{{ item.statusText }}</span>
+                  <b>{{ item.value }}</b>
+                  <strong>{{ item.title }}</strong>
+                  <em>{{ item.desc }}</em>
+                </button>
+              </div>
+            </div>
             <el-table :data="importPreview" border stripe height="360" empty-text="请先下载模板并导入 CSV 或粘贴 Excel 内容">
               <el-table-column prop="rowNo" label="行号" width="80" />
               <el-table-column label="状态" width="100">
@@ -2374,6 +2398,16 @@ interface ImportQualityItem {
   statusText: string
   desc: string
 }
+type ImportNextAction = 'verify' | 'today_touch' | 'intent' | 'online_lead'
+interface ImportNextStepItem {
+  key: string
+  title: string
+  value: number
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  statusText: string
+  desc: string
+  action: ImportNextAction
+}
 interface WecomCheckItem {
   key: string
   label: string
@@ -2540,6 +2574,7 @@ const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
 const importFileName = ref('')
 const pasteText = ref('')
+const lastImportResult = ref<{ imported: number; duplicate: number; failed: number } | null>(null)
 const importing = ref(false)
 const fileInputRef = ref<HTMLInputElement>()
 const batchVerifyingContacts = ref(false)
@@ -2914,6 +2949,50 @@ const importQualitySummary = computed(() => {
   if (previewStats.value.error > 0) return `有 ${previewStats.value.error} 行错误,先修正必填字段再导入。`
   if (previewStats.value.duplicate > 0) return `有 ${previewStats.value.duplicate} 行重复风险,建议先确认归属再导入。`
   return `当前 ${previewStats.value.ready} 行可导入,工商命中 ${previewStats.value.verified} 行。`
+})
+const importNextStepItems = computed<ImportNextStepItem[]>(() => {
+  const unverified = contacts.value.filter(isUnverifiedContact).length
+  const todayUnfollowed = contacts.value.filter(isTodayUnfollowed).length
+  const intent = contacts.value.filter(isIntentContact).length
+  const unconverted = contacts.value.filter(item => !item.convertedLeadId && (isIntentContact(item) || item.verification?.matched)).length
+  return [
+    {
+      key: 'verify',
+      title: '先核验公司主体',
+      value: unverified,
+      level: unverified > 0 ? 'danger' : 'success',
+      statusText: unverified > 0 ? '待核验' : '已核验',
+      desc: '公司名称核准后,工商信息、撞单、归属和报价口径才稳定。',
+      action: 'verify'
+    },
+    {
+      key: 'today-touch',
+      title: '安排今日首触',
+      value: todayUnfollowed,
+      level: todayUnfollowed > 0 ? 'warning' : 'success',
+      statusText: todayUnfollowed > 0 ? '待触达' : '已触达',
+      desc: '导入后当天要有负责人和下一动作,避免客户进库后沉默。',
+      action: 'today_touch'
+    },
+    {
+      key: 'intent',
+      title: '推进高意向报价',
+      value: intent,
+      level: intent > 0 ? 'primary' : 'success',
+      statusText: intent > 0 ? '可推进' : '待培育',
+      desc: '高意向客户优先补需求、预算、报价和提单草稿。',
+      action: 'intent'
+    },
+    {
+      key: 'online',
+      title: '挂接网销线索',
+      value: unconverted,
+      level: unconverted > 0 ? 'primary' : 'success',
+      statusText: unconverted > 0 ? '可入库' : '已处理',
+      desc: '适合网销承接的客户要挂到线索池,方便分配、ROI 和后续成交统计。',
+      action: 'online_lead'
+    }
+  ]
 })
 const wecomReady = computed(() => Boolean(wecomConfig.corpId && wecomConfig.contactSecret && wecomConfig.token && wecomConfig.aesKey))
 const wecomSyncScopes = computed(() => [
@@ -5880,6 +5959,7 @@ function clearImportPreview() {
   importPreview.value = []
   importFileName.value = ''
   pasteText.value = ''
+  lastImportResult.value = null
 }
 
 async function importValidRows() {
@@ -5892,12 +5972,24 @@ async function importValidRows() {
     const result = await privateDomainApi.importContacts(importPreview.value.map(item => item.data))
     importPreview.value = result.preview
     await loadContacts()
-    activeTab.value = 'contacts'
+    lastImportResult.value = { imported: result.imported, duplicate: result.duplicate, failed: result.failed }
     ElMessage.success(`已导入 ${result.imported} 条,重复 ${result.duplicate} 条,错误 ${result.failed} 条`)
   } catch (error: any) {
     ElMessage.error(error?.message || '导入失败')
   } finally {
     importing.value = false
+  }
+}
+
+function handleImportNextStep(action: ImportNextAction) {
+  activeTab.value = 'contacts'
+  if (action === 'verify') contactQuickFilter.value = 'unverified'
+  else if (action === 'today_touch') contactQuickFilter.value = 'today_unfollowed'
+  else if (action === 'intent') contactQuickFilter.value = 'intent'
+  else contactQuickFilter.value = 'intent'
+  scrollPrivateTabsIntoView()
+  if (action === 'online_lead') {
+    ElMessage.info('已切到高意向客户,可在客户详情里执行“入库线索”。')
   }
 }
 
@@ -9330,6 +9422,106 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.import-next-panel {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.import-next-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.import-next-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.import-next-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #ef4444;
+  }
+
+  &.primary {
+    border-left-color: #245bdb;
+  }
+
+  span {
+    width: fit-content;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #e0edff;
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  b {
+    color: #111827;
+    font-size: 22px;
+    line-height: 1.1;
+  }
+
+  strong,
+  em {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  em {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.5;
+  }
+}
+
 .template-table {
   margin-top: 12px;
 }
@@ -10667,6 +10859,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .toolbar,
   .preview-summary,
   .import-quality-grid,
+  .import-next-grid,
   .contact-ops-summary,
   .contact-duty-grid,
   .contact-ownership-metrics,
@@ -10727,6 +10920,10 @@ watch(() => route.fullPath, applyRouteQueue)
     span {
       text-align: left;
     }
+  }
+
+  .import-next-head {
+    flex-direction: column;
   }
 
   .wecom-check-head {

@@ -470,6 +470,34 @@
             </el-button>
           </div>
 
+          <div v-if="mustHandleQueue.length" class="must-handle-panel">
+            <div class="must-handle-head">
+              <div>
+                <strong>今日必须处理</strong>
+                <span>{{ mustHandleStats.total }} 个待处理 · {{ mustHandleStats.danger }} 个阻断 · {{ mustHandleStats.warning }} 个预警</span>
+              </div>
+              <el-tag type="primary" effect="plain">按风险和成交链路排序</el-tag>
+            </div>
+            <div class="must-handle-list">
+              <div v-for="item in mustHandleQueue" :key="item.key" class="must-handle-item" :class="item.level">
+                <button type="button" class="must-handle-main" @click.stop="openContact(item.contact)">
+                  <span>{{ item.reason }}</span>
+                  <strong>{{ item.contact.companyName }}</strong>
+                  <em>{{ item.title }} · {{ item.ownerName }}</em>
+                  <small>{{ item.desc }}</small>
+                </button>
+                <el-button
+                  size="small"
+                  :type="item.level === 'danger' ? 'danger' : item.level === 'warning' ? 'warning' : 'primary'"
+                  plain
+                  @click.stop="handleContactActionItem(item.contact, item.actionKey)"
+                >
+                  {{ item.actionLabel }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+
           <el-table v-loading="loading" :data="filteredContactRows" border stripe height="560">
             <template #empty>
               <div class="delivery-empty-state contact-empty-state">
@@ -1803,6 +1831,25 @@ const contactQuickHint = computed(() => ({
   intent: '高分或已进入意向/报价/成交阶段的客户,需要优先跟进和提单。',
   unverified: '还没有完成工商核验的客户,先核公司主体再推进报价。'
 } as Record<ContactQuickFilter, string>)[contactQuickFilter.value])
+const mustHandleQueue = computed(() => contacts.value
+  .map(row => contactMustHandleItem(row))
+  .filter((item): item is ContactMustHandleItem => Boolean(item))
+  .sort((left, right) => {
+    if (left.sort !== right.sort) return right.sort - left.sort
+    return right.contact.score - left.contact.score
+  })
+  .slice(0, 6))
+const mustHandleStats = computed(() => {
+  const all = contacts.value
+    .map(row => contactMustHandleItem(row))
+    .filter((item): item is ContactMustHandleItem => Boolean(item))
+  return {
+    total: all.length,
+    danger: all.filter(item => item.level === 'danger').length,
+    warning: all.filter(item => item.level === 'warning').length,
+    primary: all.filter(item => item.level === 'primary').length
+  }
+})
 const filteredContactRows = computed(() => {
   if (contactQuickFilter.value === 'today_unfollowed') return contacts.value.filter(isTodayUnfollowed)
   if (contactQuickFilter.value === 'intent') return contacts.value.filter(isIntentContact)
@@ -2197,6 +2244,19 @@ interface ContactDutyItem {
   actionPrimary?: boolean
 }
 
+interface ContactMustHandleItem {
+  key: string
+  contact: PrivateContact
+  level: 'danger' | 'warning' | 'primary' | 'success' | 'info'
+  reason: string
+  title: string
+  desc: string
+  ownerName: string
+  actionLabel: string
+  actionKey: ContactActionKey
+  sort: number
+}
+
 const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
 const contactTimelineTypeMeta: Record<PrivateTimelineType, { label: string; desc: string }> = {
   verify: { label: '工商核验', desc: '主体、撞单和税务资质' },
@@ -2393,6 +2453,105 @@ function contactOpenTasks(row: PrivateContact) {
     if (task.companyName !== row.companyName || task.contactName !== row.name) return false
     return task.status !== 'done'
   })
+}
+
+function contactMustHandleItem(row: PrivateContact): ContactMustHandleItem | null {
+  const record = contactLatestDealRecord(row)
+  const delivery = contactDeliveryPackage(row)
+  const overdueCount = delivery ? deliveryOverdueCount(delivery) : 0
+  const ownerName = row.ownerName || '待分配'
+
+  if (delivery && overdueCount > 0) {
+    return {
+      key: `delivery-overdue-${row.id}`,
+      contact: row,
+      level: 'danger',
+      reason: '交付逾期',
+      title: `${delivery.packageName} 有 ${overdueCount} 个逾期任务`,
+      desc: '先确认交付负责人、补救节点和客户同步口径。',
+      ownerName: delivery.ownerName || ownerName,
+      actionLabel: '看交付包',
+      actionKey: 'delivery_tab',
+      sort: 100
+    }
+  }
+
+  if ((row.stage === 'ordered' || record?.orderStatus === 'completed') && !delivery) {
+    return {
+      key: `delivery-missing-${row.id}`,
+      contact: row,
+      level: 'danger',
+      reason: '成交待交付',
+      title: '成交/审批完成但还没有交付包',
+      desc: '当天补建交付包,把工商、财税、地址和财务责任拆出来。',
+      ownerName,
+      actionLabel: '生成交付包',
+      actionKey: 'delivery',
+      sort: 95
+    }
+  }
+
+  if (isUnverifiedContact(row)) {
+    return {
+      key: `verify-${row.id}`,
+      contact: row,
+      level: 'warning',
+      reason: '待工商核验',
+      title: '公司主体未核准',
+      desc: '先核企业状态、税务资质和撞单风险,再报价/提单。',
+      ownerName,
+      actionLabel: '去核验',
+      actionKey: 'verify',
+      sort: 85
+    }
+  }
+
+  if (isTodayUnfollowed(row)) {
+    return {
+      key: `touch-${row.id}`,
+      contact: row,
+      level: 'warning',
+      reason: '今日未触达',
+      title: '今天还没有跟进留痕',
+      desc: '先安排电话/企微触达,把客户反馈和下次动作补进系统。',
+      ownerName,
+      actionLabel: hasOpenFollowTask(row) ? '记录跟进' : '建任务',
+      actionKey: hasOpenFollowTask(row) ? 'follow_record' : 'follow_task',
+      sort: 75
+    }
+  }
+
+  if (record?.orderNo && record.orderStatus !== 'completed') {
+    return {
+      key: `order-${row.id}`,
+      contact: row,
+      level: 'primary',
+      reason: '提单审批中',
+      title: `${record.orderNo} ${orderStatusText(record.orderStatus)}`,
+      desc: '销售继续盯审批、财务收款和客户确认,避免提单卡住。',
+      ownerName,
+      actionLabel: '看审批队列',
+      actionKey: 'follow_queue',
+      sort: 70
+    }
+  }
+
+  if (isIntentContact(row) && !delivery) {
+    return {
+      key: `intent-${row.id}`,
+      contact: row,
+      level: 'primary',
+      reason: '高意向',
+      title: '高意向客户需要当天报价',
+      desc: `评分 ${row.score},预计商机 ¥${formatMoney(row.estimatedAmount)},建议补报价和下次触达。`,
+      ownerName,
+      actionLabel: '记录报价',
+      actionKey: 'follow_record',
+      sort: 60
+    }
+  }
+
+  return null
 }
 
 function contactDutyItems(row: PrivateContact): ContactDutyItem[] {
@@ -4744,6 +4903,114 @@ watch(() => route.fullPath, applyRouteQueue)
   line-height: 1.6;
 }
 
+.must-handle-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.must-handle-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  div {
+    display: grid;
+    gap: 4px;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 15px;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+}
+
+.must-handle-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.must-handle-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.primary {
+    border-color: #bfdbfe;
+    background: #f8fbff;
+  }
+}
+
+.must-handle-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    width: fit-content;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #e0edff;
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  strong,
+  em,
+  small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 13px;
+  }
+
+  em,
+  small {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+  }
+}
+
 .delivery-empty-state {
   display: grid;
   gap: 14px;
@@ -6207,6 +6474,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .preview-summary,
   .contact-ops-summary,
   .contact-duty-grid,
+  .must-handle-list,
+  .must-handle-item,
   .audit-metrics,
   .audit-issue,
   .task-execution-summary,
@@ -6227,6 +6496,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .audit-head {
+    flex-direction: column;
+  }
+
+  .must-handle-head {
     flex-direction: column;
   }
 

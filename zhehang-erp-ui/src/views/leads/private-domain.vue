@@ -973,6 +973,56 @@
               <div><span>待锁地址</span><b>{{ deliveryStats.addressUnlocked }}</b></div>
               <div><span>待绑资源</span><b>{{ deliveryStats.addressUnbound }}</b></div>
             </div>
+            <div v-if="deliveryStats.all === 0" class="delivery-starter-panel">
+              <div class="delivery-starter-head">
+                <div>
+                  <strong>首个交付包生成向导</strong>
+                  <p>从已成交、审批完成或已报价客户里直接找到下一步，避免销售签单后没有交付入口。</p>
+                </div>
+                <el-tag type="primary" effect="plain">建包前检查</el-tag>
+              </div>
+              <div class="delivery-starter-metrics">
+                <div><span>可建包</span><b>{{ deliveryStarterStats.ready }}</b></div>
+                <div><span>审批中</span><b>{{ deliveryStarterStats.approving }}</b></div>
+                <div><span>已报价</span><b>{{ deliveryStarterStats.quoted }}</b></div>
+                <div><span>高意向</span><b>{{ deliveryStarterStats.intent }}</b></div>
+              </div>
+              <div v-if="deliveryStarterCandidates.length" class="delivery-starter-list">
+                <div
+                  v-for="item in deliveryStarterCandidates"
+                  :key="item.key"
+                  class="delivery-starter-card"
+                  :class="item.level"
+                >
+                  <div class="delivery-starter-card-head">
+                    <strong>{{ item.contact.companyName }}</strong>
+                    <el-tag :type="deliveryStarterTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.title }}</p>
+                  <div class="delivery-starter-meta">
+                    <span>{{ item.contact.ownerName }}</span>
+                    <span>{{ item.contact.serviceLine || '服务线待补' }}</span>
+                    <span>¥{{ formatMoney(item.amount) }}</span>
+                  </div>
+                  <em>{{ item.desc }}</em>
+                  <el-button
+                    size="small"
+                    :type="item.canCreate ? 'primary' : 'default'"
+                    :plain="!item.canCreate"
+                    :loading="item.canCreate && isCreatingDelivery(item.contact.id)"
+                    :disabled="item.canCreate && isCreatingDelivery(item.contact.id)"
+                    @click.stop="handleDeliveryStarterCandidate(item)"
+                  >
+                    {{ item.actionLabel }}
+                  </el-button>
+                </div>
+              </div>
+              <div v-else class="delivery-starter-empty">
+                <el-tag type="warning" size="small" effect="plain">先补漏斗</el-tag>
+                <span>当前还没有可转交付的成交或报价客户，建议先导入私域客户，再完成跟进、报价、提单和审批。</span>
+                <el-button size="small" type="primary" plain @click="goImportPrivateContacts">导入私域客户</el-button>
+              </div>
+            </div>
             <div class="delivery-sla-overview" :class="{ clear: deliveryStats.slaAttention === 0 }">
               <div class="delivery-sla-overview-head">
                 <div>
@@ -3213,6 +3263,112 @@ const deliveryStats = computed(() => ({
   done: deliveryPackages.value.filter(item => item.status === 'done').length,
   pending: deliveryPackages.value.filter(item => item.status !== 'done').length
 }))
+const deliveryStarterCandidates = computed<DeliveryStarterCandidate[]>(() => contacts.value
+  .filter(item => !hasDeliveryPackage(item.id))
+  .map(row => {
+    const record = contactLatestDealRecord(row)
+    const latestFollow = contactFollowRecords(row)[0]
+    const amount = Number(record?.quotedAmount || latestFollow?.quotedAmount || row.estimatedAmount || 0)
+    if (record?.orderStatus === 'completed') {
+      return {
+        key: `completed-${row.id}`,
+        contact: row,
+        record,
+        level: 'success',
+        statusText: '审批完成',
+        title: '提单审批已完成,今天应直接生成交付包。',
+        desc: `${record.orderNo || '提单'} · ${record.createdAt} · ${row.ownerName} 负责交接`,
+        actionLabel: '生成交付包',
+        canCreate: true,
+        amount,
+        sort: 100
+      } as DeliveryStarterCandidate
+    }
+    if (row.stage === 'ordered') {
+      return {
+        key: `ordered-${row.id}`,
+        contact: row,
+        record,
+        level: 'success',
+        statusText: '已成交',
+        title: '客户阶段已成交但还没有交付包,先补建包防止掉单。',
+        desc: `${row.serviceLine || '服务线待补'} · 预计 ¥${formatMoney(amount)} · ${row.nextAction || '需要交付接手'}`,
+        actionLabel: '生成交付包',
+        canCreate: true,
+        amount,
+        sort: 90
+      } as DeliveryStarterCandidate
+    }
+    if (record?.orderNo) {
+      return {
+        key: `approving-${row.id}`,
+        contact: row,
+        record,
+        level: 'warning',
+        statusText: orderStatusText(record.orderStatus),
+        title: '提单已生成,先盯审批和收款,完成后再建包。',
+        desc: `${record.orderNo} · 报价 ¥${formatMoney(amount)} · ${record.nextAction || '等待审批完成'}`,
+        actionLabel: '盯审批队列',
+        canCreate: false,
+        amount,
+        sort: 80,
+        followFilter: 'order_pending'
+      } as DeliveryStarterCandidate
+    }
+    if (record || row.stage === 'quoted') {
+      return {
+        key: `quoted-${row.id}`,
+        contact: row,
+        record,
+        level: 'primary',
+        statusText: '已报价',
+        title: '已有报价但未形成提单,需要先补提单草稿。',
+        desc: `${record?.createdAt || row.lastTouchAt || '最近跟进'} · 报价 ¥${formatMoney(amount)} · ${row.ownerName}`,
+        actionLabel: record ? '生成提单' : '补跟进报价',
+        canCreate: false,
+        amount,
+        sort: 70,
+        followFilter: record ? 'quote_no_order' : undefined
+      } as DeliveryStarterCandidate
+    }
+    if (isIntentContact(row)) {
+      return {
+        key: `intent-${row.id}`,
+        contact: row,
+        level: 'primary',
+        statusText: '高意向',
+        title: '高意向客户还没进入报价提单链路,先补一次成交跟进。',
+        desc: `评分 ${row.score} · 预计 ¥${formatMoney(amount)} · ${row.demand || row.nextAction || '待确认需求'}`,
+        actionLabel: '补跟进',
+        canCreate: false,
+        amount,
+        sort: 60
+      } as DeliveryStarterCandidate
+    }
+    return null
+  })
+  .filter((item): item is DeliveryStarterCandidate => Boolean(item))
+  .sort((left, right) => {
+    if (left.sort !== right.sort) return right.sort - left.sort
+    if (left.amount !== right.amount) return right.amount - left.amount
+    return right.contact.score - left.contact.score
+  })
+  .slice(0, 4))
+const deliveryStarterStats = computed(() => {
+  const noPackageContacts = contacts.value.filter(item => !hasDeliveryPackage(item.id))
+  return {
+    ready: noPackageContacts.filter(item => item.stage === 'ordered' || contactLatestDealRecord(item)?.orderStatus === 'completed').length,
+    approving: noPackageContacts.filter(item => {
+      const record = contactLatestDealRecord(item)
+      return Boolean(record?.orderNo && record.orderStatus !== 'completed')
+    }).length,
+    quoted: noPackageContacts.filter(item => {
+      const record = contactLatestDealRecord(item)
+      return item.stage === 'quoted' || Boolean(record && !record.orderNo)
+    }).length,
+    intent: noPackageContacts.filter(item => isIntentContact(item)).length
+  }
+})
 const deliverySlaQueue = computed<DeliverySlaQueueItem[]>(() => deliveryPackages.value
   .map(deliverySlaQueueItem)
   .filter((item): item is DeliverySlaQueueItem => Boolean(item))
@@ -3490,6 +3646,21 @@ interface DeliverySlaQueueItem {
   title: string
   desc: string
   sort: number
+}
+
+interface DeliveryStarterCandidate {
+  key: string
+  contact: PrivateContact
+  record?: PrivateFollowRecord
+  level: 'success' | 'warning' | 'primary'
+  statusText: string
+  title: string
+  desc: string
+  actionLabel: string
+  canCreate: boolean
+  amount: number
+  sort: number
+  followFilter?: FollowFilter
 }
 
 const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
@@ -4767,6 +4938,10 @@ function deliverySlaQueueTag(level: DeliverySlaQueueItem['level']) {
   return level
 }
 
+function deliveryStarterTag(level: DeliveryStarterCandidate['level']) {
+  return level
+}
+
 function showDeliverySlaRisk() {
   focusedDeliveryPackageId.value = null
   deliveryFilter.value = 'sla_risk'
@@ -5949,6 +6124,25 @@ async function createDeliveryFromFollow(row: PrivateFollowRecord) {
     return
   }
   await createDeliveryPackage(contact)
+}
+
+async function handleDeliveryStarterCandidate(item: DeliveryStarterCandidate) {
+  if (item.canCreate) {
+    await createDeliveryPackage(item.contact)
+    return
+  }
+  if (item.record && !item.record.orderNo) {
+    await createOrderDraft(item.record)
+    return
+  }
+  if (item.followFilter) {
+    activeTab.value = 'follow'
+    followFilter.value = item.followFilter
+    scrollPrivateTabsIntoView()
+    ElMessage.info(item.followFilter === 'order_pending' ? '已切到审批中提单队列,先盯审批和收款。' : '已切到已报价未提单队列,先补提单草稿。')
+    return
+  }
+  openFollowDialog(item.contact)
 }
 
 async function updateDeliveryTaskState(row: PrivateDeliveryPackage, task: PrivateTask, status: PrivateTaskStatus, successMessage: string) {
@@ -7169,6 +7363,161 @@ watch(() => route.fullPath, applyRouteQueue)
     color: #111827;
     font-size: 20px;
   }
+}
+
+.delivery-starter-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.delivery-starter-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 15px;
+  }
+
+  p {
+    max-width: 720px;
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.delivery-starter-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 18px;
+  }
+}
+
+.delivery-starter-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.delivery-starter-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.primary {
+    border-left-color: #245bdb;
+  }
+
+  p,
+  em {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  p {
+    color: #111827;
+    font-weight: 700;
+  }
+
+  em {
+    display: -webkit-box;
+    overflow: hidden;
+    font-style: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  :deep(.el-button) {
+    justify-self: flex-start;
+  }
+}
+
+.delivery-starter-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.delivery-starter-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 12px;
+  }
+}
+
+.delivery-starter-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .follow-funnel-panel {
@@ -9872,6 +10221,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .task-metrics,
   .task-group-item,
   .delivery-summary,
+  .delivery-starter-metrics,
+  .delivery-starter-list,
   .delivery-sla-overview-metrics,
   .delivery-sla-queue-item,
   .delivery-progress-stats,
@@ -9936,6 +10287,15 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .delivery-sla-overview-head {
+    flex-direction: column;
+  }
+
+  .delivery-starter-head {
+    flex-direction: column;
+  }
+
+  .delivery-starter-empty {
+    align-items: flex-start;
     flex-direction: column;
   }
 

@@ -2573,6 +2573,29 @@ function focusTaskGroup(group: TaskGroupSummary) {
   ElMessage.warning('未找到关联客户或交付包,请刷新后重试')
 }
 
+function taskOpenItemsAfterUpdate(row: PrivateTask, delivery?: PrivateDeliveryPackage) {
+  if (delivery) {
+    const currentDelivery = deliveryPackages.value.find(item => item.id === delivery.id)
+    if (currentDelivery) return currentDelivery.tasks.filter(item => item.status !== 'done')
+  }
+  return tasks.value.filter(item => item.companyName === row.companyName && item.contactName === row.contactName && item.status !== 'done')
+}
+
+function taskReviewSubject(row: PrivateTask, delivery?: PrivateDeliveryPackage) {
+  if (delivery) return delivery.packageName
+  return row.companyName
+}
+
+function taskCompletionReviewText(row: PrivateTask, delivery?: PrivateDeliveryPackage) {
+  const remaining = taskOpenItemsAfterUpdate(row, delivery)
+  const overdue = remaining.filter(item => item.status === 'overdue')
+  const subject = taskReviewSubject(row, delivery)
+  if (overdue.length > 0) return `任务已完成,但「${subject}」还有 ${overdue.length} 个逾期任务,建议先做补救复盘。`
+  if (remaining.length > 0) return `任务已完成,「${subject}」还有 ${remaining.length} 个待处理任务,请继续推进。`
+  if (delivery) return `任务已完成,「${subject}」任务已闭环,可安排客户回访、续费或资料归档。`
+  return `任务已完成,「${subject}」当前任务已闭环,建议补一条跟进复盘。`
+}
+
 function isSupervisorTask(task: PrivateTask) {
   return task.title.includes('督办') || task.action.includes('来源交付任务')
 }
@@ -3691,11 +3714,12 @@ async function createAddressReplenishTask(item: PrivateAddressInventory) {
 
 async function updatePrivateTaskStatus(row: PrivateTask, status: PrivateTaskStatus) {
   if (isUpdatingTask(row.id)) return
+  const relatedDelivery = taskDeliveryPackage(row)
   taskUpdatingIds.value = [...taskUpdatingIds.value, row.id]
   try {
     await privateDomainApi.updateTaskStatus(row.id, status)
     await loadDashboard()
-    ElMessage.success(status === 'done' ? '任务已完成' : '任务已恢复待处理')
+    ElMessage.success(status === 'done' ? taskCompletionReviewText(row, relatedDelivery) : '任务已恢复待处理,已重新进入执行队列')
   } catch (error: any) {
     ElMessage.error(error?.message || '更新任务失败')
   } finally {

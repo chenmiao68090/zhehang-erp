@@ -301,6 +301,8 @@ export interface PrivateContent {
   relatedService: string
 }
 
+export type PrivateContentPayload = Partial<PrivateContent> & Pick<PrivateContent, 'title' | 'type' | 'target' | 'ownerName' | 'relatedService'>
+
 export interface PrivateTask {
   id: number
   title: string
@@ -2041,6 +2043,36 @@ export const privateDomainApi = {
     else rules.unshift({ ...payload, id: maxId(rules) + 1 })
     writeOwnershipRules(rules)
     return delay(payload)
+  },
+  async saveContent(payload: PrivateContentPayload) {
+    ensureSeeds()
+    const contents = readList<PrivateContent>(CONTENT_KEY)
+    const idx = contents.findIndex(item => item.id === payload.id)
+    const title = cleanText(payload.title)
+    const target = cleanText(payload.target)
+    const ownerName = cleanText(payload.ownerName)
+    const relatedService = cleanText(payload.relatedService)
+    if (!title) throw new Error('请填写内容主题')
+    if (!target) throw new Error('请填写目标人群')
+    if (!relatedService) throw new Error('请填写服务线')
+    const content: PrivateContent = {
+      id: idx >= 0 ? contents[idx].id : maxId(contents) + 1,
+      title,
+      type: payload.type || '朋友圈',
+      target,
+      ownerName: ownerName || '内容运营',
+      publishAt: cleanText(payload.publishAt) || ts(),
+      status: payload.status || 'draft',
+      reachCount: Math.max(0, Number(payload.reachCount || 0)),
+      interactCount: Math.max(0, Number(payload.interactCount || 0)),
+      leadCount: Math.max(0, Number(payload.leadCount || 0)),
+      orderCount: Math.max(0, Number(payload.orderCount || 0)),
+      relatedService
+    }
+    if (idx >= 0) contents[idx] = content
+    else contents.unshift(content)
+    writeList(CONTENT_KEY, contents)
+    return delay(content)
   },
   async getWecomConfig() {
     ensureSeeds()

@@ -846,7 +846,10 @@
                 <h2>内容触达运营台</h2>
                 <p>把朋友圈、社群、公众号文章和销售话术挂到服务线、菜单入口和留资表,让内容能真正带来客户和成交。</p>
               </div>
-              <el-tag type="success" effect="plain">{{ contentStats.published }} 个已发布</el-tag>
+              <div class="content-panel-actions">
+                <el-tag type="success" effect="plain">{{ contentStats.published }} 个已发布</el-tag>
+                <el-button type="primary" size="small" @click="openContentForm()">新增素材</el-button>
+              </div>
             </div>
             <div class="content-summary">
               <div><span>内容素材</span><b>{{ contentStats.total }}</b></div>
@@ -889,7 +892,8 @@
                 <strong>还没有内容素材</strong>
                 <p>先围绕代理记账、地址挂靠、同行渠道和电商财税补文章、话术或社群推送,再挂到公众号菜单和留资表。</p>
                 <div>
-                  <el-button type="primary" plain size="small" @click="activeTab = 'config'">先配置公众号接入</el-button>
+                  <el-button type="primary" plain size="small" @click="openContentForm()">新增内容素材</el-button>
+                  <el-button size="small" @click="activeTab = 'config'">先配置公众号接入</el-button>
                   <el-button size="small" @click="syncHint">同步私域数据</el-button>
                 </div>
               </div>
@@ -913,6 +917,12 @@
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="contentStatusTag(row.status)" size="small">{{ contentStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="150" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" link size="small" @click="openContentForm(row)">编辑</el-button>
+                <el-button link size="small" @click="duplicateContent(row)">复制</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -2248,6 +2258,77 @@
       </template>
     </BusinessDetailDrawer>
 
+    <el-drawer
+      v-model="contentDrawer.visible"
+      :title="contentDrawer.editingId ? '编辑内容素材' : '新增内容素材'"
+      size="560px"
+      append-to-body
+    >
+      <el-form label-position="top" class="content-form">
+        <el-form-item label="内容主题">
+          <el-input v-model="contentForm.title" placeholder="例如：新公司开办后 30 天必须做的 5 件事" />
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="内容类型">
+              <el-select v-model="contentForm.type">
+                <el-option v-for="item in contentTypeOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="状态">
+              <el-select v-model="contentForm.status">
+                <el-option v-for="item in contentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="服务线">
+              <el-select v-model="contentForm.relatedService" filterable allow-create default-first-option>
+                <el-option v-for="item in serviceOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="负责人">
+              <el-input v-model="contentForm.ownerName" placeholder="例如：内容运营 / 网销一组" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="目标人群/触点">
+          <el-input v-model="contentForm.target" placeholder="例如：新设企业标签 / 经营异常解除答疑群" />
+        </el-form-item>
+        <el-form-item label="发布时间">
+          <el-input v-model="contentForm.publishAt" placeholder="例如：2026-06-08 18:00" />
+        </el-form-item>
+        <div class="content-form-metrics">
+          <el-form-item label="触达人数">
+            <el-input-number v-model="contentForm.reachCount" :min="0" :step="100" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="互动数">
+            <el-input-number v-model="contentForm.interactCount" :min="0" :step="10" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="线索数">
+            <el-input-number v-model="contentForm.leadCount" :min="0" :step="1" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="成交数">
+            <el-input-number v-model="contentForm.orderCount" :min="0" :step="1" controls-position="right" />
+          </el-form-item>
+        </div>
+        <div class="content-form-tip">
+          <strong>落地口径</strong>
+          <p>新增素材后会立刻参与公众号菜单映射、内容触达统计和转化率计算。发布前先保证服务线、目标人群和留资动作能对上。</p>
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="contentDrawer.visible = false">取消</el-button>
+        <el-button type="primary" :loading="contentSaving" @click="saveContentForm">保存素材</el-button>
+      </template>
+    </el-drawer>
+
     <el-dialog v-model="followDialog.visible" title="记录私域跟进" width="640px" class="follow-dialog" append-to-body>
       <el-form label-position="top" class="follow-form">
         <el-row :gutter="12">
@@ -2335,6 +2416,7 @@ import {
   type PrivateCompanyVerification,
   type PrivateContactImportRow,
   type PrivateContent,
+  type PrivateContentPayload,
   type PrivateDailyAction,
   type PrivateDeliveryPackage,
   type PrivateDeliveryStatus,
@@ -2407,6 +2489,15 @@ interface ImportNextStepItem {
   statusText: string
   desc: string
   action: ImportNextAction
+}
+type ContentFormModel = PrivateContentPayload & {
+  id?: number
+  publishAt: string
+  status: PrivateContent['status']
+  reachCount: number
+  interactCount: number
+  leadCount: number
+  orderCount: number
 }
 interface WecomCheckItem {
   key: string
@@ -2535,6 +2626,7 @@ const loading = ref(false)
 const contacts = ref<PrivateContact[]>([])
 const groups = ref<PrivateGroup[]>([])
 const contents = ref<PrivateContent[]>([])
+const contentDrawer = reactive<{ visible: boolean; editingId?: number }>({ visible: false })
 const tasks = ref<PrivateTask[]>([])
 const addressInventory = ref<PrivateAddressInventory[]>([])
 const addressLocks = ref<PrivateAddressLock[]>([])
@@ -2563,6 +2655,7 @@ const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
 const wecomSaving = ref(false)
 const wechatServiceSaving = ref(false)
+const contentSaving = ref(false)
 const followSaving = ref(false)
 const contactQuickFilter = ref<ContactQuickFilter>('all')
 const followFilter = ref<FollowFilter>('all')
@@ -2669,6 +2762,19 @@ const followForm = reactive<PrivateFollowCreatePayload>({
   nextTouchAt: '',
   ownerName: ''
 })
+const contentForm = reactive<ContentFormModel>({
+  title: '',
+  type: '朋友圈',
+  target: '',
+  ownerName: '内容运营',
+  publishAt: '',
+  status: 'draft',
+  reachCount: 0,
+  interactCount: 0,
+  leadCount: 0,
+  orderCount: 0,
+  relatedService: '代理记账'
+})
 const opsProfile = reactive<PrivateOpsProfile>({
   companyName: '浙杭集团',
   city: '杭州',
@@ -2719,6 +2825,12 @@ const wechatServiceConfig = reactive<PrivateWechatServiceConfig>({
 const sourceOptions: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
 const coreOwnershipSources: PrivateSource[] = ['企业微信', '微信群', '公众号', '老客转介绍']
 const serviceOptions = ['代理记账', '工商注册', '地址挂靠', '异常解除', '税务筹划', '公司注销', '同行渠道', '财税体检', '出口退税']
+const contentTypeOptions: PrivateContent['type'][] = ['朋友圈', '社群推送', '公众号文章', '视频号直播', '销售话术']
+const contentStatusOptions: Array<{ label: string; value: PrivateContent['status'] }> = [
+  { label: '草稿', value: 'draft' },
+  { label: '待发布', value: 'scheduled' },
+  { label: '已发布', value: 'published' }
+]
 const departmentOptions = ['网销运营', '私域运营', '电销坐席', '销售顾问', '渠道经理', '财税交付', '财务核对', '老板/管理层']
 const requiredFieldOptions = ['公司名称', '联系人', '手机号', '微信号', '来源触点', '客户需求', '工商状态', '税务资质', '地址需求', '预算金额', '负责人', '下次跟进时间']
 const workflowSteps = ['私域触点', '公司核验', '查重分配', '销售跟进', '报价提单', '财税交付', '回款续费']
@@ -3952,6 +4064,11 @@ const deliveryTimelineTypeMeta: Record<DeliveryTimelineType, { label: string; de
 function todayText() {
   const d = new Date()
   return `${d.getFullYear()}-${padTime(d.getMonth() + 1)}-${padTime(d.getDate())}`
+}
+
+function nowMinuteText() {
+  const d = new Date()
+  return `${todayText()} ${padTime(d.getHours())}:${padTime(d.getMinutes())}`
 }
 
 function isTodayUnfollowed(row: PrivateContact) {
@@ -5729,6 +5846,65 @@ function importProblemText(row: PrivateImportPreviewRow) {
 function contentRate(row: PrivateContent) {
   if (!row.reachCount) return 0
   return Number((row.leadCount / row.reachCount * 100).toFixed(1))
+}
+
+function buildContentForm(row?: PrivateContent, copy = false): ContentFormModel {
+  if (!row) {
+    return {
+      title: '',
+      type: '朋友圈',
+      target: '',
+      ownerName: '内容运营',
+      publishAt: nowMinuteText(),
+      status: 'draft',
+      reachCount: 0,
+      interactCount: 0,
+      leadCount: 0,
+      orderCount: 0,
+      relatedService: serviceOptions[0]
+    }
+  }
+  return {
+    id: copy ? undefined : row.id,
+    title: copy ? `${row.title} 副本` : row.title,
+    type: row.type,
+    target: row.target,
+    ownerName: row.ownerName,
+    publishAt: row.publishAt || nowMinuteText(),
+    status: copy ? 'draft' : row.status,
+    reachCount: copy ? 0 : row.reachCount,
+    interactCount: copy ? 0 : row.interactCount,
+    leadCount: copy ? 0 : row.leadCount,
+    orderCount: copy ? 0 : row.orderCount,
+    relatedService: row.relatedService
+  }
+}
+
+function openContentForm(row?: PrivateContent) {
+  Object.assign(contentForm, buildContentForm(row))
+  contentDrawer.editingId = row?.id
+  contentDrawer.visible = true
+}
+
+function duplicateContent(row: PrivateContent) {
+  Object.assign(contentForm, buildContentForm(row, true))
+  contentDrawer.editingId = undefined
+  contentDrawer.visible = true
+}
+
+async function saveContentForm() {
+  if (contentSaving.value) return
+  contentSaving.value = true
+  try {
+    const saved = await privateDomainApi.saveContent({ ...contentForm })
+    await loadDashboard()
+    contentDrawer.visible = false
+    ElMessage.success(`${saved.title} 已保存`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存内容素材失败')
+  } finally {
+    contentSaving.value = false
+  }
 }
 
 function isConverting(id: number) {
@@ -9976,6 +10152,13 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.content-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .wechat-menu-board {
   display: grid;
   gap: 10px;
@@ -10121,6 +10304,42 @@ watch(() => route.fullPath, applyRouteQueue)
     flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
+  }
+}
+
+.content-form {
+  display: grid;
+  gap: 4px;
+}
+
+.content-form-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+
+  :deep(.el-input-number) {
+    width: 100%;
+  }
+}
+
+.content-form-tip {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.7;
   }
 }
 
@@ -10855,6 +11074,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .group-grid,
   .config-grid,
   .content-summary,
+  .content-form-metrics,
   .wechat-menu-grid,
   .toolbar,
   .preview-summary,
@@ -10931,6 +11151,11 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .wechat-menu-head {
+    flex-direction: column;
+  }
+
+  .content-panel-actions {
+    align-items: flex-start;
     flex-direction: column;
   }
 

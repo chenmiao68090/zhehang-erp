@@ -459,6 +459,32 @@
                 <span>下载模板 -> 用 Excel 填客户 -> 另存为 CSV -> 上传；也可以直接从 Excel 复制表格内容粘贴到下方。</span>
               </div>
 
+              <div class="import-profile-panel">
+                <div class="import-profile-head">
+                  <div>
+                    <strong>按业务线选择导入预设</strong>
+                    <p>不同业务线重点字段不一样,先套预设示例,再替换成真实客户数据。</p>
+                  </div>
+                  <el-tag type="primary" effect="plain">4 套常用口径</el-tag>
+                </div>
+                <div class="import-profile-grid">
+                  <div v-for="item in importTemplateProfiles" :key="item.key" class="import-profile-card">
+                    <div class="import-profile-card-head">
+                      <strong>{{ item.title }}</strong>
+                      <el-tag size="small" effect="plain">{{ item.serviceLine }}</el-tag>
+                    </div>
+                    <p>{{ item.desc }}</p>
+                    <div class="import-profile-fields">
+                      <span v-for="field in item.focusFields" :key="field">{{ field }}</span>
+                    </div>
+                    <div class="import-profile-foot">
+                      <em>{{ item.ownerName }} · {{ item.source }}</em>
+                      <el-button size="small" type="primary" plain @click="fillImportProfileSample(item)">套用示例</el-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="import-quality-panel">
                 <div class="import-quality-head">
                   <strong>字段质量检查</strong>
@@ -2520,6 +2546,16 @@ interface ImportNextStepItem {
   desc: string
   action: ImportNextAction
 }
+interface ImportTemplateProfile {
+  key: string
+  title: string
+  serviceLine: string
+  source: PrivateSource
+  ownerName: string
+  desc: string
+  focusFields: string[]
+  rows: PrivateContactImportRow[]
+}
 type ContentFormModel = PrivateContentPayload & {
   id?: number
   publishAt: string
@@ -2659,6 +2695,60 @@ const wechatMenuMappingDefs = [
     keywords: ['税务筹划', '电商', '一般纳税人', '合规']
   }
 ] as const
+const importTemplateProfiles: ImportTemplateProfile[] = [
+  {
+    key: 'bookkeeping',
+    title: '代理记账/新公司开办',
+    serviceLine: '代理记账',
+    source: '企业微信',
+    ownerName: '何海琳',
+    desc: '适合公众号、企微和微信群里咨询注册公司、税务报到、代理记账的客户。',
+    focusFields: ['公司名称', '业务线', '预算金额', '下一步动作'],
+    rows: [
+      { companyName: '杭州新禾企业管理有限公司', name: '周总', phone: '18600006101', source: '企业微信', communityName: '新公司开办咨询群', ownerName: '何海琳', demand: '新注册公司,需要税务报到、银行开户和代理记账套餐', serviceLine: '代理记账', estimatedAmount: 12800, tags: '新设企业;代理记账;当天报价', stage: '有意向', nextAction: '发送开办套餐报价并预约电话确认', lastTouchAt: '2026-06-08 10:30' },
+      { companyName: '宁波云启科技有限公司', name: '林总', phone: '18600006102', source: '公众号', communityName: '开公司/记账菜单', ownerName: '财税顾问组', demand: '准备成立科技公司,想了解小规模纳税人申报和记账费用', serviceLine: '代理记账', estimatedAmount: 9800, tags: '公众号留资;科技公司;记账咨询', stage: '新触点', nextAction: '先补工商核名信息,再推记账套餐', lastTouchAt: '2026-06-08 11:05' }
+    ]
+  },
+  {
+    key: 'address',
+    title: '地址挂靠/异常解除',
+    serviceLine: '地址挂靠',
+    source: '微信群',
+    ownerName: '陈思旭',
+    desc: '适合经营异常、注册地址异常、挂靠地址和地址库存类咨询。',
+    focusFields: ['地址需求', '异常类型', '区域偏好', '库存核对'],
+    rows: [
+      { companyName: '浙江朗越装饰工程有限公司', name: '陈女士', phone: '18600006201', source: '微信群', communityName: '经营异常解除答疑群', ownerName: '陈思旭', demand: '注册地址异常,需要上城区可开票挂靠地址并处理异常解除', serviceLine: '地址挂靠', estimatedAmount: 23800, tags: '地址异常;挂靠地址;库存待核', stage: '已报价', nextAction: '核对上城区地址库存和异常解除资料清单', lastTouchAt: '2026-06-08 11:20' },
+      { companyName: '杭州栖木文化传媒有限公司', name: '赵先生', phone: '18600006202', source: '个人微信', communityName: '朋友圈地址异常咨询', ownerName: '刘洋', demand: '公司地址无法联系,想换滨江商用地址并补年报异常处理', serviceLine: '异常解除', estimatedAmount: 16800, tags: '地址异常;年报异常;滨江地址', stage: '有意向', nextAction: '发送异常解除流程和地址区域报价', lastTouchAt: '2026-06-08 12:10' }
+    ]
+  },
+  {
+    key: 'channel',
+    title: '同行渠道/批量地址',
+    serviceLine: '同行渠道',
+    source: '老客转介绍',
+    ownerName: '王舟',
+    desc: '适合卖挂靠地址给同行、渠道月结、返点和批量库存需求。',
+    focusFields: ['渠道身份', '月度需求', '账期返点', '地址库存'],
+    rows: [
+      { companyName: '义乌诚达财税服务部', name: '王经理', phone: '18600006301', source: '老客转介绍', communityName: '同行渠道合作', ownerName: '王舟', demand: '同行每月需要 20 套义乌园区地址,希望月结并确认返点', serviceLine: '同行渠道', estimatedAmount: 56000, tags: '同行渠道;批量地址;月结', stage: '已成交', nextAction: '核对渠道账期、返点口径和地址库存', lastTouchAt: '2026-06-08 09:40' },
+      { companyName: '杭州企伴商务服务有限公司', name: '李总', phone: '18600006302', source: '企业微信', communityName: '渠道经理私聊', ownerName: '王舟', demand: '咨询杭州上城、拱墅地址资源,需要长期合作价格表', serviceLine: '同行渠道', estimatedAmount: 42000, tags: '渠道合作;杭州地址;价格表', stage: '有意向', nextAction: '发送渠道价目表并确认首批地址数量', lastTouchAt: '2026-06-08 14:00' }
+    ]
+  },
+  {
+    key: 'ecommerce-tax',
+    title: '电商财税/税务筹划',
+    serviceLine: '税务筹划',
+    source: '视频号',
+    ownerName: '财税顾问组',
+    desc: '适合电商合规、一般纳税人、成本票、税负和补税风险咨询。',
+    focusFields: ['平台类型', '流水规模', '税务资质', '财税风险'],
+    rows: [
+      { companyName: '杭州麦田电子商务有限公司', name: '孙总', phone: '18600006401', source: '视频号', communityName: '电商财税直播间', ownerName: '财税顾问组', demand: '抖音小店流水增长,想评估一般纳税人和成本票合规方案', serviceLine: '税务筹划', estimatedAmount: 32800, tags: '电商财税;一般纳税人;成本票', stage: '有意向', nextAction: '收集平台流水和开票情况,安排财税顾问诊断', lastTouchAt: '2026-06-08 15:20' },
+      { companyName: '宁波澜桥贸易有限公司', name: '郑总', phone: '18600006402', source: '公众号', communityName: '电商财税风险测评表', ownerName: '财税顾问组', demand: '跨境电商客户咨询出口退税、收入确认和税负测算', serviceLine: '出口退税', estimatedAmount: 45800, tags: '跨境电商;出口退税;税负测算', stage: '培育中', nextAction: '补平台店铺、报关和收款资料后报价', lastTouchAt: '2026-06-08 16:10' }
+    ]
+  }
+]
 
 const router = useRouter()
 const route = useRoute()
@@ -6216,6 +6306,11 @@ async function fillImportSample() {
   await previewImportRows(privateImportTemplateSamples, '模板示例数据')
 }
 
+async function fillImportProfileSample(profile: ImportTemplateProfile) {
+  pasteText.value = importRowsToText(profile.rows)
+  await previewImportRows(profile.rows, `${profile.title}示例`)
+}
+
 function triggerFileSelect() {
   fileInputRef.value?.click()
 }
@@ -9754,6 +9849,105 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.import-profile-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.import-profile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.import-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.import-profile-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+
+  p {
+    min-height: 38px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.import-profile-card-head,
+.import-profile-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.import-profile-card-head {
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.import-profile-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  span {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.import-profile-foot {
+  em {
+    min-width: 0;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .import-quality-panel {
   display: grid;
   gap: 10px;
@@ -11330,6 +11524,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .preview-summary,
   .import-quality-grid,
   .import-next-grid,
+  .import-profile-grid,
   .ownership-impact-summary,
   .ownership-impact-list,
   .ownership-impact-metrics,
@@ -11395,6 +11590,7 @@ watch(() => route.fullPath, applyRouteQueue)
     }
   }
 
+  .import-profile-head,
   .import-next-head {
     flex-direction: column;
   }

@@ -458,6 +458,16 @@
             >
               批量核验 {{ batchVerifiableContacts.length }}
             </el-button>
+            <el-button
+              size="small"
+              type="warning"
+              plain
+              :loading="batchCreatingFollowTasks"
+              :disabled="batchCreatingFollowTasks || batchFollowTaskContacts.length === 0"
+              @click="batchCreateFollowTasks"
+            >
+              批量建任务 {{ batchFollowTaskContacts.length }}
+            </el-button>
           </div>
 
           <el-table v-loading="loading" :data="filteredContactRows" border stripe height="560">
@@ -1606,6 +1616,7 @@ const pasteText = ref('')
 const importing = ref(false)
 const fileInputRef = ref<HTMLInputElement>()
 const batchVerifyingContacts = ref(false)
+const batchCreatingFollowTasks = ref(false)
 const summary = reactive<PrivateSummary>({
   contactCount: 0,
   intentCount: 0,
@@ -1655,6 +1666,9 @@ const filteredContactRows = computed(() => {
   return contacts.value
 })
 const batchVerifiableContacts = computed(() => filteredContactRows.value.filter(isUnverifiedContact))
+const batchFollowTaskContacts = computed(() => filteredContactRows.value.filter(row => {
+  return (isIntentContact(row) || isTodayUnfollowed(row)) && !hasOpenFollowTask(row)
+}))
 const hasContactFilter = computed(() => Boolean(query.keyword || query.source || query.stage || contactQuickFilter.value !== 'all'))
 const contactEmptyTitle = computed(() => (hasContactFilter.value ? '当前筛选没有客户' : '还没有私域客户'))
 const contactEmptyDesc = computed(() => {
@@ -1978,6 +1992,14 @@ function isIntentContact(row: PrivateContact) {
 
 function isUnverifiedContact(row: PrivateContact) {
   return !row.verification?.matched
+}
+
+function hasOpenFollowTask(row: PrivateContact) {
+  return tasks.value.some(task => {
+    if (task.companyName !== row.companyName || task.contactName !== row.name) return false
+    if (task.status === 'done') return false
+    return task.action.includes('CRM 跟进') || task.action.includes('触达') || task.title === row.nextAction
+  })
 }
 
 function contactFollowRecords(row: PrivateContact) {
@@ -3100,13 +3122,61 @@ async function markIntent(row: PrivateContact) {
 }
 
 async function createFollowTask(row: PrivateContact) {
+  if (hasOpenFollowTask(row)) {
+    ElMessage.info('该客户已有未完成跟进任务')
+    return
+  }
   try {
     const task = await privateDomainApi.createTaskFromContact(row.id)
     ElMessage.success(`已生成跟进任务: ${task.title}`)
+    await loadDashboard()
     await loadContacts()
     if (drawer.row?.id === row.id) await loadDrawerTimeline(row.id)
   } catch (error: any) {
     ElMessage.error(error?.message || '生成跟进任务失败')
+  }
+}
+
+async function batchCreateFollowTasks() {
+  if (batchCreatingFollowTasks.value) return
+  const targets = batchFollowTaskContacts.value
+  if (!targets.length) {
+    ElMessage.info('当前列表没有需要新建跟进任务的客户')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `将给当前筛选下 ${targets.length} 个高意向或今日未跟进客户批量生成跟进任务,已有未完成任务的客户会自动跳过。`,
+      '确认批量生成跟进任务',
+      {
+        type: 'warning',
+        confirmButtonText: '开始生成',
+        cancelButtonText: '再看看'
+      }
+    )
+  } catch {
+    return
+  }
+  batchCreatingFollowTasks.value = true
+  let successCount = 0
+  try {
+    for (const target of targets) {
+      if (hasOpenFollowTask(target)) continue
+      await privateDomainApi.createTaskFromContact(target.id)
+      successCount += 1
+    }
+    await loadDashboard()
+    await loadContacts()
+    activeTab.value = 'tasks'
+    taskFilter.value = 'pending'
+    scrollPrivateTabsIntoView()
+    ElMessage.success(`已生成 ${successCount} 个跟进任务,并切到待处理任务队列`)
+  } catch (error: any) {
+    ElMessage.error(error?.message || `批量生成任务中断,已完成 ${successCount} 个`)
+    await loadDashboard()
+    await loadContacts()
+  } finally {
+    batchCreatingFollowTasks.value = false
   }
 }
 

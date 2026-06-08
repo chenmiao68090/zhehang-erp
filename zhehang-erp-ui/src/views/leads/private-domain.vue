@@ -596,6 +596,35 @@
               <div><span>成交记录</span><b>{{ followStats.ordered }}</b></div>
               <div><span>待复联</span><b>{{ followStats.nextTouch }}</b></div>
             </div>
+            <div class="follow-funnel-panel" :class="{ clear: followFunnelIssueTotal === 0 }">
+              <div class="follow-funnel-head">
+                <div>
+                  <strong>报价到提单漏斗异常</strong>
+                  <p>{{ followFunnelSummary }}</p>
+                </div>
+                <el-tag :type="followFunnelIssueTotal > 0 ? 'warning' : 'success'" effect="plain">
+                  {{ followFunnelIssueTotal > 0 ? `${followFunnelIssueTotal} 个待处理` : '漏斗顺畅' }}
+                </el-tag>
+              </div>
+              <div class="follow-funnel-grid">
+                <button
+                  v-for="item in followFunnelIssues"
+                  :key="item.key"
+                  type="button"
+                  class="follow-funnel-card"
+                  :class="item.level"
+                  @click.stop="focusFollowIssue(item)"
+                >
+                  <div class="follow-funnel-card-head">
+                    <strong>{{ item.title }}</strong>
+                    <el-tag :type="followFunnelIssueTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <b>{{ item.count }}</b>
+                  <p>{{ item.desc }}</p>
+                  <span>{{ item.amount > 0 ? `涉及报价 ¥${formatMoney(item.amount)}` : item.actionText }}</span>
+                </button>
+              </div>
+            </div>
             <div class="follow-filter-bar">
               <el-radio-group v-model="followFilter">
                 <el-radio-button v-for="item in followFilterOptions" :key="item.value" :label="item.value" :value="item.value">
@@ -1763,6 +1792,17 @@ type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'addre
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 type StarterAction = 'import' | 'contacts' | 'follow' | 'quote' | 'delivery'
 type ContactQuickFilter = 'all' | 'today_unfollowed' | 'intent' | 'unverified'
+interface FollowFunnelIssue {
+  key: string
+  filter: FollowFilter
+  title: string
+  count: number
+  amount: number
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  statusText: string
+  desc: string
+  actionText: string
+}
 type AddressBindingIssue = {
   delivery: PrivateDeliveryPackage
   lock: PrivateAddressLock
@@ -2083,6 +2123,68 @@ const followFilterHint = computed(() => ({
   completed_no_delivery: '审批已完成但还没交付包,需要当天交接给财税/工商团队。',
   next_touch: '有下次跟进时间的客户,用于每天复联排班。'
 } as Record<FollowFilter, string>)[followFilter.value])
+const followFunnelIssues = computed<FollowFunnelIssue[]>(() => {
+  const packageContactIds = new Set(deliveryPackages.value.map(item => item.contactId))
+  const quoteNoOrder = followRecords.value.filter(item => Number(item.quotedAmount || 0) > 0 && !item.orderNo)
+  const orderPending = followRecords.value.filter(item => ['draft', 'pending_approval', 'pending_finance', 'pending_boss'].includes(item.orderStatus || ''))
+  const completedNoDelivery = followRecords.value.filter(item => item.orderStatus === 'completed' && !packageContactIds.has(item.contactId))
+  const nextTouch = followRecords.value.filter(item => item.nextTouchAt && item.result !== '已成交' && item.result !== '流失')
+  const amountOf = (list: PrivateFollowRecord[]) => list.reduce((sum, item) => sum + Number(item.quotedAmount || 0), 0)
+
+  return [
+    {
+      key: 'quote_no_order',
+      filter: 'quote_no_order',
+      title: '已报价未提单',
+      count: quoteNoOrder.length,
+      amount: amountOf(quoteNoOrder),
+      level: quoteNoOrder.length > 0 ? 'danger' : 'success',
+      statusText: quoteNoOrder.length > 0 ? '易丢单' : '已清空',
+      desc: quoteNoOrder.length > 0 ? '客户已经有报价金额,但没有形成提单草稿,需要销售当天补提单。' : '当前没有口头报价停留在表格里。',
+      actionText: '筛选未提单'
+    },
+    {
+      key: 'order_pending',
+      filter: 'order_pending',
+      title: '提单审批中',
+      count: orderPending.length,
+      amount: amountOf(orderPending),
+      level: orderPending.length > 0 ? 'warning' : 'success',
+      statusText: orderPending.length > 0 ? '盯审批' : '已清空',
+      desc: orderPending.length > 0 ? '提单还在销售、财务或老板审批节点,需要同步收款和客户确认。' : '当前没有卡在审批中的提单。',
+      actionText: '筛选审批中'
+    },
+    {
+      key: 'completed_no_delivery',
+      filter: 'completed_no_delivery',
+      title: '完成待交付',
+      count: completedNoDelivery.length,
+      amount: amountOf(completedNoDelivery),
+      level: completedNoDelivery.length > 0 ? 'danger' : 'success',
+      statusText: completedNoDelivery.length > 0 ? '当天建包' : '已闭环',
+      desc: completedNoDelivery.length > 0 ? '审批已完成但还没建交付包,工商、财税、地址和回款会断档。' : '审批完成的客户都已进入交付链路。',
+      actionText: '筛选待交付'
+    },
+    {
+      key: 'next_touch',
+      filter: 'next_touch',
+      title: '待复联客户',
+      count: nextTouch.length,
+      amount: amountOf(nextTouch),
+      level: nextTouch.length > 0 ? 'primary' : 'success',
+      statusText: nextTouch.length > 0 ? '排班触达' : '无待办',
+      desc: nextTouch.length > 0 ? '已有下次跟进时间,用于电销/私域运营当天排班触达。' : '当前没有需要按时间复联的客户。',
+      actionText: '筛选待复联'
+    }
+  ]
+})
+const followFunnelIssueTotal = computed(() => followFunnelIssues.value.reduce((sum, item) => sum + item.count, 0))
+const followFunnelSummary = computed(() => {
+  if (followFunnelIssueTotal.value === 0) return '报价、提单、交付和复联当前没有明显卡点。'
+  const danger = followFunnelIssues.value.filter(item => item.level === 'danger' && item.count > 0).reduce((sum, item) => sum + item.count, 0)
+  if (danger > 0) return `存在 ${danger} 个阻断项,优先处理已报价未提单和完成待交付。`
+  return '当前主要是审批和复联排班,销售与运营需要按队列推进。'
+})
 const filteredFollowRecords = computed(() => {
   const packageContactIds = new Set(deliveryPackages.value.map(item => item.contactId))
   return followRecords.value.filter(item => {
@@ -3018,6 +3120,10 @@ function contentStatusText(status: PrivateContent['status']) {
 
 function contentStatusTag(status: PrivateContent['status']) {
   return ({ draft: 'info', scheduled: 'warning', published: 'success' } as Record<PrivateContent['status'], any>)[status]
+}
+
+function followFunnelIssueTag(level: FollowFunnelIssue['level']) {
+  return level
 }
 
 function taskStatusText(status: PrivateTaskStatus) {
@@ -4394,6 +4500,15 @@ function goCompletedDeliveryQueue() {
   }
 }
 
+function focusFollowIssue(item: FollowFunnelIssue) {
+  followFilter.value = item.filter
+  if (item.count > 0) {
+    ElMessage.info(`已筛选: ${item.title},共 ${item.count} 条`)
+  } else {
+    ElMessage.info(`${item.title}当前没有待处理记录`)
+  }
+}
+
 function showAllDeliveryPackages() {
   deliveryFilter.value = 'all'
   focusedDeliveryPackageId.value = null
@@ -4965,6 +5080,121 @@ watch(() => route.fullPath, applyRouteQueue)
   b {
     color: #111827;
     font-size: 20px;
+  }
+}
+
+.follow-funnel-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+
+  &.clear {
+    border-color: #bbf7d0;
+    background: #f7fdf9;
+  }
+}
+
+.follow-funnel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.follow-funnel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.follow-funnel-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.primary {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+  }
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+    transform: translateY(-1px);
+  }
+
+  b {
+    color: #111827;
+    font-size: 22px;
+    line-height: 1.1;
+  }
+
+  p {
+    min-height: 52px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.follow-funnel-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -6852,6 +7082,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .contact-duty-grid,
   .contact-evidence-summary,
   .contact-evidence-grid,
+  .follow-funnel-grid,
   .must-handle-list,
   .must-handle-item,
   .audit-metrics,
@@ -6879,6 +7110,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .must-handle-head {
+    flex-direction: column;
+  }
+
+  .follow-funnel-head {
     flex-direction: column;
   }
 

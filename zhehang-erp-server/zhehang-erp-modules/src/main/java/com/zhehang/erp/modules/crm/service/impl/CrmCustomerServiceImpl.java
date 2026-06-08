@@ -69,9 +69,12 @@ public class CrmCustomerServiceImpl extends ServiceImpl<CrmCustomerMapper, CrmCu
         poolMapper.insert(pool);
 
         // 清除负责人与归属部门(退回公海后变为无主)
-        customer.setOwnerId(null);
-        customer.setDeptId(null);
-        customerMapper.updateById(customer);
+        // 用 lambdaUpdate 显式置 null:updateById 默认跳过 null 字段,setOwnerId(null) 不会真正清空
+        lambdaUpdate()
+                .eq(CrmCustomer::getId, id)
+                .set(CrmCustomer::getOwnerId, null)
+                .set(CrmCustomer::getDeptId, null)
+                .update();
     }
 
     @Override

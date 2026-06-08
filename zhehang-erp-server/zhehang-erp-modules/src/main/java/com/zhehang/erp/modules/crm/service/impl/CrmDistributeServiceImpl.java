@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -42,6 +43,7 @@ public class CrmDistributeServiceImpl extends ServiceImpl<CrmDistributeLogMapper
             lead.setDeptId(dataScopeHelper.deptIdOfUser(candidateUserId));
             lead.setOwnership("private");
             lead.setClaimTime(LocalDateTime.now());
+            lead.setProtectionExpireDate(LocalDate.now().plusDays(15)); // 保护期15天,与 CrmLeadServiceImpl.PROTECTION_DAYS 一致
             leadMapper.updateById(lead);
         }
 
@@ -66,6 +68,7 @@ public class CrmDistributeServiceImpl extends ServiceImpl<CrmDistributeLogMapper
         lead.setDeptId(dataScopeHelper.deptIdOfUser(toUserId));
         lead.setOwnership("private");
         lead.setClaimTime(LocalDateTime.now());
+        lead.setProtectionExpireDate(LocalDate.now().plusDays(15)); // 保护期15天,与 CrmLeadServiceImpl.PROTECTION_DAYS 一致
         leadMapper.updateById(lead);
 
         CrmDistributeLog distLog = new CrmDistributeLog();
@@ -92,6 +95,7 @@ public class CrmDistributeServiceImpl extends ServiceImpl<CrmDistributeLogMapper
         lead.setDeptId(dataScopeHelper.deptIdOfUser(userId));
         lead.setOwnership("private");
         lead.setClaimTime(LocalDateTime.now());
+        lead.setProtectionExpireDate(LocalDate.now().plusDays(15)); // 保护期15天,与 CrmLeadServiceImpl.PROTECTION_DAYS 一致
         leadMapper.updateById(lead);
 
         CrmDistributeLog distLog = new CrmDistributeLog();

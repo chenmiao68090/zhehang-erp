@@ -39,11 +39,7 @@ public class CrmRecycleServiceImpl extends ServiceImpl<CrmRecycleRuleMapper, Crm
 
         int count = 0;
         for (CrmLead lead : leads) {
-            lead.setOwnerId(null);
-            lead.setOwnership("pool");
-            lead.setRecycleCount(lead.getRecycleCount() == null ? 1 : lead.getRecycleCount() + 1);
-            lead.setLastRecycleTime(LocalDateTime.now());
-            leadMapper.updateById(lead);
+            releaseToPool(lead);
             count++;
         }
         log.info("自动扫描回收完成, 回收数量: {}", count);
@@ -74,15 +70,29 @@ public class CrmRecycleServiceImpl extends ServiceImpl<CrmRecycleRuleMapper, Crm
             if (lead == null) {
                 continue;
             }
-            lead.setOwnerId(null);
-            lead.setOwnership("pool");
-            lead.setRecycleCount(lead.getRecycleCount() == null ? 1 : lead.getRecycleCount() + 1);
-            lead.setLastRecycleTime(LocalDateTime.now());
-            leadMapper.updateById(lead);
+            releaseToPool(lead);
             count++;
         }
         log.info("手动回收完成, 数量: {}, 原因: {}", count, reason);
         return count;
+    }
+
+    /**
+     * 把线索释放回公海:清空负责人/部门/保护期,归属置 pool,回收次数+1。
+     * 用 LambdaUpdateWrapper 显式置 null —— MyBatis-Plus 的 updateById 默认跳过 null 字段,
+     * 直接 setOwnerId(null)+updateById 不会真正清空 owner_id,会导致"半回收"(归属人未清)。
+     */
+    private void releaseToPool(CrmLead lead) {
+        int newRecycleCount = lead.getRecycleCount() == null ? 1 : lead.getRecycleCount() + 1;
+        LambdaUpdateWrapper<CrmLead> uw = new LambdaUpdateWrapper<>();
+        uw.eq(CrmLead::getId, lead.getId())
+          .set(CrmLead::getOwnerId, null)
+          .set(CrmLead::getDeptId, null)
+          .set(CrmLead::getOwnership, "pool")
+          .set(CrmLead::getProtectionExpireDate, null)
+          .set(CrmLead::getRecycleCount, newRecycleCount)
+          .set(CrmLead::getLastRecycleTime, LocalDateTime.now());
+        leadMapper.update(null, uw);
     }
 
     @Override

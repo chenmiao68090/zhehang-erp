@@ -42,6 +42,8 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
     /** 每日领取上限 */
     private static final String DAILY_KEY = "crm:claim:daily:";
     private static final long DAILY_LIMIT = 50L;
+    /** 客资保护期(天):领取/分配/跟进后顺延;到期仍未跟进则被回收引擎(scanAndRecycle)释放回公海 */
+    private static final long PROTECTION_DAYS = 15L;
 
     private final CrmLeadMapper leadMapper;
     private final CrmCustomerMapper customerMapper;
@@ -182,6 +184,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                     .set(CrmLead::getDeptId, SecurityUtils.getCurrentDeptId())
                     .set(CrmLead::getOwnership, "private")
                     .set(CrmLead::getClaimTime, now)
+                    .set(CrmLead::getProtectionExpireDate, LocalDate.now().plusDays(PROTECTION_DAYS))
                     .set(CrmLead::getStatus, 2)
                     .update();
             if (!claimed) {
@@ -208,13 +211,15 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                 stringRedisTemplate.opsForValue().set(
                         COOLDOWN_KEY + lead.getOwnerId() + ":" + id, "1", COOLDOWN_DAYS, TimeUnit.DAYS);
             }
-            lead.setOwnerId(null);
-            lead.setDeptId(null);
-            lead.setOwnership("pool");
-            if (StringUtils.hasText(reason)) {
-                lead.setLastFollowContent("退回公海:" + reason);
-            }
-            leadMapper.updateById(lead);
+            // 用 lambdaUpdate 显式置 null:updateById 默认跳过 null 字段,直接 setOwnerId(null) 不会清空 owner_id
+            lambdaUpdate()
+                    .eq(CrmLead::getId, id)
+                    .set(CrmLead::getOwnerId, null)
+                    .set(CrmLead::getDeptId, null)
+                    .set(CrmLead::getOwnership, "pool")
+                    .set(CrmLead::getProtectionExpireDate, null)
+                    .set(StringUtils.hasText(reason), CrmLead::getLastFollowContent, "退回公海:" + reason)
+                    .update();
         }
     }
 
@@ -233,6 +238,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
             lead.setDeptId(dataScopeHelper.deptIdOfUser(ownerId));
             lead.setOwnership("private");
             lead.setClaimTime(LocalDateTime.now());
+            lead.setProtectionExpireDate(LocalDate.now().plusDays(PROTECTION_DAYS));
             leadMapper.updateById(lead);
         }
     }
@@ -262,6 +268,8 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
         if (nextTime != null) {
             lead.setNextFollowTime(nextTime.toLocalDate());
         }
+        // 跟进即续命:顺延保护期,避免活跃客资被回收引擎释放("没跟进才回收")
+        lead.setProtectionExpireDate(LocalDate.now().plusDays(PROTECTION_DAYS));
         leadMapper.updateById(lead);
     }
 

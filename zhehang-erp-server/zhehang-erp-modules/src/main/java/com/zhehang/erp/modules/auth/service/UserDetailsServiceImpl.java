@@ -44,6 +44,20 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         loginUser.setPassword(user.getPassword());
         loginUser.setTenantId(user.getTenantId());
         loginUser.setEnabled(true);
+        loginUser.setDeptId(user.getDeptId());
+
+        // 数据权限:登录时一次性算好"是否管理员"与"数据范围",避免每次查询再查库
+        List<String> roleKeys = userMapper.selectRoleKeysByUserId(user.getId());
+        boolean isAdmin = Long.valueOf(1L).equals(user.getId())
+                || "admin".equals(user.getUsername())
+                || (roleKeys != null && (roleKeys.contains("super_admin") || roleKeys.contains("sys_admin")));
+        loginUser.setAdmin(isAdmin);
+        if (isAdmin) {
+            loginUser.setDataScope(1); // 管理员看全部
+        } else {
+            Integer minScope = userMapper.selectMinDataScopeByUserId(user.getId());
+            loginUser.setDataScope(minScope != null ? minScope : 5); // 无角色兜底为"仅本人"
+        }
 
         List<String> perms = userMapper.selectPermsByUserId(user.getId());
         Set<String> permSet = perms == null ? new HashSet<>() : new HashSet<>(perms);

@@ -17,4 +17,13 @@ public interface AuthUser {
 
     /** 当前用户名 */
     String getUsername();
+
+    /** 当前用户所属部门 ID(未设置时可为 null) */
+    Long getDeptId();
+
+    /** 数据范围(1全部 2自定义 3本部门 4本部门及以下 5本人);多角色取范围最大者(数值最小)。可为 null */
+    Integer getDataScope();
+
+    /** 是否管理员(看全部数据,数据权限直接放行) */
+    boolean isAdmin();
 }

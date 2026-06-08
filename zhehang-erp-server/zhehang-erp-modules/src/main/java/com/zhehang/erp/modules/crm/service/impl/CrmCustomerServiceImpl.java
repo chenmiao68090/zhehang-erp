@@ -5,11 +5,13 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.crm.domain.entity.CrmCustomer;
 import com.zhehang.erp.modules.crm.domain.entity.CrmPool;
 import com.zhehang.erp.modules.crm.mapper.CrmCustomerMapper;
 import com.zhehang.erp.modules.crm.mapper.CrmPoolMapper;
 import com.zhehang.erp.modules.crm.service.ICrmCustomerService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,10 +25,25 @@ public class CrmCustomerServiceImpl extends ServiceImpl<CrmCustomerMapper, CrmCu
 
     private final CrmCustomerMapper customerMapper;
     private final CrmPoolMapper poolMapper;
+    private final DataScopeHelper dataScopeHelper;
+
+    @Override
+    public boolean save(CrmCustomer entity) {
+        // 新建客户:未指定负责人时默认归属创建人,并按负责人补归属部门,确保创建人/主管能在数据权限下看到
+        if (entity.getOwnerId() == null) {
+            entity.setOwnerId(SecurityUtils.getCurrentUserId());
+        }
+        if (entity.getDeptId() == null) {
+            entity.setDeptId(dataScopeHelper.deptIdOfUser(entity.getOwnerId()));
+        }
+        return super.save(entity);
+    }
 
     @Override
     public IPage<CrmCustomer> selectPage(int pageNum, int pageSize, String name, String level, Integer status, Long ownerId) {
         LambdaQueryWrapper<CrmCustomer> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:电销只看自己、主管看本部门、管理员看全部
+        dataScopeHelper.apply(wrapper, CrmCustomer::getOwnerId, CrmCustomer::getDeptId);
         wrapper.like(StringUtils.hasText(name), CrmCustomer::getName, name)
                .eq(StringUtils.hasText(level), CrmCustomer::getLevel, level)
                .eq(status != null, CrmCustomer::getStatus, status)
@@ -51,8 +68,9 @@ public class CrmCustomerServiceImpl extends ServiceImpl<CrmCustomerMapper, CrmCu
         pool.setReturnBy(customer.getOwnerId());
         poolMapper.insert(pool);
 
-        // 清除负责人
+        // 清除负责人与归属部门(退回公海后变为无主)
         customer.setOwnerId(null);
+        customer.setDeptId(null);
         customerMapper.updateById(customer);
     }
 
@@ -67,6 +85,7 @@ public class CrmCustomerServiceImpl extends ServiceImpl<CrmCustomerMapper, CrmCu
             throw new BusinessException("该客户已被认领");
         }
         customer.setOwnerId(ownerId);
+        customer.setDeptId(dataScopeHelper.deptIdOfUser(ownerId));
         customerMapper.updateById(customer);
     }
 }

@@ -26,6 +26,15 @@
           AND r.deleted = 0
     </select>
 
+    <select id="selectMinDataScopeByUserId" resultType="java.lang.Integer">
+        SELECT MIN(r.data_scope)
+        FROM sys_role r
+        INNER JOIN sys_user_role ur ON ur.role_id = r.id
+        WHERE ur.user_id = #{userId}
+          AND r.status = 0
+          AND r.deleted = 0
+    </select>
+
     <select id="selectFirstUserIdByRoleKey" resultType="java.lang.Long">
         SELECT ur.user_id
         FROM sys_user_role ur

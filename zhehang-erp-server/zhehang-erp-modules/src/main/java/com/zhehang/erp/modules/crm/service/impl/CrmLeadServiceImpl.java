@@ -14,6 +14,7 @@ import com.zhehang.erp.modules.crm.mapper.CrmCustomerMapper;
 import com.zhehang.erp.modules.crm.mapper.CrmLeadMapper;
 import com.zhehang.erp.modules.crm.service.ICrmHoldingService;
 import com.zhehang.erp.modules.crm.service.ICrmLeadService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -45,10 +46,22 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
     private final CrmContactMapper contactMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final ICrmHoldingService holdingService;
+    private final DataScopeHelper dataScopeHelper;
+
+    @Override
+    public boolean save(CrmLead entity) {
+        // 新建线索:若已指定负责人(私海)则补归属部门;无负责人(进公海)保持无部门,待领取时再写
+        if (entity.getOwnerId() != null && entity.getDeptId() == null) {
+            entity.setDeptId(dataScopeHelper.deptIdOfUser(entity.getOwnerId()));
+        }
+        return super.save(entity);
+    }
 
     @Override
     public IPage<CrmLead> selectPage(int pageNum, int pageSize, String name, Integer source, Integer status, Long ownerId) {
         LambdaQueryWrapper<CrmLead> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:电销只看自己、主管看本部门、管理员看全部;前端传的 ownerId 只能在可见范围内收窄
+        dataScopeHelper.apply(wrapper, CrmLead::getOwnerId, CrmLead::getDeptId);
         wrapper.like(StringUtils.hasText(name), CrmLead::getName, name)
                .eq(source != null, CrmLead::getSource, source)
                .eq(status != null, CrmLead::getStatus, status)
@@ -76,6 +89,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
         customer.setTaxpayerType(1);
         customer.setStatus(0);
         customer.setOwnerId(lead.getOwnerId());
+        customer.setDeptId(lead.getDeptId());
         customerMapper.insert(customer);
 
         // 创建联系人
@@ -99,6 +113,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
             throw new BusinessException("线索不存在");
         }
         lead.setOwnerId(ownerId);
+        lead.setDeptId(dataScopeHelper.deptIdOfUser(ownerId));
         leadMapper.updateById(lead);
     }
 
@@ -161,6 +176,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                     .eq(CrmLead::getId, id)
                     .eq(CrmLead::getOwnership, "pool")
                     .set(CrmLead::getOwnerId, userId)
+                    .set(CrmLead::getDeptId, SecurityUtils.getCurrentDeptId())
                     .set(CrmLead::getOwnership, "private")
                     .set(CrmLead::getClaimTime, now)
                     .set(CrmLead::getStatus, 2)
@@ -190,6 +206,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                         COOLDOWN_KEY + lead.getOwnerId() + ":" + id, "1", COOLDOWN_DAYS, TimeUnit.DAYS);
             }
             lead.setOwnerId(null);
+            lead.setDeptId(null);
             lead.setOwnership("pool");
             if (StringUtils.hasText(reason)) {
                 lead.setLastFollowContent("退回公海:" + reason);
@@ -210,6 +227,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                 continue;
             }
             lead.setOwnerId(ownerId);
+            lead.setDeptId(dataScopeHelper.deptIdOfUser(ownerId));
             lead.setOwnership("private");
             lead.setClaimTime(LocalDateTime.now());
             leadMapper.updateById(lead);

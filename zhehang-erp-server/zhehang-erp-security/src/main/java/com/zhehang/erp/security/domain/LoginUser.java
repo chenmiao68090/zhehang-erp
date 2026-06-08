@@ -22,6 +22,13 @@ public class LoginUser implements UserDetails, AuthUser {
     private Long tenantId;
     private Set<String> permissions;
 
+    /** 所属部门 ID(数据权限按部门过滤用) */
+    private Long deptId;
+    /** 数据范围(1全部 2自定义 3本部门 4本部门及以下 5本人),多角色取数值最小者 */
+    private Integer dataScope;
+    /** 是否管理员(看全部数据) */
+    private boolean admin;
+
     @JsonIgnore
     private transient Collection<? extends GrantedAuthority> authorities;
 

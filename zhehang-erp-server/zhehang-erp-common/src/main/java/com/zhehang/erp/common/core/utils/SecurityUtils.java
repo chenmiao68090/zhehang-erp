@@ -27,6 +27,30 @@ public class SecurityUtils {
         return authUser != null ? authUser.getTenantId() : null;
     }
 
+    /** 当前用户所属部门 ID(未登录或未设置时为 null) */
+    public static Long getCurrentDeptId() {
+        AuthUser authUser = currentAuthUser();
+        return authUser != null ? authUser.getDeptId() : null;
+    }
+
+    /** 当前数据范围(1全部 2自定义 3本部门 4本部门及以下 5本人);未取到时为 null,调用方按最严格(本人)兜底 */
+    public static Integer getCurrentDataScope() {
+        AuthUser authUser = currentAuthUser();
+        return authUser != null ? authUser.getDataScope() : null;
+    }
+
+    /** 是否管理员(看全部)。兼容旧 token:userId==1 或 username==admin 也视为管理员 */
+    public static boolean isCurrentAdmin() {
+        AuthUser authUser = currentAuthUser();
+        if (authUser == null) {
+            return false;
+        }
+        if (authUser.isAdmin()) {
+            return true;
+        }
+        return Long.valueOf(1L).equals(authUser.getUserId()) || "admin".equals(authUser.getUsername());
+    }
+
     public static String getCurrentUsername() {
         AuthUser authUser = currentAuthUser();
         if (authUser != null) {

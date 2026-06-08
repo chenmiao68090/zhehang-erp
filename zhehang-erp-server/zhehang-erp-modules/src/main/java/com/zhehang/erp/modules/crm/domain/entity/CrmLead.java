@@ -27,6 +27,8 @@ public class CrmLead extends BaseEntity {
     private Integer status;
     /** 负责人ID */
     private Long ownerId;
+    /** 归属部门ID(数据权限按部门过滤用) */
+    private Long deptId;
     /** 备注 */
     private String remark;
     /** 客户类型 */

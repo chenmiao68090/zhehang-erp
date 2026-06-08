@@ -33,6 +33,8 @@ public class CrmCustomer extends BaseEntity {
     private Integer status;
     /** 负责人ID */
     private Long ownerId;
+    /** 归属部门ID(数据权限按部门过滤用) */
+    private Long deptId;
     /** 服务套餐 */
     private String servicePackage;
     /** 账期 */

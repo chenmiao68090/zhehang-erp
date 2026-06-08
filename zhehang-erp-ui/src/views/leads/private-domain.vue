@@ -1560,6 +1560,18 @@
               <p>{{ item.desc }}</p>
             </div>
           </div>
+          <div class="contact-ownership-actions">
+            <el-button
+              v-for="item in contactOwnershipActions(drawer.row)"
+              :key="item.key"
+              :type="item.primary ? 'primary' : 'default'"
+              size="small"
+              plain
+              @click.stop="handleContactActionItem(drawer.row, item.key)"
+            >
+              {{ item.label }}
+            </el-button>
+          </div>
         </div>
 
         <div class="bd-section-title mt">资料证据链</div>
@@ -3367,7 +3379,7 @@ const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '沉默', value: 'silent' }
 ]
 
-type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead' | 'mark_intent'
+type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead' | 'mark_intent' | 'ownership_tab'
 type DeliveryTimelineType = 'address' | 'follow' | 'task'
 type DeliveryChecklistStatus = 'done' | 'todo' | 'risk'
 type DeliveryArchiveAction = 'order' | 'contact' | 'task' | 'address' | 'review'
@@ -4107,6 +4119,52 @@ function contactOwnershipSteps(row: PrivateContact): ContactOwnershipStep[] {
   ]
 }
 
+function contactOwnershipActions(row: PrivateContact): ContactActionItem[] {
+  const rule = contactOwnershipRule(row)
+  const clock = contactOwnershipClock(row, rule)
+  const risk = row.verification?.duplicateRisk || 'none'
+  if (!rule || !rule.enabled) {
+    return [
+      { label: '看归属规则', key: 'ownership_tab', primary: true },
+      { label: '记录复核说明', key: 'follow_record' },
+      { label: '生成复联任务', key: 'follow_task' }
+    ]
+  }
+  if (risk === 'hit') {
+    return [
+      { label: '工商核验', key: 'verify', primary: true },
+      { label: '看归属规则', key: 'ownership_tab' },
+      { label: '记录仲裁', key: 'follow_record' }
+    ]
+  }
+  if (clock.recycleDays > 0 && clock.recycleLeft <= 0) {
+    return [
+      { label: '生成复联任务', key: 'follow_task', primary: true },
+      { label: '记录续保理由', key: 'follow_record' },
+      { label: '看归属规则', key: 'ownership_tab' }
+    ]
+  }
+  if (clock.protectDays > 0 && clock.protectLeft <= 3) {
+    return [
+      { label: '生成复联任务', key: 'follow_task', primary: true },
+      { label: '记录最近跟进', key: 'follow_record' },
+      { label: '标记意向', key: 'mark_intent' }
+    ]
+  }
+  if (risk === 'possible') {
+    return [
+      { label: '工商核验', key: 'verify', primary: true },
+      { label: '记录复核', key: 'follow_record' },
+      { label: '看归属规则', key: 'ownership_tab' }
+    ]
+  }
+  return [
+    { label: '记录跟进', key: 'follow_record', primary: true },
+    { label: '生成任务', key: 'follow_task' },
+    { label: '看归属规则', key: 'ownership_tab' }
+  ]
+}
+
 function contactEvidenceTag(status: DeliveryChecklistStatus): 'success' | 'warning' | 'danger' {
   return ({ done: 'success', todo: 'warning', risk: 'danger' } as Record<DeliveryChecklistStatus, 'success' | 'warning' | 'danger'>)[status]
 }
@@ -4286,6 +4344,13 @@ async function handleContactActionItem(row: PrivateContact, key: ContactActionKe
   }
   if (key === 'delivery_tab') {
     focusContactDelivery(row)
+    return
+  }
+  if (key === 'ownership_tab') {
+    drawer.visible = false
+    activeTab.value = 'ownership'
+    scrollPrivateTabsIntoView()
+    ElMessage.info('已切到归属规则,可复核来源、保护期、回收和撞单策略。')
     return
   }
   if (key === 'order_draft') {
@@ -9465,6 +9530,21 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.contact-ownership-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+
+  :deep(.el-button) {
+    margin-left: 0;
+    border-radius: 999px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
 .contact-evidence-panel {
   display: grid;
   gap: 10px;
@@ -9886,6 +9966,10 @@ watch(() => route.fullPath, applyRouteQueue)
 
   .contact-duty-action {
     grid-template-columns: 1fr;
+  }
+
+  .contact-ownership-actions {
+    justify-content: flex-start;
   }
 
   .timeline-group-head {

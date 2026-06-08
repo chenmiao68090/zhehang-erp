@@ -277,8 +277,41 @@
               <el-tag type="primary" effect="plain">A · 归属闭环</el-tag>
             </div>
             <div class="rule-toolbar">
-              <span>已启用 {{ ownershipRules.filter(item => item.enabled).length }} 条规则</span>
-              <span>同行/挂靠地址客户默认独立保护，撞单先冻结再仲裁。</span>
+              <div class="rule-toolbar-copy">
+                <span>已启用 {{ enabledOwnershipRuleCount }}/{{ ownershipRules.length }} 条规则</span>
+                <span>同行/挂靠地址客户默认独立保护，撞单先冻结再仲裁。</span>
+              </div>
+              <div class="rule-toolbar-actions">
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :loading="ruleBulkSaving"
+                  :disabled="!disabledOwnershipRuleCount || ruleBulkSaving"
+                  @click="bulkSetOwnershipRules(true)"
+                >
+                  全部启用
+                </el-button>
+                <el-button
+                  size="small"
+                  plain
+                  :loading="ruleBulkSaving"
+                  :disabled="!enabledOwnershipRuleCount || ruleBulkSaving"
+                  @click="bulkSetOwnershipRules(false)"
+                >
+                  全部停用
+                </el-button>
+                <el-button
+                  size="small"
+                  type="warning"
+                  plain
+                  :loading="ruleBulkSaving"
+                  :disabled="!coreDisabledOwnershipRuleCount || ruleBulkSaving"
+                  @click="enableCoreOwnershipRules"
+                >
+                  启用核心渠道
+                </el-button>
+              </div>
             </div>
             <div class="ownership-audit-panel" :class="ownershipAuditLevel">
               <div class="ownership-audit-head">
@@ -2489,6 +2522,7 @@ const addressResourceBindingIds = ref<number[]>([])
 const addressReplenishCreatingIds = ref<number[]>([])
 const orderDraftCreatingIds = ref<number[]>([])
 const ruleSavingIds = ref<number[]>([])
+const ruleBulkSaving = ref(false)
 const addressResourceLoading = ref(false)
 const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
@@ -2648,6 +2682,7 @@ const wechatServiceConfig = reactive<PrivateWechatServiceConfig>({
 })
 
 const sourceOptions: PrivateSource[] = ['企业微信', '个人微信', '微信群', '朋友圈', '公众号', '视频号', '老客转介绍']
+const coreOwnershipSources: PrivateSource[] = ['企业微信', '微信群', '公众号', '老客转介绍']
 const serviceOptions = ['代理记账', '工商注册', '地址挂靠', '异常解除', '税务筹划', '公司注销', '同行渠道', '财税体检', '出口退税']
 const departmentOptions = ['网销运营', '私域运营', '电销坐席', '销售顾问', '渠道经理', '财税交付', '财务核对', '老板/管理层']
 const requiredFieldOptions = ['公司名称', '联系人', '手机号', '微信号', '来源触点', '客户需求', '工商状态', '税务资质', '地址需求', '预算金额', '负责人', '下次跟进时间']
@@ -2667,6 +2702,9 @@ const collisionPolicyOptions: Array<{ label: string; value: PrivateCollisionPoli
 ]
 const followMethodOptions: PrivateFollowMethod[] = ['企微', '电话', '微信', '短信', '社群', '线下', '其他']
 const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '有意向', '已报价', '已成交', '暂缓', '流失']
+const enabledOwnershipRuleCount = computed(() => ownershipRules.value.filter(item => item.enabled).length)
+const disabledOwnershipRuleCount = computed(() => ownershipRules.value.length - enabledOwnershipRuleCount.value)
+const coreDisabledOwnershipRuleCount = computed(() => ownershipRules.value.filter(item => coreOwnershipSources.includes(item.source) && !item.enabled).length)
 const ownershipAuditItems = computed<OwnershipAuditItem[]>(() => {
   const enabledRules = ownershipRules.value.filter(item => item.enabled)
   const enabledSources = new Set(enabledRules.map(item => item.source))
@@ -6224,6 +6262,64 @@ async function saveOwnershipRule(row: PrivateOwnershipRule) {
   }
 }
 
+async function saveOwnershipRulesBatch(targets: PrivateOwnershipRule[], successText: string) {
+  if (ruleBulkSaving.value) return
+  if (!targets.length) {
+    ElMessage.info('当前没有需要批量更新的归属规则')
+    return
+  }
+  const targetIds = targets.map(item => item.id)
+  ruleBulkSaving.value = true
+  ruleSavingIds.value = Array.from(new Set([...ruleSavingIds.value, ...targetIds]))
+  try {
+    const savedRules: PrivateOwnershipRule[] = []
+    for (const rule of targets) {
+      savedRules.push(await privateDomainApi.saveOwnershipRule({ ...rule }))
+    }
+    ownershipRules.value = ownershipRules.value.map(rule => savedRules.find(item => item.id === rule.id) || rule)
+    await loadDashboard()
+    ElMessage.success(successText)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '批量保存归属规则失败')
+  } finally {
+    ruleSavingIds.value = ruleSavingIds.value.filter(id => !targetIds.includes(id))
+    ruleBulkSaving.value = false
+  }
+}
+
+async function bulkSetOwnershipRules(enabled: boolean) {
+  const targets = ownershipRules.value
+    .filter(item => item.enabled !== enabled)
+    .map(item => ({ ...item, enabled }))
+  if (!targets.length) {
+    ElMessage.info(enabled ? '当前归属规则已全部启用' : '当前归属规则已全部停用')
+    return
+  }
+  if (!enabled) {
+    try {
+      await ElMessageBox.confirm(
+        '停用全部归属规则后,新私域客户将缺少自动归属口径。确认只是临时排查时再执行。',
+        '确认停用全部归属规则',
+        {
+          type: 'warning',
+          confirmButtonText: '确认停用',
+          cancelButtonText: '再看看'
+        }
+      )
+    } catch {
+      return
+    }
+  }
+  await saveOwnershipRulesBatch(targets, enabled ? `已启用 ${targets.length} 条归属规则` : `已停用 ${targets.length} 条归属规则`)
+}
+
+async function enableCoreOwnershipRules() {
+  const targets = ownershipRules.value
+    .filter(item => coreOwnershipSources.includes(item.source) && !item.enabled)
+    .map(item => ({ ...item, enabled: true }))
+  await saveOwnershipRulesBatch(targets, `已启用 ${targets.length} 条核心渠道规则`)
+}
+
 async function saveWecomConfig() {
   wecomSaving.value = true
   try {
@@ -7372,17 +7468,35 @@ watch(() => route.fullPath, applyRouteQueue)
 }
 
 .rule-toolbar {
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   padding: 10px 12px;
   border: 1px solid #edf2f7;
   border-radius: 8px;
   background: #f8fafc;
   color: #64748b;
   font-size: 13px;
+}
+
+.rule-toolbar-copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 
   span:first-child {
     color: #245bdb;
     font-weight: 700;
+  }
+}
+
+.rule-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+
+  :deep(.el-button) {
+    margin-left: 0;
   }
 }
 
@@ -10531,6 +10645,14 @@ watch(() => route.fullPath, applyRouteQueue)
   .pd-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .rule-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-toolbar-actions {
+    justify-content: flex-start;
   }
 
   .connect-strip,

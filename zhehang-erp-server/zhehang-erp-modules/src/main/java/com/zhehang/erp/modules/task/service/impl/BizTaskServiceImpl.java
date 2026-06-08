@@ -1,10 +1,13 @@
 package com.zhehang.erp.modules.task.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.modules.contract.domain.BizContract;
+import com.zhehang.erp.modules.contract.mapper.BizContractMapper;
 import com.zhehang.erp.modules.task.domain.BizTask;
 import com.zhehang.erp.modules.task.domain.BizTaskHandover;
 import com.zhehang.erp.modules.task.domain.BizTaskHandoverItem;
@@ -31,6 +34,8 @@ public class BizTaskServiceImpl extends ServiceImpl<BizTaskMapper, BizTask> impl
     private final BizTaskMapper taskMapper;
     private final BizTaskHandoverMapper handoverMapper;
     private final BizTaskHandoverItemMapper handoverItemMapper;
+    // 注入 mapper 而非 IBizContractService:避免 contract(派单依赖task)↔task 的Spring循环依赖
+    private final BizContractMapper contractMapper;
 
     @Override
     public IPage<BizTask> selectPage(int pageNum, int pageSize, String taskType, Integer status, Long executorId) {
@@ -108,6 +113,32 @@ public class BizTaskServiceImpl extends ServiceImpl<BizTaskMapper, BizTask> impl
         task.setReviewerId(reviewerId);
         task.setReviewTime(LocalDateTime.now());
         taskMapper.updateById(task);
+        if (pass) {
+            markContractServingIfAllDone(task);
+        }
+    }
+
+    /**
+     * 交付闭环回写:某合同派生的交付任务全部验收完成时,把合同状态置为"服务中"(status=5)。
+     * 即 派交付→交付完成→进入服务。用 contractMapper 直接更新(避免service循环依赖)。
+     */
+    private void markContractServingIfAllDone(BizTask task) {
+        if (!"contract".equals(task.getBizType()) || task.getBizId() == null) {
+            return;
+        }
+        // 该合同下仍未结束(既非已完成5也非已取消7)的交付任务数
+        Long pending = taskMapper.selectCount(new LambdaQueryWrapper<BizTask>()
+                .eq(BizTask::getBizId, task.getBizId())
+                .eq(BizTask::getBizType, "contract")
+                .notIn(BizTask::getStatus, 5, 7));
+        if (pending != null && pending == 0) {
+            BizContract contract = contractMapper.selectById(task.getBizId());
+            if (contract != null && contract.getStatus() != null && contract.getStatus() == 4) {
+                LambdaUpdateWrapper<BizContract> uw = new LambdaUpdateWrapper<>();
+                uw.eq(BizContract::getId, contract.getId()).set(BizContract::getStatus, 5); // 5=服务中/履约中
+                contractMapper.update(null, uw);
+            }
+        }
     }
 
     @Override

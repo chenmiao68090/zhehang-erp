@@ -21,7 +21,9 @@ import java.util.Map;
 public class BizTaskController {
 
     private final IBizTaskService taskService;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    // 注册 JavaTimeModule:支持 body 里 LocalDateTime 字段(如交接单时间)按 ISO 字符串转换
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
     @GetMapping("/list")
     public R<IPage<BizTask>> list(

@@ -13,8 +13,11 @@ import com.zhehang.erp.modules.contract.service.IBizContractService;
 import com.zhehang.erp.modules.order.domain.BizOrder;
 import com.zhehang.erp.modules.order.mapper.BizOrderMapper;
 import com.zhehang.erp.modules.task.domain.BizTask;
+import com.zhehang.erp.modules.task.domain.BizCommission;
 import com.zhehang.erp.modules.task.mapper.BizTaskMapper;
+import com.zhehang.erp.modules.task.mapper.BizCommissionMapper;
 import com.zhehang.erp.modules.task.service.IBizTaskService;
+import com.zhehang.erp.modules.task.service.IBizCommissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,8 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
     private final BizOrderMapper orderMapper;
     private final IBizTaskService taskService;
     private final BizTaskMapper bizTaskMapper;
+    private final IBizCommissionService commissionService;
+    private final BizCommissionMapper bizCommissionMapper;
 
     /** 合同签署后自动派发的交付任务模板(代账主流程) */
     private static final String[] DELIVERY_TASKS = {"客户资料收集", "建账初始化", "税务报到"};
@@ -110,6 +115,22 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
         contractMapper.updateById(contract);
         // 签约→自动派发交付任务(同事务,关联合同+客户;防重派发)
         dispatchDeliveryTasks(contract);
+        // 签约→自动生成销售提成(按订单销售人,默认5%;防重)
+        generateCommission(contract);
+    }
+
+    /** 合同签署后,按关联订单的销售人自动生成提成单(默认费率,见BizCommissionServiceImpl)。已生成则跳过。 */
+    private void generateCommission(BizContract contract) {
+        if (contract.getOrderId() == null) {
+            return;
+        }
+        Long existing = bizCommissionMapper.selectCount(new LambdaQueryWrapper<BizCommission>()
+                .eq(BizCommission::getOrderId, contract.getOrderId()));
+        if (existing != null && existing > 0) {
+            return;
+        }
+        Long cmsId = commissionService.generate(contract.getOrderId(), null);
+        log.info("合同[{}]签署,订单[{}]自动生成提成单[{}]", contract.getContractNo(), contract.getOrderId(), cmsId);
     }
 
     /**

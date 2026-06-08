@@ -1602,6 +1602,38 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">资料归档</div>
+        <div class="delivery-archive-panel">
+          <div class="delivery-archive-summary">
+            <div>
+              <strong>{{ deliveryArchiveSummary(deliveryDrawer.row).title }}</strong>
+              <p>{{ deliveryArchiveSummary(deliveryDrawer.row).hint }}</p>
+            </div>
+            <el-progress
+              :percentage="deliveryArchiveSummary(deliveryDrawer.row).percent"
+              :status="deliveryArchiveSummary(deliveryDrawer.row).status"
+              :stroke-width="8"
+            />
+          </div>
+          <div class="delivery-archive-grid">
+            <button
+              v-for="item in deliveryArchiveItems(deliveryDrawer.row)"
+              :key="item.key"
+              type="button"
+              class="delivery-archive-card"
+              :class="item.status"
+              @click.stop="handleDeliveryArchiveAction(deliveryDrawer.row, item)"
+            >
+              <div class="delivery-archive-head">
+                <strong>{{ item.label }}</strong>
+                <el-tag :type="deliveryChecklistTag(item.status)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+              </div>
+              <p>{{ item.desc }}</p>
+              <span>{{ item.actionText }}</span>
+            </button>
+          </div>
+        </div>
+
         <div class="bd-section-title mt">回访续费</div>
         <div class="delivery-review-card">
           <div>
@@ -2484,6 +2516,7 @@ const stageOptions: Array<{ label: string; value: PrivateStage }> = [
 type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead' | 'mark_intent'
 type DeliveryTimelineType = 'address' | 'follow' | 'task'
 type DeliveryChecklistStatus = 'done' | 'todo' | 'risk'
+type DeliveryArchiveAction = 'order' | 'contact' | 'task' | 'address' | 'review'
 
 interface ContactActionItem {
   key: ContactActionKey
@@ -2532,6 +2565,16 @@ interface DeliveryChecklistItem {
   status: DeliveryChecklistStatus
   statusText: string
   desc: string
+}
+
+interface DeliveryArchiveItem {
+  key: string
+  label: string
+  status: DeliveryChecklistStatus
+  statusText: string
+  desc: string
+  actionText: string
+  action: DeliveryArchiveAction
 }
 
 const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
@@ -3447,6 +3490,118 @@ function deliveryChecklistItems(row: PrivateDeliveryPackage): DeliveryChecklistI
       desc: deliveryProgress(row) >= 100 ? '可做满意度回访、资料归档、续费提醒和转介绍沉淀。' : '交付未完成前先沉淀资料清单,完成后自动进入回访续费。'
     }
   ]
+}
+
+function deliveryArchiveSummary(row: PrivateDeliveryPackage) {
+  const items = deliveryArchiveItems(row)
+  const done = items.filter(item => item.status === 'done').length
+  const risk = items.filter(item => item.status === 'risk').length
+  const todo = items.filter(item => item.status === 'todo').length
+  return {
+    title: `归档完整度 ${done}/${items.length}`,
+    hint: risk > 0 ? `还有 ${risk} 个归档阻断项,先补合同、地址、任务或客户资料。` : todo > 0 ? `还有 ${todo} 个待确认项,交付完成前持续沉淀凭证。` : '合同、回款、资料、地址和任务凭证已经具备归档基础。',
+    percent: items.length ? Math.round(done / items.length * 100) : 0,
+    status: risk > 0 ? 'exception' : todo > 0 ? 'warning' : 'success'
+  } as { title: string; hint: string; percent: number; status: 'success' | 'exception' | 'warning' }
+}
+
+function deliveryArchiveItems(row: PrivateDeliveryPackage): DeliveryArchiveItem[] {
+  const isAddress = isAddressDelivery(row)
+  const addressLock = activeAddressLock(row)
+  const doneCount = deliveryDoneCount(row)
+  const pendingCount = deliveryPendingCount(row)
+  const overdueCount = deliveryOverdueCount(row)
+  const taskTotal = row.tasks.length || row.taskIds.length
+  const progress = deliveryProgress(row)
+  const hasOrder = Boolean(row.orderNo)
+  const hasPaymentRule = Boolean(row.paymentTimeReq)
+  const hasOrderItems = Boolean(row.orderItemNames?.length)
+
+  return [
+    {
+      key: 'order',
+      label: '合同/提单凭证',
+      status: hasOrder && hasOrderItems ? 'done' : hasOrder ? 'todo' : 'risk',
+      statusText: hasOrder && hasOrderItems ? '已挂接' : hasOrder ? '待补服务项' : '缺提单',
+      desc: hasOrder ? `${row.orderNo} · ${row.orderItemNames?.join('、') || row.serviceLine}` : '缺少提单或合同入口,后续归档无法追溯服务范围和审批凭证。',
+      actionText: hasOrder ? '查看提单' : '查看客户',
+      action: hasOrder ? 'order' : 'contact'
+    },
+    {
+      key: 'payment',
+      label: '回款/账期凭证',
+      status: row.orderStatus === 'completed' && hasPaymentRule ? 'done' : hasPaymentRule ? 'todo' : 'risk',
+      statusText: row.orderStatus === 'completed' && hasPaymentRule ? '已核对' : hasPaymentRule ? '待财务确认' : '缺收款要求',
+      desc: hasPaymentRule ? `${paymentMethodText(row.paymentMethod)} · ${row.paymentTimeReq}` : '缺少首款、尾款、月结或账期说明,财务归档无法判断回款责任。',
+      actionText: '查看提单',
+      action: 'order'
+    },
+    {
+      key: 'materials',
+      label: '客户资料清单',
+      status: doneCount > 0 ? 'done' : taskTotal > 0 ? 'todo' : 'risk',
+      statusText: doneCount > 0 ? '已沉淀' : taskTotal > 0 ? '待收集' : '无任务',
+      desc: doneCount > 0 ? `已有 ${doneCount} 个交付任务完成,继续补法人、股东、开票和办理资料。` : '还没有形成可归档的客户资料节点,需要交付负责人补清单。',
+      actionText: '查看客户',
+      action: 'contact'
+    },
+    {
+      key: 'address',
+      label: '地址/资源凭证',
+      status: !isAddress || hasBoundAddressResource(row) ? 'done' : addressLock ? 'todo' : 'risk',
+      statusText: !isAddress ? '无需地址' : hasBoundAddressResource(row) ? '已绑定 ADR' : addressLock ? '待补 ADR' : '未锁地址',
+      desc: !isAddress ? '该服务包不涉及地址资源。' : addressLock ? `${formatAddressResourceNo(addressLock.resourceId)} · ${addressLock.remark}` : '地址挂靠或同行渠道业务必须保留地址锁定和资源编号凭证。',
+      actionText: isAddress ? '补地址凭证' : '无需处理',
+      action: 'address'
+    },
+    {
+      key: 'tasks',
+      label: '交付任务凭证',
+      status: overdueCount > 0 ? 'risk' : pendingCount > 0 ? 'todo' : 'done',
+      statusText: overdueCount > 0 ? `${overdueCount} 个逾期` : pendingCount > 0 ? `${pendingCount} 个待办` : '已闭环',
+      desc: `当前 ${doneCount}/${taskTotal} 个任务完成,最晚节点 ${row.dueDate},任务流是交付归档主证据。`,
+      actionText: '查看任务',
+      action: 'task'
+    },
+    {
+      key: 'review',
+      label: '回访/续费记录',
+      status: progress >= 100 ? 'todo' : progress > 0 ? 'todo' : 'risk',
+      statusText: progress >= 100 ? '待回访' : progress > 0 ? '交付中' : '未启动',
+      desc: progress >= 100 ? '交付完成后应沉淀满意度、续费提醒、转介绍和新增需求。' : '交付未完成前先记录客户反馈,完成后再归档回访续费。',
+      actionText: '记录回访',
+      action: 'review'
+    }
+  ]
+}
+
+function handleDeliveryArchiveAction(row: PrivateDeliveryPackage, item: DeliveryArchiveItem) {
+  if (item.action === 'order') {
+    openDeliveryOrder(row)
+    return
+  }
+  if (item.action === 'contact') {
+    openDeliveryContact(row)
+    return
+  }
+  if (item.action === 'task') {
+    deliveryDrawer.visible = false
+    activeTab.value = 'tasks'
+    taskFilter.value = deliveryOverdueCount(row) > 0 ? 'overdue' : deliveryPendingCount(row) > 0 ? 'pending' : 'all'
+    scrollPrivateTabsIntoView()
+    return
+  }
+  if (item.action === 'address') {
+    if (!isAddressDelivery(row)) {
+      ElMessage.info('该交付包不涉及地址资源,无需补地址凭证')
+      return
+    }
+    ElMessage.info(needsAddressResourceBinding(row) ? '请在上方地址资源区选择可用地址并补绑定 ADR' : '地址凭证已在当前交付包内显示')
+    return
+  }
+  if (item.action === 'review') {
+    openDeliveryReview(row)
+  }
 }
 
 function deliveryReviewTitle(row: PrivateDeliveryPackage) {
@@ -5958,6 +6113,104 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.delivery-archive-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.delivery-archive-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.delivery-archive-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.delivery-archive-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &.done {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.todo {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.risk {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+    transform: translateY(-1px);
+  }
+
+  p {
+    min-height: 38px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.delivery-archive-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .delivery-review-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -7375,6 +7628,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .delivery-progress-stats,
   .delivery-check-grid,
   .delivery-checklist,
+  .delivery-archive-summary,
+  .delivery-archive-grid,
   .delivery-review-card,
   .address-inventory-list,
   .verify-detail-grid,

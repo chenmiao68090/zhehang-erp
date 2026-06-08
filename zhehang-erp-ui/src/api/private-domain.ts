@@ -50,6 +50,20 @@ export interface PrivateWecomConfig {
   updatedAt: string
 }
 
+export interface PrivateWechatServiceConfig {
+  appId: string
+  appSecret: string
+  callbackUrl: string
+  token: string
+  aesKey: string
+  syncMessages: boolean
+  syncLeads: boolean
+  syncMenuClick: boolean
+  syncMiniProgram: boolean
+  ownerName: string
+  updatedAt: string
+}
+
 export interface PrivateDeliveryPackage {
   id: number
   contactId: number
@@ -371,6 +385,7 @@ const INTEGRATION_KEY = 'biz_private_integrations'
 const PROFILE_KEY = 'biz_private_ops_profile'
 const OWNERSHIP_RULE_KEY = 'biz_private_ownership_rules'
 const WECOM_CONFIG_KEY = 'biz_private_wecom_config'
+const WECHAT_SERVICE_CONFIG_KEY = 'biz_private_wechat_service_config'
 const DELIVERY_PACKAGE_KEY = 'biz_private_delivery_packages'
 const FOLLOW_KEY = 'biz_private_follow_records'
 const ADDRESS_INVENTORY_KEY = 'biz_private_address_inventory'
@@ -798,6 +813,39 @@ function isWecomReady(config: PrivateWecomConfig) {
   return Boolean(config.corpId && config.contactSecret && config.token && config.aesKey)
 }
 
+function defaultWechatServiceConfig(): PrivateWechatServiceConfig {
+  return {
+    appId: '',
+    appSecret: '',
+    callbackUrl: 'https://your-domain.com/api/wechat/private-domain/callback',
+    token: '',
+    aesKey: '',
+    syncMessages: true,
+    syncLeads: true,
+    syncMenuClick: true,
+    syncMiniProgram: false,
+    ownerName: '网销主管',
+    updatedAt: ts()
+  }
+}
+
+function readWechatServiceConfig(): PrivateWechatServiceConfig {
+  try {
+    const raw = localStorage.getItem(WECHAT_SERVICE_CONFIG_KEY)
+    return raw ? { ...defaultWechatServiceConfig(), ...JSON.parse(raw) } : defaultWechatServiceConfig()
+  } catch {
+    return defaultWechatServiceConfig()
+  }
+}
+
+function writeWechatServiceConfig(config: PrivateWechatServiceConfig) {
+  localStorage.setItem(WECHAT_SERVICE_CONFIG_KEY, JSON.stringify(config))
+}
+
+function isWechatServiceReady(config: PrivateWechatServiceConfig) {
+  return Boolean(config.appId && config.appSecret && config.callbackUrl && config.token)
+}
+
 function syncWecomIntegration(config: PrivateWecomConfig) {
   const integrations = readList<PrivateIntegration>(INTEGRATION_KEY)
   const idx = integrations.findIndex(item => item.key === 'wecom-contact')
@@ -811,6 +859,30 @@ function syncWecomIntegration(config: PrivateWecomConfig) {
     description: connected
       ? '已保存企微客户联系参数,可同步外部联系人、客户群、标签和互动记录。'
       : '同步外部联系人、企微客户群、员工归属和客户标签。'
+  }
+  writeList(INTEGRATION_KEY, integrations)
+}
+
+function syncWechatServiceIntegration(config: PrivateWechatServiceConfig) {
+  const integrations = readList<PrivateIntegration>(INTEGRATION_KEY)
+  const idx = integrations.findIndex(item => item.key === 'wechat-service')
+  if (idx < 0) return
+  const connected = isWechatServiceReady(config)
+  const scopes = [
+    config.syncMessages ? '会话消息' : '',
+    config.syncLeads ? '留资表单' : '',
+    config.syncMenuClick ? '菜单点击' : '',
+    config.syncMiniProgram ? '小程序线索' : ''
+  ].filter(Boolean)
+  integrations[idx] = {
+    ...integrations[idx],
+    status: connected ? 'connected' : 'pending',
+    ownerName: config.ownerName || integrations[idx].ownerName,
+    scope: scopes.length ? scopes.join('/') : integrations[idx].scope,
+    lastSyncAt: connected ? ts(0, 9, 20) : '待配置',
+    description: connected
+      ? '已保存微信客服/公众号参数,可承接消息、留资、菜单点击和小程序线索。'
+      : '承接公众号、小程序、微信客服消息和留资表单。'
   }
   writeList(INTEGRATION_KEY, integrations)
 }
@@ -967,6 +1039,7 @@ function ensureSeeds() {
   if (!localStorage.getItem(PROFILE_KEY)) writeProfile(defaultProfile())
   if (!readList<PrivateOwnershipRule>(OWNERSHIP_RULE_KEY).length) writeOwnershipRules(defaultOwnershipRules())
   if (!localStorage.getItem(WECOM_CONFIG_KEY)) writeWecomConfig(defaultWecomConfig())
+  if (!localStorage.getItem(WECHAT_SERVICE_CONFIG_KEY)) writeWechatServiceConfig(defaultWechatServiceConfig())
   if (!localStorage.getItem(DELIVERY_PACKAGE_KEY)) writeList<PrivateDeliveryPackage>(DELIVERY_PACKAGE_KEY, [])
   if (!readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY).length) {
     writeList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY, [
@@ -1866,6 +1939,7 @@ export const privateDomainApi = {
     const integrations = readList<PrivateIntegration>(INTEGRATION_KEY)
     const ownershipRules = readOwnershipRules()
     const wecomConfig = readWecomConfig()
+    const wechatServiceConfig = readWechatServiceConfig()
     const followRecords = readList<PrivateFollowRecord>(FOLLOW_KEY)
     const addressInventory = readList<PrivateAddressInventory>(ADDRESS_INVENTORY_KEY)
     const addressLocks = readList<PrivateAddressLock>(ADDRESS_LOCK_KEY)
@@ -1881,6 +1955,7 @@ export const privateDomainApi = {
       integrations,
       ownershipRules,
       wecomConfig,
+      wechatServiceConfig,
       deliveryPackages,
       followRecords,
       addressInventory,
@@ -1981,6 +2056,21 @@ export const privateDomainApi = {
     }
     writeWecomConfig(payload)
     syncWecomIntegration(payload)
+    return delay(payload)
+  },
+  async getWechatServiceConfig() {
+    ensureSeeds()
+    return delay(readWechatServiceConfig())
+  },
+  async saveWechatServiceConfig(config: PrivateWechatServiceConfig) {
+    ensureSeeds()
+    const payload: PrivateWechatServiceConfig = {
+      ...defaultWechatServiceConfig(),
+      ...config,
+      updatedAt: ts()
+    }
+    writeWechatServiceConfig(payload)
+    syncWechatServiceIntegration(payload)
     return delay(payload)
   },
   async listDeliveryPackages() {

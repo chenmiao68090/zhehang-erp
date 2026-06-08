@@ -1297,6 +1297,85 @@
               <el-button type="primary" :loading="wecomSaving" @click="saveWecomConfig">保存企微配置</el-button>
             </div>
           </div>
+          <div class="wecom-config-card">
+            <div class="panel-title compact">
+              <div>
+                <h2>微信客服/公众号接入参数</h2>
+                <p>用于承接公众号菜单、微信客服会话、小程序留资和消息回调,让私域客户从微信端自动沉淀。</p>
+              </div>
+              <el-tag :type="wechatServiceReady ? 'success' : 'warning'" effect="plain">{{ wechatServiceReady ? '已具备接入参数' : '待补参数' }}</el-tag>
+            </div>
+            <el-form label-position="top" class="wecom-form">
+              <el-row :gutter="12">
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="AppID">
+                    <el-input v-model="wechatServiceConfig.appId" placeholder="wx..." />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="AppSecret">
+                    <el-input v-model="wechatServiceConfig.appSecret" type="password" show-password />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="同步负责人">
+                    <el-input v-model="wechatServiceConfig.ownerName" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="12">
+                <el-col :xs="24" :md="10">
+                  <el-form-item label="消息回调 URL">
+                    <el-input v-model="wechatServiceConfig.callbackUrl" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="7">
+                  <el-form-item label="Token">
+                    <el-input v-model="wechatServiceConfig.token" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="7">
+                  <el-form-item label="EncodingAESKey">
+                    <el-input v-model="wechatServiceConfig.aesKey" type="password" show-password />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="12">
+                <el-col :xs="24">
+                  <el-form-item label="同步范围">
+                    <div class="sync-switches">
+                      <el-checkbox v-model="wechatServiceConfig.syncMessages">客服会话</el-checkbox>
+                      <el-checkbox v-model="wechatServiceConfig.syncLeads">留资表单</el-checkbox>
+                      <el-checkbox v-model="wechatServiceConfig.syncMenuClick">菜单点击</el-checkbox>
+                      <el-checkbox v-model="wechatServiceConfig.syncMiniProgram">小程序线索</el-checkbox>
+                    </div>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
+            <div class="wecom-check-panel" :class="wechatServicePrecheckLevel">
+              <div class="wecom-check-head">
+                <div>
+                  <strong>微信接入前置检查</strong>
+                  <p>{{ wechatServicePrecheckSummary }}</p>
+                </div>
+                <el-tag :type="wecomCheckTag(wechatServicePrecheckLevel)" effect="plain">{{ wechatServicePrecheckStatusText }}</el-tag>
+              </div>
+              <div class="wecom-check-grid">
+                <div v-for="item in wechatServiceCheckItems" :key="item.key" class="wecom-check-item" :class="item.level">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <el-tag :type="wecomCheckTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.desc }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="profile-actions">
+              <span>最近更新：{{ wechatServiceConfig.updatedAt || '-' }}</span>
+              <el-button type="primary" :loading="wechatServiceSaving" @click="saveWechatServiceConfig">保存微信配置</el-button>
+            </div>
+          </div>
           <div class="integration-audit-panel" :class="integrationAuditLevel">
             <div class="integration-audit-head">
               <div>
@@ -2108,7 +2187,8 @@ import {
   type PrivateTaskStatus,
   type PrivateTimelineItem,
   type PrivateTimelineType,
-  type PrivateWecomConfig
+  type PrivateWecomConfig,
+  type PrivateWechatServiceConfig
 } from '@/api/private-domain'
 
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
@@ -2244,6 +2324,7 @@ const opsChecks = ref<PrivateOpsCheck[]>([])
 const dailyActions = ref<PrivateDailyAction[]>([])
 const profileSaving = ref(false)
 const wecomSaving = ref(false)
+const wechatServiceSaving = ref(false)
 const followSaving = ref(false)
 const contactQuickFilter = ref<ContactQuickFilter>('all')
 const followFilter = ref<FollowFilter>('all')
@@ -2380,6 +2461,19 @@ const wecomConfig = reactive<PrivateWecomConfig>({
   syncInteraction: true,
   syncIntervalMinutes: 30,
   ownerName: '系统管理员',
+  updatedAt: ''
+})
+const wechatServiceConfig = reactive<PrivateWechatServiceConfig>({
+  appId: '',
+  appSecret: '',
+  callbackUrl: '',
+  token: '',
+  aesKey: '',
+  syncMessages: true,
+  syncLeads: true,
+  syncMenuClick: true,
+  syncMiniProgram: false,
+  ownerName: '网销主管',
   updatedAt: ''
 })
 
@@ -2687,6 +2781,76 @@ const wecomPrecheckSummary = computed(() => {
   if (wecomPrecheckLevel.value === 'danger') return `已完成 ${wecomPrecheckReadyCount.value}/${total},还缺 CorpId、Secret 或安全密钥等关键参数。`
   if (wecomPrecheckLevel.value === 'warning') return `已完成 ${wecomPrecheckReadyCount.value}/${total},可以保存配置,但真实联调前仍需补齐警告项。`
   return `已完成 ${total}/${total},参数、范围和责任人都具备,可以进入企微回调/定时同步联调。`
+})
+const wechatServiceReady = computed(() => Boolean(wechatServiceConfig.appId && wechatServiceConfig.appSecret && wechatServiceConfig.callbackUrl && wechatServiceConfig.token))
+const wechatServiceSyncScopes = computed(() => [
+  wechatServiceConfig.syncMessages ? '客服会话' : '',
+  wechatServiceConfig.syncLeads ? '留资表单' : '',
+  wechatServiceConfig.syncMenuClick ? '菜单点击' : '',
+  wechatServiceConfig.syncMiniProgram ? '小程序线索' : ''
+].filter(Boolean))
+const wechatServiceCheckItems = computed<WecomCheckItem[]>(() => [
+  {
+    key: 'identity',
+    label: '应用身份',
+    level: wechatServiceConfig.appId ? 'success' : 'danger',
+    statusText: wechatServiceConfig.appId ? '已填写' : '缺 AppID',
+    desc: wechatServiceConfig.appId ? `AppID ${wechatServiceConfig.appId}` : '先在公众号/微信客服后台获取 AppID,否则无法识别微信来源。'
+  },
+  {
+    key: 'secret',
+    label: 'AppSecret',
+    level: wechatServiceConfig.appSecret ? 'success' : 'danger',
+    statusText: wechatServiceConfig.appSecret ? '已填写' : '缺 Secret',
+    desc: wechatServiceConfig.appSecret ? '微信端接口调用已具备授权参数。' : '缺 AppSecret 时,菜单点击、客服会话和留资表单不能自动同步。'
+  },
+  {
+    key: 'callback',
+    label: '消息回调',
+    level: wechatServiceConfig.callbackUrl ? 'success' : 'warning',
+    statusText: wechatServiceConfig.callbackUrl ? '已填写' : '待配置',
+    desc: wechatServiceConfig.callbackUrl || '真实接入时需要配置公网 HTTPS 回调地址,用于接收消息、事件和留资通知。'
+  },
+  {
+    key: 'security',
+    label: 'Token/AESKey',
+    level: wechatServiceConfig.token ? 'success' : 'danger',
+    statusText: wechatServiceConfig.token ? (wechatServiceConfig.aesKey ? '已齐' : '缺 AESKey') : '缺 Token',
+    desc: wechatServiceConfig.token
+      ? (wechatServiceConfig.aesKey ? '回调验签和消息解密参数已具备。' : '已填写 Token,AESKey 可按公众号加解密模式补齐。')
+      : 'Token 必填,否则微信服务器回调无法验签。'
+  },
+  {
+    key: 'scope',
+    label: '同步范围',
+    level: wechatServiceSyncScopes.value.length ? 'success' : 'warning',
+    statusText: wechatServiceSyncScopes.value.length ? `${wechatServiceSyncScopes.value.length} 项` : '未选择',
+    desc: wechatServiceSyncScopes.value.length ? `当前同步: ${wechatServiceSyncScopes.value.join('、')}。` : '至少选择客服会话或留资表单,后续才能沉淀私域客户。'
+  },
+  {
+    key: 'owner',
+    label: '负责人',
+    level: wechatServiceConfig.ownerName ? 'success' : 'warning',
+    statusText: wechatServiceConfig.ownerName || '待补负责人',
+    desc: wechatServiceConfig.ownerName ? `${wechatServiceConfig.ownerName} 负责微信渠道配置、同步异常和线索归属。` : '建议指定网销或私域负责人,避免微信渠道异常无人处理。'
+  }
+])
+const wechatServiceReadyCount = computed(() => wechatServiceCheckItems.value.filter(item => item.level === 'success').length)
+const wechatServicePrecheckLevel = computed<WecomCheckItem['level']>(() => {
+  if (wechatServiceCheckItems.value.some(item => item.level === 'danger')) return 'danger'
+  if (wechatServiceCheckItems.value.some(item => item.level === 'warning')) return 'warning'
+  return 'success'
+})
+const wechatServicePrecheckStatusText = computed(() => ({
+  danger: '缺关键参数',
+  warning: '可保存待补',
+  success: '可进入联调'
+} as Record<WecomCheckItem['level'], string>)[wechatServicePrecheckLevel.value])
+const wechatServicePrecheckSummary = computed(() => {
+  const total = wechatServiceCheckItems.value.length
+  if (wechatServicePrecheckLevel.value === 'danger') return `已完成 ${wechatServiceReadyCount.value}/${total},还缺 AppID、AppSecret 或 Token 等关键参数。`
+  if (wechatServicePrecheckLevel.value === 'warning') return `已完成 ${wechatServiceReadyCount.value}/${total},可以保存配置,但真实联调前仍需补齐警告项。`
+  return `已完成 ${total}/${total},微信客服、公众号和留资表单可以进入回调联调。`
 })
 const integrationAuditItems = computed<IntegrationAuditItem[]>(() => integrations.value.map(item => {
   const hasOwner = Boolean(item.ownerName)
@@ -5127,6 +5291,7 @@ async function loadDashboard() {
   opsChecks.value = data.opsChecks
   dailyActions.value = data.dailyActions
   Object.assign(wecomConfig, data.wecomConfig)
+  Object.assign(wechatServiceConfig, data.wechatServiceConfig)
   Object.assign(opsProfile, data.opsProfile)
   opsProfile.answers = { sourceTruth: '', ownerRule: '', successMetric: '', dataImport: '', ...(data.opsProfile.answers || {}) }
   await loadAddressResourceOptions()
@@ -5672,6 +5837,20 @@ async function saveWecomConfig() {
     ElMessage.error(error?.message || '保存企微配置失败')
   } finally {
     wecomSaving.value = false
+  }
+}
+
+async function saveWechatServiceConfig() {
+  wechatServiceSaving.value = true
+  try {
+    const saved = await privateDomainApi.saveWechatServiceConfig({ ...wechatServiceConfig })
+    Object.assign(wechatServiceConfig, saved)
+    await loadDashboard()
+    ElMessage.success(wechatServiceReady.value ? '微信客服/公众号接入参数已保存,接入卡片已标记为可同步' : '微信配置已保存,还需补齐 AppID/AppSecret/回调/Token')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存微信配置失败')
+  } finally {
+    wechatServiceSaving.value = false
   }
 }
 

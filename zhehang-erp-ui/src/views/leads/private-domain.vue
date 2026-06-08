@@ -491,7 +491,7 @@
             </template>
             <el-table-column label="客户" min-width="260" fixed="left">
               <template #default="{ row }">
-                <button class="link-btn" @click.stop="openContact(row)">{{ row.companyName }}</button>
+                <button type="button" class="link-btn" @click.stop="openContact(row)">{{ row.companyName }}</button>
                 <div class="sub-line">{{ row.name }} · {{ row.phone }}</div>
               </template>
             </el-table-column>
@@ -580,7 +580,7 @@
               <el-table-column prop="createdAt" label="记录时间" width="150" />
               <el-table-column label="客户" min-width="240">
                 <template #default="{ row }">
-                  <button class="link-btn" @click.stop="openContactFromFollow(row)">{{ row.companyName }}</button>
+                  <button type="button" class="link-btn" @click.stop="openContactFromFollow(row)">{{ row.companyName }}</button>
                   <div class="sub-line">{{ row.contactName }} · {{ row.ownerName }}</div>
                 </template>
               </el-table-column>
@@ -695,15 +695,21 @@
             <span>{{ taskFilterHint }} 当前显示 {{ filteredTasks.length }} 条任务。</span>
           </div>
           <el-table :data="filteredTasks" border stripe empty-text="当前筛选下暂无任务">
-            <el-table-column label="任务" min-width="260">
+            <el-table-column label="任务" min-width="300">
               <template #default="{ row }">
                 <strong>{{ row.title }}</strong>
+                <div class="task-source-row">
+                  <el-tag :type="taskSourceTag(row)" size="small" effect="plain">{{ taskSourceText(row) }}</el-tag>
+                  <button v-if="taskDeliveryPackage(row)" type="button" class="mini-link-btn" @click.stop="openDeliveryFromTask(row)">
+                    {{ taskDeliveryPackageText(row) }}
+                  </button>
+                </div>
                 <div class="sub-line">{{ row.action }}</div>
               </template>
             </el-table-column>
             <el-table-column label="客户" min-width="220">
               <template #default="{ row }">
-                {{ row.companyName }}
+                <button type="button" class="link-btn" @click.stop="openTaskContact(row)">{{ row.companyName }}</button>
                 <div class="sub-line">{{ row.contactName }}</div>
               </template>
             </el-table-column>
@@ -2335,6 +2341,54 @@ function taskStatusText(status: PrivateTaskStatus) {
 
 function taskStatusTag(status: PrivateTaskStatus) {
   return ({ pending: 'warning', done: 'success', overdue: 'danger' } as Record<PrivateTaskStatus, any>)[status]
+}
+
+function taskContact(row: PrivateTask) {
+  return contacts.value.find(item => item.companyName === row.companyName && item.name === row.contactName)
+    || contacts.value.find(item => item.companyName === row.companyName)
+}
+
+function taskDeliveryPackage(row: PrivateTask) {
+  return deliveryPackages.value.find(item => item.taskIds.includes(row.id) || item.tasks.some(task => task.id === row.id))
+}
+
+function taskSourceText(row: PrivateTask) {
+  const pkg = taskDeliveryPackage(row)
+  if (pkg) return `交付包 · ${pkg.serviceLine}`
+  if (isAddressStockTask(row)) return '地址库存补货'
+  if (isSupervisorTask(row)) return '主管督办'
+  return '客户跟进'
+}
+
+function taskSourceTag(row: PrivateTask) {
+  if (taskDeliveryPackage(row)) return 'primary'
+  if (isAddressStockTask(row)) return 'success'
+  if (isSupervisorTask(row)) return 'warning'
+  return 'info'
+}
+
+function taskDeliveryPackageText(row: PrivateTask) {
+  const pkg = taskDeliveryPackage(row)
+  if (!pkg) return ''
+  return pkg.orderNo || pkg.packageName || '查看交付包'
+}
+
+function openTaskContact(row: PrivateTask) {
+  const contact = taskContact(row)
+  if (!contact) {
+    ElMessage.warning('未找到关联私域客户,请刷新后重试')
+    return
+  }
+  openContact(contact)
+}
+
+function openDeliveryFromTask(row: PrivateTask) {
+  const pkg = taskDeliveryPackage(row)
+  if (!pkg) {
+    ElMessage.warning('未找到关联交付包,请刷新后重试')
+    return
+  }
+  openDeliveryPackage(pkg)
 }
 
 function isSupervisorTask(task: PrivateTask) {
@@ -4902,6 +4956,23 @@ watch(() => route.fullPath, applyRouteQueue)
   color: #245bdb;
   font-weight: 700;
   cursor: pointer;
+}
+
+.mini-link-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #245bdb;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.task-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .contact-table-actions {

@@ -2299,6 +2299,41 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">客户同步话术</div>
+        <div class="delivery-brief-panel">
+          <div class="delivery-brief-head">
+            <div>
+              <strong>{{ deliveryBriefSummary(deliveryDrawer.row).title }}</strong>
+              <p>{{ deliveryBriefSummary(deliveryDrawer.row).hint }}</p>
+            </div>
+            <el-tag :type="deliveryBriefTag(deliveryBriefSummary(deliveryDrawer.row).level)" effect="plain">
+              {{ deliveryBriefSummary(deliveryDrawer.row).statusText }}
+            </el-tag>
+          </div>
+          <div class="delivery-brief-grid">
+            <div
+              v-for="item in deliveryClientBriefItems(deliveryDrawer.row)"
+              :key="item.key"
+              class="delivery-brief-card"
+              :class="item.level"
+            >
+              <div class="delivery-brief-card-head">
+                <div>
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.channel }}</span>
+                </div>
+                <el-tag :type="deliveryBriefTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+              </div>
+              <p>{{ item.content }}</p>
+              <em>{{ item.tip }}</em>
+              <div class="delivery-brief-actions">
+                <el-button size="small" type="primary" plain @click.stop="copyDeliveryClientBrief(item)">复制话术</el-button>
+                <el-button size="small" @click.stop="recordDeliveryClientBrief(deliveryDrawer.row, item)">记入跟进</el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="bd-section-title mt">资料归档</div>
         <div class="delivery-archive-panel">
           <div class="delivery-archive-summary">
@@ -4481,6 +4516,23 @@ interface DeliverySlaQueueItem {
   sort: number
 }
 
+interface DeliveryClientBriefItem {
+  key: string
+  title: string
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  statusText: string
+  channel: string
+  content: string
+  tip: string
+}
+
+interface DeliveryBriefSummary {
+  title: string
+  hint: string
+  level: DeliveryClientBriefItem['level']
+  statusText: string
+}
+
 interface DeliveryStarterCandidate {
   key: string
   contact: PrivateContact
@@ -6082,6 +6134,205 @@ function deliverySlaSummary(row: PrivateDeliveryPackage): DeliverySlaSummary {
     level: 'success',
     statusText: '已闭环'
   }
+}
+
+function deliveryBriefTag(level: DeliveryClientBriefItem['level']) {
+  return level
+}
+
+function deliveryBriefOpenTaskText(row: PrivateDeliveryPackage) {
+  const openTasks = row.tasks.filter(task => task.status !== 'done')
+  if (!openTasks.length) return '当前任务已全部完成'
+  return openTasks
+    .slice(0, 3)
+    .map(task => `${task.title.replace(row.companyName + ' - ', '')}(${task.ownerName}/${taskStatusText(task.status)})`)
+    .join('、')
+}
+
+function deliveryBriefMaterialText(row: PrivateDeliveryPackage) {
+  const issues = deliveryChecklistItems(row).filter(item => item.status !== 'done')
+  if (!issues.length) return '当前合同、回款、资料、任务和归档信息已具备闭环基础'
+  return issues.slice(0, 4).map(item => `${item.label}:${item.statusText}`).join('；')
+}
+
+function deliveryBriefRiskLine(row: PrivateDeliveryPackage) {
+  const overdue = deliveryOverdueCount(row)
+  const pending = deliveryPendingCount(row)
+  if (overdue > 0) return `当前有 ${overdue} 个交付节点超过计划时间,我们会由 ${row.ownerName} 当天补齐原因、责任人和预计完成时间。`
+  if (needsAddressResourceBinding(row)) return '当前地址已锁定但还未绑定 ADR 资源编号,需要先补资源凭证,避免后续渠道结算和客户地址交付无法追溯。'
+  if (needsAddressLock(row)) return '当前涉及挂靠地址,还未完成地址锁定,需要先确认区域、库存、渠道价格和授权材料。'
+  if (pending > 0) return `当前还有 ${pending} 个交付节点待处理,我们会按最晚节点 ${row.dueDate} 推进并同步进度。`
+  return '当前没有交付异常,后续重点是资料归档、满意度回访和续费提醒。'
+}
+
+function deliveryBriefSummary(row: PrivateDeliveryPackage): DeliveryBriefSummary {
+  const overdue = deliveryOverdueCount(row)
+  const addressRisk = needsAddressLock(row) || needsAddressResourceBinding(row)
+  if (overdue > 0) {
+    return {
+      title: '先同步异常和补救节点',
+      hint: '逾期交付必须先说明原因、责任人、预计完成时间,再做回访或续费动作。',
+      level: 'danger',
+      statusText: '需外呼'
+    }
+  }
+  if (addressRisk) {
+    return {
+      title: '先说明地址资源处理口径',
+      hint: '挂靠地址业务需要把锁定、ADR 编号、渠道应收和授权材料讲清楚。',
+      level: 'warning',
+      statusText: '需确认'
+    }
+  }
+  if (deliveryProgress(row) < 100) {
+    return {
+      title: '按节点同步交付进展',
+      hint: '把已完成、待处理、资料缺口和最晚节点讲清楚,客户就知道下一步配合什么。',
+      level: 'primary',
+      statusText: '推进中'
+    }
+  }
+  return {
+    title: '交付完成后做回访续费',
+    hint: '用完成话术承接满意度、资料归档、续费提醒、转介绍和新增需求。',
+    level: 'success',
+    statusText: '可回访'
+  }
+}
+
+function deliveryClientBriefItems(row: PrivateDeliveryPackage): DeliveryClientBriefItem[] {
+  const progress = deliveryProgress(row)
+  const overdue = deliveryOverdueCount(row)
+  const pending = deliveryPendingCount(row)
+  const done = deliveryDoneCount(row)
+  const firstRiskTask = deliverySlaAttentionTasks(row)[0] || row.tasks.find(task => task.status !== 'done')
+  const addressLock = activeAddressLock(row)
+  const serviceItems = row.orderItemNames?.join('、') || row.serviceLine
+  const riskLine = deliveryBriefRiskLine(row)
+  const materialLine = deliveryBriefMaterialText(row)
+  const openTaskText = deliveryBriefOpenTaskText(row)
+  const paymentLine = row.paymentTimeReq
+    ? `${paymentMethodText(row.paymentMethod)} · ${row.paymentTimeReq}`
+    : '当前系统还没有记录明确收款要求,我们会先和财务核对首款、尾款或账期。'
+
+  const items: DeliveryClientBriefItem[] = [
+    {
+      key: `progress-${row.id}`,
+      title: progress >= 100 ? '交付完成同步' : '交付进度同步',
+      level: overdue > 0 ? 'danger' : progress >= 100 ? 'success' : 'primary',
+      statusText: overdue > 0 ? '含异常' : progress >= 100 ? '已完成' : '可发送',
+      channel: '企微/微信',
+      content: `您好 ${row.contactName},我是浙杭集团交付负责人 ${row.ownerName}。您这边的「${row.packageName}」当前进度 ${progress}%,已完成 ${done} 个节点,待处理 ${pending} 个节点。${openTaskText}。我们会按最晚节点 ${row.dueDate} 推进,有资料或办理节点需要您配合时会第一时间同步。`,
+      tip: '适合每天给客户同步一次进展,避免客户只知道交了钱但不知道办到哪一步。'
+    },
+    {
+      key: `risk-${row.id}`,
+      title: overdue > 0 ? '逾期补救说明' : '风险口径说明',
+      level: overdue > 0 || needsAddressLock(row) || needsAddressResourceBinding(row) ? 'danger' : 'warning',
+      statusText: overdue > 0 ? '必须同步' : '提前说明',
+      channel: '电话后企微补充',
+      content: `您好 ${row.contactName},关于「${row.packageName}」我同步一下风险口径:${riskLine}${firstRiskTask ? ` 当前优先处理节点是「${firstRiskTask.title.replace(row.companyName + ' - ', '')}」,负责人 ${firstRiskTask.ownerName},节点时间 ${firstRiskTask.dueTime}。` : ''}如果中间需要您补资料或确认信息,我会一次性列清单,避免反复打扰。`,
+      tip: '适合逾期、地址资源、资料缺口时使用,先稳住客户预期再推进补救。'
+    },
+    {
+      key: `materials-${row.id}`,
+      title: '资料缺口提醒',
+      level: materialLine.includes('已具备闭环') ? 'success' : 'warning',
+      statusText: materialLine.includes('已具备闭环') ? '已齐套' : '待配合',
+      channel: '企微/短信',
+      content: `您好 ${row.contactName},为了不影响「${row.packageName}」办理进度,这边给您汇总当前资料和凭证情况:${materialLine}。涉及 ${serviceItems} 的资料请尽量在今天确认,我们收到后会继续推进后续节点。`,
+      tip: '适合资料反复催不动时发送,把缺口收敛成一条清单。'
+    },
+    {
+      key: `payment-${row.id}`,
+      title: '回款合同确认',
+      level: row.orderNo && row.paymentTimeReq ? 'success' : 'warning',
+      statusText: row.orderNo && row.paymentTimeReq ? '已关联' : '需核对',
+      channel: '财务/销售同步',
+      content: `您好 ${row.contactName},我这边同步一下本次服务范围和回款口径:服务项目为 ${serviceItems},${row.orderNo ? `来源提单 ${row.orderNo},` : '当前还未关联提单,'}回款要求为 ${paymentLine}。如合同主体、发票主体或付款节点有调整,请您今天反馈,我们好同步财务和交付。`,
+      tip: '适合财务、销售、交付三方对齐,避免交付完了才发现回款或合同口径不一致。'
+    }
+  ]
+
+  if (progress >= 100) {
+    items.push({
+      key: `review-${row.id}`,
+      title: '完成回访邀请',
+      level: 'success',
+      statusText: '可回访',
+      channel: '电话/企微',
+      content: `您好 ${row.contactName},您在浙杭集团办理的「${row.packageName}」主要交付节点已经完成。我想和您约 ${nextTouchTime(1, 10, 0)} 左右做一次简短回访,确认资料归档、满意度、后续续费提醒,也看看是否还有代账、税务、地址或工商变更等新增需求。`,
+      tip: '适合交付完成后沉淀满意度、续费、转介绍和新增业务机会。'
+    })
+  }
+
+  if (isAddressDelivery(row)) {
+    items.push({
+      key: `address-${row.id}`,
+      title: '挂靠地址说明',
+      level: hasBoundAddressResource(row) ? 'success' : 'warning',
+      statusText: hasBoundAddressResource(row) ? '地址已锁' : '待确认',
+      channel: '同行/客户同步',
+      content: `您好 ${row.contactName},关于「${row.packageName}」里的挂靠地址,当前${addressLock ? `已锁定 ${addressLock.remark}` : '还需确认可用地址资源'}。${hasBoundAddressResource(row) ? `资源编号 ${addressResourceNo(row)},` : '资源编号待绑定,'}我们会同步核对区域、授权材料、渠道应收和后续释放时间,确保客户地址交付和供应商结算都能追溯。`,
+      tip: '适合挂靠地址和同行渠道业务,把地址资源、ADR、渠道应收勾稽清楚。'
+    })
+  }
+
+  return items.sort((left, right) => {
+    const score = { danger: 4, warning: 3, primary: 2, success: 1 } as Record<DeliveryClientBriefItem['level'], number>
+    return score[right.level] - score[left.level]
+  })
+}
+
+async function copyDeliveryClientBrief(item: DeliveryClientBriefItem) {
+  try {
+    await navigator.clipboard.writeText(item.content)
+  } catch {
+    const input = document.createElement('textarea')
+    input.value = item.content
+    input.style.position = 'fixed'
+    input.style.left = '-9999px'
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    document.body.removeChild(input)
+  }
+  ElMessage.success('客户同步话术已复制')
+}
+
+function deliveryBriefFollowMethod(item: DeliveryClientBriefItem): PrivateFollowMethod {
+  if (item.channel.includes('企微')) return '企微'
+  if (item.channel.includes('短信')) return '短信'
+  if (item.channel.includes('电话')) return '电话'
+  if (item.channel.includes('微信')) return '微信'
+  return '其他'
+}
+
+function deliveryBriefNextAction(row: PrivateDeliveryPackage, item: DeliveryClientBriefItem) {
+  if (item.level === 'danger') return '同步交付异常补救节点并确认客户反馈'
+  if (item.key.includes('materials')) return '等待客户补齐资料后继续推进交付'
+  if (item.key.includes('payment')) return '同步财务/销售核对回款合同口径'
+  if (deliveryProgress(row) >= 100) return '完成交付回访并确认续费/转介绍机会'
+  return '按交付节点继续同步进度'
+}
+
+function recordDeliveryClientBrief(row: PrivateDeliveryPackage, item: DeliveryClientBriefItem) {
+  const contact = deliveryContact(row)
+  if (!contact) {
+    ElMessage.warning('未找到关联私域客户,请刷新后重试')
+    return
+  }
+  deliveryDrawer.visible = false
+  openFollowDialog(contact)
+  Object.assign(followForm, {
+    method: deliveryBriefFollowMethod(item),
+    result: item.level === 'danger' ? '已联系' : deliveryProgress(row) >= 100 ? '已成交' : '已联系',
+    content: item.content,
+    quotedAmount: row.orderAmount || 0,
+    nextAction: deliveryBriefNextAction(row, item),
+    nextTouchAt: nextTouchTime(item.level === 'danger' ? 1 : 2, 10, 0),
+    ownerName: contact.ownerName || row.ownerName
+  })
 }
 
 function deliveryArchiveSummary(row: PrivateDeliveryPackage) {
@@ -10000,6 +10251,122 @@ watch(() => route.fullPath, applyRouteQueue)
   text-align: center;
 }
 
+.delivery-brief-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.delivery-brief-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.delivery-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.delivery-brief-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbe5f2;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+
+  &.primary {
+    border-left-color: #2563eb;
+  }
+
+  p {
+    max-height: 132px;
+    margin: 0;
+    overflow: auto;
+    color: #334155;
+    font-size: 12px;
+    line-height: 1.65;
+    white-space: pre-line;
+  }
+
+  em {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.6;
+  }
+}
+
+.delivery-brief-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+
+  div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+}
+
+.delivery-brief-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+
+  :deep(.el-button) {
+    margin-left: 0;
+  }
+}
+
 .delivery-review-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -12640,6 +13007,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .delivery-check-grid,
   .delivery-checklist,
   .delivery-sla-grid,
+  .delivery-brief-grid,
   .delivery-archive-summary,
   .delivery-archive-grid,
   .delivery-review-card,
@@ -12722,6 +13090,11 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .delivery-sla-head {
+    flex-direction: column;
+  }
+
+  .delivery-brief-head,
+  .delivery-brief-card-head {
     flex-direction: column;
   }
 

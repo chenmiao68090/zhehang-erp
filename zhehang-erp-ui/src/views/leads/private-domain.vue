@@ -1038,6 +1038,30 @@
       </template>
 
       <div v-if="drawer.row">
+        <div class="bd-section-title">运营摘要</div>
+        <div class="contact-ops-summary">
+          <div>
+            <span>今日状态</span>
+            <b>{{ contactQueueText(drawer.row) }}</b>
+            <em>{{ contactQueueHint(drawer.row) }}</em>
+          </div>
+          <div>
+            <span>最近互动</span>
+            <b>{{ drawer.row.lastTouchAt || '未记录' }}</b>
+            <em>{{ drawer.row.source }} · {{ drawer.row.communityName }}</em>
+          </div>
+          <div>
+            <span>跟进记录</span>
+            <b>{{ contactFollowCount(drawer.row) }} 次</b>
+            <em>{{ contactLatestFollowText(drawer.row) }}</em>
+          </div>
+          <div>
+            <span>转化进度</span>
+            <b>{{ contactConversionText(drawer.row) }}</b>
+            <em>{{ contactConversionHint(drawer.row) }}</em>
+          </div>
+        </div>
+
         <div class="bd-section-title">私域标签</div>
         <div class="tag-list drawer-tags">
           <el-tag v-for="tag in drawer.row.tags" :key="tag" effect="plain">{{ tag }}</el-tag>
@@ -1919,6 +1943,49 @@ function isIntentContact(row: PrivateContact) {
 
 function isUnverifiedContact(row: PrivateContact) {
   return !row.verification?.matched
+}
+
+function contactFollowRecords(row: PrivateContact) {
+  return followRecords.value
+    .filter(item => item.contactId === row.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+function contactFollowCount(row: PrivateContact) {
+  return contactFollowRecords(row).length || row.touchCount || 0
+}
+
+function contactLatestFollowText(row: PrivateContact) {
+  const latest = contactFollowRecords(row)[0]
+  return latest ? `${latest.createdAt} · ${latest.result}` : '暂无跟进记录'
+}
+
+function contactQueueText(row: PrivateContact) {
+  if (isUnverifiedContact(row)) return '待工商核验'
+  if (isTodayUnfollowed(row)) return '今日未跟进'
+  if (isIntentContact(row)) return '高意向优先'
+  return stageText(row.stage)
+}
+
+function contactQueueHint(row: PrivateContact) {
+  if (isUnverifiedContact(row)) return '先核公司主体,再报价和提单'
+  if (isTodayUnfollowed(row)) return '今天还没有触达,应进入复联排班'
+  if (isIntentContact(row)) return '优先记录跟进、报价或发起提单'
+  return row.nextAction || '按阶段继续推进'
+}
+
+function contactConversionText(row: PrivateContact) {
+  if (hasDeliveryPackage(row.id)) return '已建交付包'
+  if (row.convertedLeadId) return `已入库线索 #${row.convertedLeadId}`
+  if (row.stage === 'ordered') return '待建交付包'
+  return '跟进中'
+}
+
+function contactConversionHint(row: PrivateContact) {
+  if (hasDeliveryPackage(row.id)) return '成交后交付链路已建立'
+  if (row.convertedLeadId) return '已进入网销线索池,继续盯提单'
+  if (row.stage === 'ordered') return '成交客户需当天建交付包'
+  return '还在私域培育或报价阶段'
 }
 
 function formatMoney(value: number) {
@@ -4572,6 +4639,36 @@ watch(() => route.fullPath, applyRouteQueue)
   margin-bottom: 12px;
 }
 
+.contact-ops-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+
+  div {
+    display: grid;
+    gap: 5px;
+    min-height: 94px;
+    padding: 12px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  span,
+  em {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.5;
+  }
+
+  b {
+    color: #111827;
+    font-size: 15px;
+  }
+}
+
 .mt {
   margin-top: 14px;
 }
@@ -4746,6 +4843,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .config-grid,
   .toolbar,
   .preview-summary,
+  .contact-ops-summary,
   .delivery-summary,
   .delivery-progress-stats,
   .delivery-check-grid,

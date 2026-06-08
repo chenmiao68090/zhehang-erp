@@ -1044,6 +1044,42 @@
               </button>
             </div>
           </div>
+          <div class="task-backfill-panel">
+            <div class="task-backfill-head">
+              <div>
+                <strong>任务结果回填</strong>
+                <p>{{ taskBackfillSummary }}</p>
+              </div>
+              <el-tag :type="taskBackfillStats.overdue ? 'danger' : taskBackfillStats.canBackfill ? 'primary' : 'success'" effect="plain">
+                {{ taskBackfillStats.canBackfill }} 个可回填
+              </el-tag>
+            </div>
+            <div class="task-backfill-metrics">
+              <div><span>客户任务</span><b>{{ taskBackfillStats.customer }}</b></div>
+              <div><span>可回填</span><b>{{ taskBackfillStats.canBackfill }}</b></div>
+              <div><span>逾期待回填</span><b>{{ taskBackfillStats.overdue }}</b></div>
+              <div><span>已完成待复盘</span><b>{{ taskBackfillStats.doneWithoutFollow }}</b></div>
+            </div>
+            <div v-if="taskBackfillQueue.length" class="task-backfill-list">
+              <button
+                v-for="item in taskBackfillQueue"
+                :key="item.id"
+                type="button"
+                class="task-backfill-item"
+                :class="item.status"
+                @click.stop="openTaskResultDialog(item)"
+              >
+                <span>{{ item.ownerName }} · {{ item.companyName }}</span>
+                <el-tag :type="taskStatusTag(item.status)" size="small" effect="plain">{{ taskStatusText(item.status) }}</el-tag>
+                <strong>{{ item.title }}</strong>
+                <em>{{ taskBackfillHint(item) }}</em>
+              </button>
+            </div>
+            <div v-else class="task-backfill-empty">
+              <el-tag type="success" size="small" effect="plain">已清爽</el-tag>
+              <span>当前筛选下没有需要回填结果的客户任务。</span>
+            </div>
+          </div>
           <div class="task-execution-summary">
             <div class="task-metrics">
               <div><span>客户跟进</span><b>{{ taskSourceSummary.follow }}</b></div>
@@ -1104,11 +1140,19 @@
                 <el-tag :type="taskStatusTag(row.status)" size="small">{{ taskStatusText(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="130" fixed="right" align="center">
+            <el-table-column label="操作" width="160" fixed="right" align="center">
               <template #default="{ row }">
                 <el-button
-                  v-if="row.status !== 'done'"
+                  v-if="row.status !== 'done' && taskCanBackfill(row)"
                   type="primary"
+                  text
+                  size="small"
+                  @click.stop="openTaskResultDialog(row)"
+                >
+                  回填
+                </el-button>
+                <el-button
+                  v-if="row.status !== 'done'"
                   text
                   size="small"
                   :loading="isUpdatingTask(row.id)"
@@ -2427,6 +2471,14 @@
     </el-drawer>
 
     <el-dialog v-model="followDialog.visible" title="记录私域跟进" width="640px" class="follow-dialog" append-to-body>
+      <div v-if="followSourceTask" class="follow-source-task">
+        <div>
+          <span>来源任务</span>
+          <strong>{{ followSourceTask.title }}</strong>
+          <p>{{ followSourceTask.companyName }} · {{ followSourceTask.contactName }} · {{ followSourceTask.action }}</p>
+        </div>
+        <el-tag :type="taskStatusTag(followSourceTask.status)" effect="plain">{{ taskStatusText(followSourceTask.status) }}</el-tag>
+      </div>
       <el-form label-position="top" class="follow-form">
         <el-row :gutter="12">
           <el-col :xs="24" :md="12">
@@ -2485,7 +2537,7 @@
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="followDialog.visible = false">取消</el-button>
+        <el-button @click="closeFollowDialog">取消</el-button>
         <el-button type="primary" :loading="followSaving" @click="saveFollowRecord">保存跟进记录</el-button>
       </template>
     </el-dialog>
@@ -2924,6 +2976,7 @@ const contactEmptyDesc = computed(() => {
 const drawer = reactive<{ visible: boolean; row: PrivateContact | null }>({ visible: false, row: null })
 const deliveryDrawer = reactive<{ visible: boolean; row: PrivateDeliveryPackage | null }>({ visible: false, row: null })
 const followDialog = reactive<{ visible: boolean; row: PrivateContact | null }>({ visible: false, row: null })
+const followSourceTask = ref<PrivateTask | null>(null)
 const followForm = reactive<PrivateFollowCreatePayload>({
   contactId: 0,
   method: '电话',
@@ -3820,6 +3873,31 @@ const taskScheduleSummary = computed(() => {
   if (taskStats.value.pending > 0) return `当前 ${taskStats.value.pending} 个待处理任务,按负责人依次推进即可。`
   return '任务队列已经清爽,可以安排回访复盘或导入新客户。'
 })
+const taskBackfillRows = computed(() => filteredTasks.value.filter(taskCanBackfill))
+const taskBackfillStats = computed(() => {
+  const customerTasks = filteredTasks.value.filter(item => taskContact(item))
+  return {
+    customer: customerTasks.length,
+    canBackfill: customerTasks.filter(item => item.status !== 'done').length,
+    overdue: customerTasks.filter(item => item.status === 'overdue').length,
+    doneWithoutFollow: customerTasks.filter(item => item.status === 'done' && !taskHasFollowRecord(item)).length
+  }
+})
+const taskBackfillQueue = computed(() => taskBackfillRows.value
+  .filter(item => item.status !== 'done')
+  .sort((left, right) => {
+    const statusScore = taskSchedulePriority(right) - taskSchedulePriority(left)
+    if (statusScore !== 0) return statusScore
+    return taskDueSortValue(left) - taskDueSortValue(right)
+  })
+  .slice(0, 4))
+const taskBackfillSummary = computed(() => {
+  if (!taskBackfillStats.value.customer) return '当前筛选下没有可关联客户的任务,地址补货或交付督办可以直接在任务状态里闭环。'
+  if (taskBackfillStats.value.overdue) return `有 ${taskBackfillStats.value.overdue} 个客户任务逾期,建议先回填客户沟通结果和下一步动作。`
+  if (taskBackfillStats.value.canBackfill) return `有 ${taskBackfillStats.value.canBackfill} 个客户任务可直接回填为跟进记录,保存后会自动关闭对应任务。`
+  if (taskBackfillStats.value.doneWithoutFollow) return `有 ${taskBackfillStats.value.doneWithoutFollow} 个完成任务缺少跟进记录,建议复盘补充留痕。`
+  return '客户任务已形成跟进留痕,当前执行闭环较清爽。'
+})
 const taskSourceSummary = computed(() => {
   const list = filteredTasks.value
   const delivery = list.filter(item => taskDeliveryPackage(item)).length
@@ -4676,6 +4754,7 @@ function contentTouchMethod(type: PrivateContent['type']): PrivateFollowMethod {
 }
 
 function useRecommendedContent(row: PrivateContact, item: ContactContentRecommendation) {
+  followSourceTask.value = null
   Object.assign(followForm, {
     contactId: row.id,
     method: contentTouchMethod(item.content.type),
@@ -5509,6 +5588,40 @@ function taskSchedulePriority(task: PrivateTask) {
 function taskContact(row: PrivateTask) {
   return contacts.value.find(item => item.companyName === row.companyName && item.name === row.contactName)
     || contacts.value.find(item => item.companyName === row.companyName)
+}
+
+function taskCanBackfill(row: PrivateTask) {
+  return Boolean(taskContact(row))
+}
+
+function taskHasFollowRecord(row: PrivateTask) {
+  const contact = taskContact(row)
+  if (!contact) return false
+  return followRecords.value.some(item => item.contactId === contact.id && item.content.includes(row.title))
+}
+
+function taskBackfillHint(row: PrivateTask) {
+  const contact = taskContact(row)
+  const prefix = row.status === 'overdue' ? '逾期任务需补救留痕' : row.priority === '高' ? '高优任务建议当天回填' : '完成后补跟进记录'
+  return contact ? `${prefix},保存后关闭任务并进入客户时间线。` : '该任务没有关联客户,可直接更新任务状态。'
+}
+
+function taskBackfillResult(row: PrivateTask): PrivateFollowResult {
+  const text = `${row.title} ${row.action}`
+  if (text.includes('报价') || text.includes('价格') || text.includes('费用')) return '已报价'
+  if (text.includes('成交') || text.includes('交付') || text.includes('建包')) return '已成交'
+  if (text.includes('意向') || text.includes('预算')) return '有意向'
+  if (text.includes('无响应') || text.includes('沉默')) return '无响应'
+  return '已联系'
+}
+
+function taskBackfillMethod(row: PrivateTask): PrivateFollowMethod {
+  const text = `${row.title} ${row.action}`
+  if (text.includes('企微')) return '企微'
+  if (text.includes('社群')) return '社群'
+  if (text.includes('短信')) return '短信'
+  if (text.includes('微信')) return '微信'
+  return '电话'
 }
 
 function taskDeliveryPackage(row: PrivateTask) {
@@ -6799,6 +6912,7 @@ function nextTouchTime(offsetDays = 1, hour = 10, minute = 0) {
 }
 
 function openFollowDialog(row?: PrivateContact) {
+  followSourceTask.value = null
   const target = row || contacts.value[0]
   followDialog.row = target || null
   Object.assign(followForm, {
@@ -6810,6 +6924,32 @@ function openFollowDialog(row?: PrivateContact) {
     nextAction: target?.nextAction || '',
     nextTouchAt: nextTouchTime(1, 10, 0),
     ownerName: target?.ownerName || ''
+  })
+  followDialog.visible = true
+}
+
+function closeFollowDialog() {
+  followDialog.visible = false
+  followSourceTask.value = null
+}
+
+function openTaskResultDialog(row: PrivateTask) {
+  const contact = taskContact(row)
+  if (!contact) {
+    ElMessage.warning('该任务没有关联客户,可直接标记完成或进入交付包处理')
+    return
+  }
+  followSourceTask.value = row
+  followDialog.row = contact
+  Object.assign(followForm, {
+    contactId: contact.id,
+    method: taskBackfillMethod(row),
+    result: taskBackfillResult(row),
+    content: `完成任务「${row.title}」。执行动作: ${row.action}。客户反馈: `,
+    quotedAmount: contact.stage === 'quoted' || row.action.includes('报价') ? contact.estimatedAmount : 0,
+    nextAction: contact.nextAction || row.action,
+    nextTouchAt: nextTouchTime(row.status === 'overdue' ? 0 : 1, row.status === 'overdue' ? 18 : 10, 0),
+    ownerName: row.ownerName || contact.ownerName
   })
   followDialog.visible = true
 }
@@ -6949,12 +7089,18 @@ async function batchCreateFollowTasks() {
 }
 
 async function saveFollowRecord() {
+  const sourceTask = followSourceTask.value
   followSaving.value = true
   try {
     const result = await privateDomainApi.createFollowRecord({ ...followForm })
-    ElMessage.success(`已记录跟进: ${result.record.companyName} / ${result.record.result}`)
+    if (sourceTask && followForm.result !== '无响应') {
+      await privateDomainApi.updateTaskStatus(sourceTask.id, 'done')
+    }
+    ElMessage.success(sourceTask ? `已回填任务并记录跟进: ${result.record.companyName} / ${result.record.result}` : `已记录跟进: ${result.record.companyName} / ${result.record.result}`)
     followDialog.visible = false
-    activeTab.value = 'follow'
+    followSourceTask.value = null
+    activeTab.value = sourceTask ? 'tasks' : 'follow'
+    await loadDashboard()
     await loadContacts()
     if (drawer.row?.id === result.contact.id) {
       drawer.row = result.contact
@@ -9244,6 +9390,49 @@ watch(() => route.fullPath, applyRouteQueue)
   padding-top: 8px;
 }
 
+.follow-source-task {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  strong,
+  p {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+  }
+}
+
 .follow-form :deep(.el-select) {
   width: 100%;
 }
@@ -10674,6 +10863,132 @@ watch(() => route.fullPath, applyRouteQueue)
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.task-backfill-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.task-backfill-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.task-backfill-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #0f172a;
+    font-size: 18px;
+  }
+}
+
+.task-backfill-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.task-backfill-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &.overdue {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+    transform: translateY(-1px);
+  }
+
+  span,
+  strong,
+  em {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span,
+  em {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+  }
+
+  strong,
+  em {
+    grid-column: 1 / -1;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 13px;
+  }
+}
+
+.task-backfill-empty {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .task-execution-summary {
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
@@ -11989,6 +12304,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .task-execution-summary,
   .task-owner-grid,
   .task-schedule-list,
+  .task-backfill-metrics,
+  .task-backfill-list,
   .task-metrics,
   .task-group-item,
   .delivery-summary,
@@ -12068,6 +12385,11 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .task-schedule-head {
+    flex-direction: column;
+  }
+
+  .task-backfill-head,
+  .follow-source-task {
     flex-direction: column;
   }
 

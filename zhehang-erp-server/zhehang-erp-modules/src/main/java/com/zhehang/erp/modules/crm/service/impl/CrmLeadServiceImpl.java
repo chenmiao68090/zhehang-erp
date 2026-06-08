@@ -61,6 +61,10 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
 
     @Override
     public boolean save(CrmLead entity) {
+        // 公司名标准化(去首尾空格),保证去重/带出一致
+        if (entity != null && entity.getCompany() != null) {
+            entity.setCompany(entity.getCompany().trim());
+        }
         // 自动补工商信息:填了公司名但工商字段为空时,从工商库带出补全(区域/规模/注册资本/成立日期)
         enrichFromCompany(entity);
         // 新建线索:若已指定负责人(私海)则补归属部门;无负责人(进公海)保持无部门,待领取时再写
@@ -111,6 +115,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
             try {
                 return new BigDecimal(m.group());
             } catch (Exception e) {
+                log.debug("注册资本解析失败,原值[{}]", s);
                 return null;
             }
         }
@@ -126,6 +131,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
             String t = s.trim().replace('/', '-');
             return LocalDate.parse(t.substring(0, Math.min(10, t.length())));
         } catch (Exception e) {
+            log.debug("成立日期解析失败,原值[{}]", s);
             return null;
         }
     }
@@ -386,15 +392,16 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
             if (info == null || !StringUtils.hasText(info.getName())) {
                 continue;
             }
-            // 去重:同名公司已有线索则跳过
+            String cname = info.getName().trim();
+            // 去重:同名公司(标准化后)已有线索则跳过(尽力去重;并发/已删记录的彻底去重需DB唯一约束,见卡片)
             Long exist = leadMapper.selectCount(new LambdaQueryWrapper<CrmLead>()
-                    .eq(CrmLead::getCompany, info.getName()));
+                    .eq(CrmLead::getCompany, cname));
             if (exist != null && exist > 0) {
                 continue;
             }
             CrmLead lead = new CrmLead();
-            lead.setName(info.getName());
-            lead.setCompany(info.getName());
+            lead.setName(cname);
+            lead.setCompany(cname);
             lead.setOwnership("pool"); // 进公海待领取/分配
             lead.setStatus(1);
             lead.setRemark("工商库导入");

@@ -41,9 +41,11 @@ public class BizTaskServiceImpl extends ServiceImpl<BizTaskMapper, BizTask> impl
     @Override
     public IPage<BizTask> selectPage(int pageNum, int pageSize, String taskType, Integer status, Long executorId) {
         LambdaQueryWrapper<BizTask> wrapper = new LambdaQueryWrapper<>();
-        // 数据范围:管理员/主管看全部交付任务(便于派活/跟踪),其余(执行人)只看分配给自己的
+        // 数据范围:管理员/主管看全部(便于派活);执行人看"分配给自己的 + 待指派(executorId为空)"的任务
+        // —— 待指派任务(签约自动派发,executorId=null)对执行人可见,才能被认领/指派,否则无主管的部门(如会计)任务无人可见
         if (!SecurityUtils.isCurrentAdmin() && !SecurityUtils.hasAnyRole("dept_manager")) {
-            wrapper.eq(BizTask::getExecutorId, SecurityUtils.getCurrentUserId());
+            Long uid = SecurityUtils.getCurrentUserId();
+            wrapper.and(w -> w.eq(BizTask::getExecutorId, uid).or().isNull(BizTask::getExecutorId));
         }
         wrapper.eq(StringUtils.hasText(taskType), BizTask::getTaskType, taskType)
                 .eq(status != null, BizTask::getStatus, status)

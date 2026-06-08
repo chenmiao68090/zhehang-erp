@@ -783,7 +783,60 @@
         </el-tab-pane>
 
         <el-tab-pane label="内容触达" name="contents">
+          <div class="content-ops-panel">
+            <div class="panel-title compact">
+              <div>
+                <h2>内容触达运营台</h2>
+                <p>把朋友圈、社群、公众号文章和销售话术挂到服务线、菜单入口和留资表,让内容能真正带来客户和成交。</p>
+              </div>
+              <el-tag type="success" effect="plain">{{ contentStats.published }} 个已发布</el-tag>
+            </div>
+            <div class="content-summary">
+              <div><span>内容素材</span><b>{{ contentStats.total }}</b></div>
+              <div><span>待发布</span><b>{{ contentStats.scheduled }}</b></div>
+              <div><span>触达人数</span><b>{{ contentStats.reach }}</b></div>
+              <div><span>互动线索</span><b>{{ contentStats.leads }}</b></div>
+              <div><span>成交订单</span><b>{{ contentStats.orders }}</b></div>
+            </div>
+            <div class="wechat-menu-board">
+              <div class="wechat-menu-head">
+                <div>
+                  <strong>公众号菜单/文章来源映射</strong>
+                  <p>每个菜单必须对应服务线、核心素材、留资表和转化动作,避免公众号只有文章没有线索闭环。</p>
+                </div>
+                <el-button type="primary" plain size="small" @click="activeTab = 'config'">看公众号配置</el-button>
+              </div>
+              <div class="wechat-menu-grid">
+                <div v-for="item in wechatMenuMappings" :key="item.key" class="wechat-menu-card" :class="item.level">
+                  <div class="wechat-menu-card-head">
+                    <strong>{{ item.menuName }}</strong>
+                    <el-tag :type="wechatMenuMappingTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.desc }}</p>
+                  <div class="wechat-menu-content">
+                    <span>{{ item.primaryContent?.title || '待补内容素材' }}</span>
+                    <em>{{ item.primaryContent ? `${item.primaryContent.type} · ${item.primaryContent.target}` : item.cta }}</em>
+                  </div>
+                  <div class="wechat-menu-foot">
+                    <span>{{ item.path }}</span>
+                    <span>{{ item.formName }}</span>
+                    <b>{{ item.leadCount }} 线索 / {{ item.orderCount }} 成交</b>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <el-table :data="contents" border stripe>
+            <template #empty>
+              <div class="content-empty-state">
+                <strong>还没有内容素材</strong>
+                <p>先围绕代理记账、地址挂靠、同行渠道和电商财税补文章、话术或社群推送,再挂到公众号菜单和留资表。</p>
+                <div>
+                  <el-button type="primary" plain size="small" @click="activeTab = 'config'">先配置公众号接入</el-button>
+                  <el-button size="small" @click="syncHint">同步私域数据</el-button>
+                </div>
+              </div>
+            </template>
             <el-table-column prop="title" label="内容主题" min-width="260" />
             <el-table-column prop="type" label="类型" width="120" />
             <el-table-column prop="target" label="目标人群" min-width="180" />
@@ -2353,6 +2406,61 @@ interface IntegrationAuditItem {
   ownerText: string
 }
 
+interface WechatMenuMapping {
+  key: string
+  menuName: string
+  path: string
+  serviceLine: string
+  formName: string
+  cta: string
+  desc: string
+  level: 'success' | 'warning' | 'danger'
+  statusText: string
+  primaryContent?: PrivateContent
+  contentCount: number
+  leadCount: number
+  orderCount: number
+}
+
+const wechatMenuMappingDefs = [
+  {
+    key: 'startup',
+    menuName: '开公司/记账',
+    path: '公众号菜单: 财税服务 > 新公司开办',
+    serviceLine: '代理记账',
+    formName: '新公司开办套餐留资表',
+    cta: '填写公司名称后自动带出工商信息,再分配给网销顾问。',
+    keywords: ['代理记账', '新公司', '开办', '税务报到']
+  },
+  {
+    key: 'address',
+    menuName: '地址异常/挂靠',
+    path: '公众号菜单: 地址服务 > 挂靠地址',
+    serviceLine: '地址挂靠',
+    formName: '挂靠地址/异常解除咨询表',
+    cta: '收集注册地址、异常状态和所需区域,进入地址资源交付链路。',
+    keywords: ['地址挂靠', '地址异常', '经营异常', '挂靠地址']
+  },
+  {
+    key: 'channel',
+    menuName: '同行渠道合作',
+    path: '公众号菜单: 渠道合作 > 地址库存',
+    serviceLine: '同行渠道',
+    formName: '同行渠道合作登记表',
+    cta: '记录同行身份、月度需求、账期和返点口径,进入渠道伙伴管理。',
+    keywords: ['同行渠道', '渠道', '挂靠地址库存', '返点']
+  },
+  {
+    key: 'ecommerce-tax',
+    menuName: '电商财税合规',
+    path: '公众号菜单: 财税服务 > 电商合规',
+    serviceLine: '税务筹划',
+    formName: '电商财税风险测评表',
+    cta: '引导客户提交平台、流水、成本票和税负问题,分配给财税顾问。',
+    keywords: ['税务筹划', '电商', '一般纳税人', '合规']
+  }
+] as const
+
 const router = useRouter()
 const route = useRoute()
 const activeTab = ref('diagnosis')
@@ -2914,6 +3022,52 @@ const wechatServicePrecheckSummary = computed(() => {
   if (wechatServicePrecheckLevel.value === 'warning') return `已完成 ${wechatServiceReadyCount.value}/${total},可以保存配置,但真实联调前仍需补齐警告项。`
   return `已完成 ${total}/${total},微信客服、公众号和留资表单可以进入回调联调。`
 })
+const contentStats = computed(() => ({
+  total: contents.value.length,
+  published: contents.value.filter(item => item.status === 'published').length,
+  scheduled: contents.value.filter(item => item.status === 'scheduled').length,
+  draft: contents.value.filter(item => item.status === 'draft').length,
+  reach: contents.value.reduce((sum, item) => sum + item.reachCount, 0),
+  interact: contents.value.reduce((sum, item) => sum + item.interactCount, 0),
+  leads: contents.value.reduce((sum, item) => sum + item.leadCount, 0),
+  orders: contents.value.reduce((sum, item) => sum + item.orderCount, 0)
+}))
+const wechatMenuMappings = computed<WechatMenuMapping[]>(() => wechatMenuMappingDefs.map(def => {
+  const matched = contents.value
+    .filter(item => {
+      const text = `${item.title} ${item.type} ${item.target} ${item.relatedService}`
+      return def.keywords.some(keyword => text.includes(keyword)) || item.relatedService.includes(def.serviceLine)
+    })
+    .sort((left, right) => {
+      const publishedScore = Number(right.status === 'published') - Number(left.status === 'published')
+      if (publishedScore !== 0) return publishedScore
+      if (left.leadCount !== right.leadCount) return right.leadCount - left.leadCount
+      return right.orderCount - left.orderCount
+    })
+  const primaryContent = matched[0]
+  const leadCount = matched.reduce((sum, item) => sum + item.leadCount, 0)
+  const orderCount = matched.reduce((sum, item) => sum + item.orderCount, 0)
+  const level: WechatMenuMapping['level'] = !matched.length ? 'danger' : primaryContent?.status === 'published' ? 'success' : 'warning'
+  const statusText = !matched.length ? '缺素材' : primaryContent?.status === 'published' ? '可上线' : '待发布'
+  const desc = !matched.length
+    ? `缺少${def.serviceLine}内容,菜单上线前先补文章、话术或社群素材。`
+    : `${matched.length} 个素材覆盖${def.serviceLine},主推「${primaryContent.title}」。`
+  return {
+    key: def.key,
+    menuName: def.menuName,
+    path: def.path,
+    serviceLine: def.serviceLine,
+    formName: def.formName,
+    cta: def.cta,
+    desc,
+    level,
+    statusText,
+    primaryContent,
+    contentCount: matched.length,
+    leadCount,
+    orderCount
+  }
+}))
 const integrationAuditItems = computed<IntegrationAuditItem[]>(() => integrations.value.map(item => {
   const hasOwner = Boolean(item.ownerName)
   const hasSync = Boolean(item.lastSyncAt && !item.lastSyncAt.includes('待'))
@@ -4619,6 +4773,10 @@ function contentStatusText(status: PrivateContent['status']) {
 
 function contentStatusTag(status: PrivateContent['status']) {
   return ({ draft: 'info', scheduled: 'warning', published: 'success' } as Record<PrivateContent['status'], any>)[status]
+}
+
+function wechatMenuMappingTag(level: WechatMenuMapping['level']) {
+  return level
 }
 
 function followFunnelIssueTag(level: FollowFunnelIssue['level']) {
@@ -9475,6 +9633,191 @@ watch(() => route.fullPath, applyRouteQueue)
   padding: 16px;
 }
 
+.content-ops-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(31, 47, 70, 0.04);
+}
+
+.content-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 19px;
+    line-height: 1.1;
+  }
+}
+
+.wechat-menu-board {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.wechat-menu-head,
+.wechat-menu-card-head,
+.wechat-menu-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wechat-menu-head {
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    max-width: 720px;
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.wechat-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wechat-menu-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #ef4444;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
+.wechat-menu-card-head {
+  align-items: center;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.wechat-menu-content {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  span,
+  em {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  em {
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+  }
+}
+
+.wechat-menu-foot {
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+
+  b {
+    color: #111827;
+  }
+}
+
+.content-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  color: #64748b;
+  text-align: center;
+
+  strong {
+    color: #111827;
+    font-size: 15px;
+  }
+
+  p {
+    max-width: 540px;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+}
+
 .group-head {
   margin-bottom: 12px;
 
@@ -10197,6 +10540,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .starter-steps,
   .group-grid,
   .config-grid,
+  .content-summary,
+  .wechat-menu-grid,
   .toolbar,
   .preview-summary,
   .import-quality-grid,
@@ -10263,6 +10608,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .wecom-check-head {
+    flex-direction: column;
+  }
+
+  .wechat-menu-head {
     flex-direction: column;
   }
 

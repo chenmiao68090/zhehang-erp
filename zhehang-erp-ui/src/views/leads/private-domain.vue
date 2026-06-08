@@ -1158,6 +1158,31 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">责任分工</div>
+        <div class="contact-duty-grid">
+          <div v-for="item in contactDutyItems(drawer.row)" :key="item.role" class="contact-duty-card">
+            <div class="contact-duty-head">
+              <div>
+                <span>{{ item.role }}</span>
+                <strong>{{ item.ownerName }}</strong>
+              </div>
+              <el-tag :type="item.statusType" size="small" effect="plain">{{ item.statusText }}</el-tag>
+            </div>
+            <p>{{ item.desc }}</p>
+            <div class="contact-duty-action">
+              <span>{{ item.action }}</span>
+              <el-button
+                size="small"
+                :type="item.actionPrimary ? 'primary' : 'default'"
+                plain
+                @click.stop="handleContactActionItem(drawer.row, item.actionKey)"
+              >
+                {{ item.actionLabel }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+
         <div class="bd-section-title">私域标签</div>
         <div class="tag-list drawer-tags">
           <el-tag v-for="tag in drawer.row.tags" :key="tag" effect="plain">{{ tag }}</el-tag>
@@ -2160,6 +2185,18 @@ interface ContactActionItem {
   primary?: boolean
 }
 
+interface ContactDutyItem {
+  role: string
+  ownerName: string
+  statusText: string
+  statusType: 'success' | 'warning' | 'info' | 'danger' | 'primary'
+  desc: string
+  action: string
+  actionLabel: string
+  actionKey: ContactActionKey
+  actionPrimary?: boolean
+}
+
 const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
 const contactTimelineTypeMeta: Record<PrivateTimelineType, { label: string; desc: string }> = {
   verify: { label: '工商核验', desc: '主体、撞单和税务资质' },
@@ -2345,6 +2382,155 @@ function contactActionItems(row: PrivateContact): ContactActionItem[] {
     { label: '发案例内容', key: 'follow_record' },
     { label: '保持复联', key: 'follow_task' }
   ]
+}
+
+function contactDeliveryPackage(row: PrivateContact) {
+  return deliveryPackages.value.find(item => item.contactId === row.id)
+}
+
+function contactOpenTasks(row: PrivateContact) {
+  return tasks.value.filter(task => {
+    if (task.companyName !== row.companyName || task.contactName !== row.name) return false
+    return task.status !== 'done'
+  })
+}
+
+function contactDutyItems(row: PrivateContact): ContactDutyItem[] {
+  const record = contactLatestDealRecord(row)
+  const delivery = contactDeliveryPackage(row)
+  const openTaskCount = contactOpenTasks(row).length
+  const deliveryOverdue = delivery ? deliveryOverdueCount(delivery) : 0
+  const salesOwner = row.ownerName || '待分配销售'
+  const deliveryOwner = delivery?.ownerName || (row.stage === 'ordered' ? '待分配交付' : '成交后自动分配')
+  const financeOwner = record?.orderNo || delivery ? '财务核对' : '成交后介入'
+
+  const opsDuty: ContactDutyItem = {
+    role: '私域运营',
+    ownerName: row.ownerName || '待分配运营',
+    statusText: isUnverifiedContact(row) ? '待核验' : isTodayUnfollowed(row) ? '待触达' : '已留痕',
+    statusType: isUnverifiedContact(row) || isTodayUnfollowed(row) ? 'warning' : 'success',
+    desc: isUnverifiedContact(row) ? '先核准公司主体、税务资质和撞单风险,再交给销售报价。' : '负责企微/社群/朋友圈触达留痕,把客户需求和下一动作写清楚。',
+    action: contactQueueHint(row),
+    actionLabel: isUnverifiedContact(row) ? '去核验' : isTodayUnfollowed(row) ? '建跟进任务' : '补跟进',
+    actionKey: isUnverifiedContact(row) ? 'verify' : isTodayUnfollowed(row) ? 'follow_task' : 'follow_record',
+    actionPrimary: isUnverifiedContact(row) || isTodayUnfollowed(row)
+  }
+
+  let salesDuty: ContactDutyItem
+  if (record?.orderNo) {
+    salesDuty = {
+      role: '销售顾问',
+      ownerName: salesOwner,
+      statusText: orderStatusText(record.orderStatus),
+      statusType: orderStatusTag(record.orderStatus),
+      desc: `已生成提单 ${record.orderNo},销售继续盯审批、收款反馈和客户确认。`,
+      action: '审批未完成前,每天同步客户和内部节点。',
+      actionLabel: '看跟进队列',
+      actionKey: 'follow_queue',
+      actionPrimary: true
+    }
+  } else if (record || row.stage === 'quoted') {
+    salesDuty = {
+      role: '销售顾问',
+      ownerName: salesOwner,
+      statusText: '待提单',
+      statusType: 'warning',
+      desc: '已有报价或成交沟通,不要停在口头承诺,应补齐提单和审批证据。',
+      action: record ? `最近报价 ¥${formatMoney(record.quotedAmount)}` : '补成交金额、服务项和付款要求。',
+      actionLabel: '生成提单',
+      actionKey: 'order_draft',
+      actionPrimary: true
+    }
+  } else if (row.stage === 'ordered') {
+    salesDuty = {
+      role: '销售顾问',
+      ownerName: salesOwner,
+      statusText: '已成交',
+      statusType: 'success',
+      desc: '客户已成交,销售需要把合同、付款节点和服务范围交清楚。',
+      action: '成交当天交给交付团队拆任务。',
+      actionLabel: '生成交付包',
+      actionKey: 'delivery',
+      actionPrimary: true
+    }
+  } else if (isIntentContact(row)) {
+    salesDuty = {
+      role: '销售顾问',
+      ownerName: salesOwner,
+      statusText: '待报价',
+      statusType: 'warning',
+      desc: '客户已进入高意向,销售需要当天明确报价、服务包和付款方式。',
+      action: `预计商机 ¥${formatMoney(row.estimatedAmount)}`,
+      actionLabel: '记录报价',
+      actionKey: 'follow_record',
+      actionPrimary: true
+    }
+  } else {
+    salesDuty = {
+      role: '销售顾问',
+      ownerName: salesOwner,
+      statusText: '培育中',
+      statusType: 'info',
+      desc: '客户还未到销售强推进阶段,先由运营保持内容触达和需求确认。',
+      action: row.nextAction || '持续补需求和案例内容。',
+      actionLabel: '建跟进任务',
+      actionKey: 'follow_task'
+    }
+  }
+
+  const deliveryDuty: ContactDutyItem = delivery ? {
+    role: '交付负责人',
+    ownerName: deliveryOwner,
+    statusText: deliveryOverdue > 0 ? `${deliveryOverdue} 个逾期` : deliveryStatusText(delivery.status),
+    statusType: deliveryOverdue > 0 ? 'danger' : deliveryProgress(delivery) >= 100 ? 'success' : 'primary',
+    desc: `已建 ${delivery.packageName},当前 ${deliveryDoneCount(delivery)}/${delivery.tasks.length} 个任务完成。`,
+    action: deliveryRiskText(delivery),
+    actionLabel: '看交付包',
+    actionKey: 'delivery_tab',
+    actionPrimary: true
+  } : {
+    role: '交付负责人',
+    ownerName: deliveryOwner,
+    statusText: row.stage === 'ordered' || record?.orderStatus === 'completed' ? '待建包' : '待接入',
+    statusType: row.stage === 'ordered' || record?.orderStatus === 'completed' ? 'danger' : 'info',
+    desc: row.stage === 'ordered' || record?.orderStatus === 'completed' ? '成交或审批完成后当天必须建交付包,否则销售和交付会断档。' : '客户未成交前先不拆交付任务,但要提前确认是否涉及地址、代账、异常解除。',
+    action: openTaskCount > 0 ? `当前还有 ${openTaskCount} 个未完成任务。` : '成交后自动分配工商/财税/地址任务。',
+    actionLabel: row.stage === 'ordered' || record?.orderStatus === 'completed' ? '生成交付包' : '看交付队列',
+    actionKey: row.stage === 'ordered' || record?.orderStatus === 'completed' ? 'delivery' : 'delivery_tab',
+    actionPrimary: row.stage === 'ordered' || record?.orderStatus === 'completed'
+  }
+
+  const financeDuty: ContactDutyItem = record?.orderNo ? {
+    role: '财务核对',
+    ownerName: financeOwner,
+    statusText: orderStatusText(record.orderStatus),
+    statusType: orderStatusTag(record.orderStatus),
+    desc: '负责核对收款、合同、发票主体和审批凭证,审批完成后通知交付建包。',
+    action: record.orderStatus === 'completed' ? '审批完成,需确认是否已建交付包。' : '继续盯财务/老板审批节点。',
+    actionLabel: '看审批队列',
+    actionKey: 'follow_queue',
+    actionPrimary: record.orderStatus !== 'completed'
+  } : delivery ? {
+    role: '财务核对',
+    ownerName: financeOwner,
+    statusText: '回款核对',
+    statusType: 'warning',
+    desc: '交付推进时同步核对回款、合同、资料归档和后续续费提醒。',
+    action: delivery.paymentTimeReq || '先核对回款/合同/资料。',
+    actionLabel: '记录回访',
+    actionKey: 'follow_record'
+  } : {
+    role: '财务核对',
+    ownerName: financeOwner,
+    statusText: '待介入',
+    statusType: 'info',
+    desc: '成交前不用财务强介入,但报价时要明确收款方式、开票主体和账期。',
+    action: '成交后进入提单审批和收款核对。',
+    actionLabel: '补跟进',
+    actionKey: 'follow_record'
+  }
+
+  return [opsDuty, salesDuty, deliveryDuty, financeDuty]
 }
 
 function contactRowActions(row: PrivateContact): ContactActionItem[] {
@@ -5738,6 +5924,83 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.contact-duty-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.contact-duty-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+
+  p {
+    min-height: 42px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.contact-duty-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  strong {
+    overflow: hidden;
+    color: #111827;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.contact-duty-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :deep(.el-button) {
+    margin-left: 0;
+    border-radius: 999px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
 .mt {
   margin-top: 14px;
 }
@@ -5943,6 +6206,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .toolbar,
   .preview-summary,
   .contact-ops-summary,
+  .contact-duty-grid,
   .audit-metrics,
   .audit-issue,
   .task-execution-summary,
@@ -5985,6 +6249,10 @@ watch(() => route.fullPath, applyRouteQueue)
   .contact-next-action-steps {
     justify-content: flex-start;
     max-width: none;
+  }
+
+  .contact-duty-action {
+    grid-template-columns: 1fr;
   }
 
   .timeline-group-head {

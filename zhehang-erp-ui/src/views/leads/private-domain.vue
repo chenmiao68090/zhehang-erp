@@ -973,6 +973,49 @@
               <div><span>待锁地址</span><b>{{ deliveryStats.addressUnlocked }}</b></div>
               <div><span>待绑资源</span><b>{{ deliveryStats.addressUnbound }}</b></div>
             </div>
+            <div class="delivery-sla-overview" :class="{ clear: deliveryStats.slaAttention === 0 }">
+              <div class="delivery-sla-overview-head">
+                <div>
+                  <strong>交付 SLA 总览</strong>
+                  <p v-if="deliveryStats.slaAttention">先处理逾期和高优任务,列表层直接定位交付包,再进详情生成督办或标记逾期。</p>
+                  <p v-else>当前没有逾期或高优交付任务,可以继续做资料归档、回访和续费提醒。</p>
+                </div>
+                <el-button
+                  type="primary"
+                  plain
+                  size="small"
+                  :disabled="!deliveryStats.slaAttention"
+                  @click="showDeliverySlaRisk"
+                >
+                  {{ deliveryStats.slaAttention ? '只看 SLA 盯办' : '已检查' }}
+                </el-button>
+              </div>
+              <div class="delivery-sla-overview-metrics">
+                <div><span>待补救包</span><b>{{ deliveryStats.slaAttention }}</b></div>
+                <div><span>逾期任务</span><b>{{ deliveryStats.slaOverdueTasks }}</b></div>
+                <div><span>高优任务</span><b>{{ deliveryStats.slaHighTasks }}</b></div>
+                <div><span>任务闭环包</span><b>{{ deliveryStats.slaClosed }}</b></div>
+              </div>
+              <div v-if="deliverySlaQueue.length" class="delivery-sla-queue">
+                <button
+                  v-for="item in deliverySlaQueue"
+                  :key="item.key"
+                  type="button"
+                  class="delivery-sla-queue-item"
+                  :class="item.level"
+                  @click.stop="focusDeliverySlaQueue(item)"
+                >
+                  <span>{{ item.delivery.companyName }}</span>
+                  <el-tag :type="deliverySlaQueueTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  <strong>{{ item.title }}</strong>
+                  <em>{{ item.desc }}</em>
+                </button>
+              </div>
+              <div v-else class="delivery-sla-empty-line">
+                <el-tag type="success" size="small" effect="plain">SLA 正常</el-tag>
+                <span>如果后续出现逾期或高优任务,这里会自动生成盯办队列。</span>
+              </div>
+            </div>
             <div class="address-binding-audit" :class="{ clear: !addressBindingIssues.length }">
               <div class="audit-head">
                 <div>
@@ -2069,7 +2112,7 @@ import {
 } from '@/api/private-domain'
 
 type FollowFilter = 'all' | 'quote_no_order' | 'order_pending' | 'completed_no_delivery' | 'next_touch'
-type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'address_unlocked' | 'address_unbound' | 'done'
+type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'sla_risk' | 'address_unlocked' | 'address_unbound' | 'done'
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 type StarterAction = 'import' | 'contacts' | 'follow' | 'quote' | 'delivery'
 type ContactQuickFilter = 'all' | 'today_unfollowed' | 'intent' | 'unverified'
@@ -2470,7 +2513,7 @@ const ownershipAuditSummary = computed(() => {
 })
 const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
 const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
-const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'address_unlocked', 'address_unbound', 'done']
+const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'sla_risk', 'address_unlocked', 'address_unbound', 'done']
 const routeTaskFilters: TaskFilter[] = ['all', 'pending', 'overdue', 'address_stock', 'supervisor', 'done']
 const diagnosisQuestions = [
   {
@@ -2985,11 +3028,24 @@ const deliveryStats = computed(() => ({
   notStarted: deliveryPackages.value.filter(item => item.status === 'created' && deliveryProgress(item) === 0).length,
   inProgress: deliveryPackages.value.filter(item => item.status === 'in_progress').length,
   overdue: deliveryPackages.value.filter(item => deliveryOverdueCount(item) > 0).length,
+  slaAttention: deliveryPackages.value.filter(item => deliverySlaAttentionTasks(item).length > 0).length,
+  slaOverdueTasks: deliveryPackages.value.reduce((sum, item) => sum + item.tasks.filter(task => task.status === 'overdue').length, 0),
+  slaHighTasks: deliveryPackages.value.reduce((sum, item) => sum + item.tasks.filter(task => task.status !== 'done' && task.priority === '高').length, 0),
+  slaClosed: deliveryPackages.value.filter(item => item.tasks.length > 0 && item.tasks.every(task => task.status === 'done')).length,
   addressUnlocked: deliveryPackages.value.filter(item => needsAddressLock(item)).length,
   addressUnbound: deliveryPackages.value.filter(item => needsAddressResourceBinding(item)).length,
   done: deliveryPackages.value.filter(item => item.status === 'done').length,
   pending: deliveryPackages.value.filter(item => item.status !== 'done').length
 }))
+const deliverySlaQueue = computed<DeliverySlaQueueItem[]>(() => deliveryPackages.value
+  .map(deliverySlaQueueItem)
+  .filter((item): item is DeliverySlaQueueItem => Boolean(item))
+  .sort((left, right) => {
+    if (left.level !== right.level) return left.level === 'danger' ? -1 : 1
+    if (left.sort !== right.sort) return right.sort - left.sort
+    return left.delivery.dueDate.localeCompare(right.delivery.dueDate)
+  })
+  .slice(0, 4))
 const todayReviewLevel = computed<TodayReviewCard['level']>(() => {
   if (deliveryStats.value.overdue > 0 || followQueueCounts.value.completed_no_delivery > 0 || followQueueCounts.value.quote_no_order > 0) return 'danger'
   if (taskStats.value.overdue > 0 || deliveryStats.value.addressUnbound > 0 || followQueueCounts.value.order_pending > 0) return 'warning'
@@ -3091,6 +3147,7 @@ const deliveryFilterOptions = computed(() => [
   { label: `待启动 ${deliveryStats.value.notStarted}`, value: 'not_started' },
   { label: `进行中 ${deliveryStats.value.inProgress}`, value: 'in_progress' },
   { label: `有逾期 ${deliveryStats.value.overdue}`, value: 'overdue' },
+  { label: `SLA 盯办 ${deliveryStats.value.slaAttention}`, value: 'sla_risk' },
   { label: `待锁地址 ${deliveryStats.value.addressUnlocked}`, value: 'address_unlocked' },
   { label: `待绑资源 ${deliveryStats.value.addressUnbound}`, value: 'address_unbound' },
   { label: `已完成 ${deliveryStats.value.done}`, value: 'done' }
@@ -3100,6 +3157,7 @@ const deliveryFilterHint = computed(() => ({
   not_started: '已创建但任务还没启动的交付包,需要当天确认资料、回款和责任人。',
   in_progress: '已经开始推进的交付包,重点看最晚节点和剩余任务。',
   overdue: '存在逾期任务的交付包,需要主管介入处理。',
+  sla_risk: '存在逾期或高优交付任务的包,需要负责人当天补救或盯办。',
   address_unlocked: '地址类业务还没有锁定资源池,需要渠道或交付先确认可售地址。',
   address_unbound: '已经锁定地址但缺少 ADR 资源编号的交付包,需要补绑定资源池。',
   done: '已完成交付包,用于回访、续费和服务质量复盘。'
@@ -3113,6 +3171,7 @@ const filteredDeliveryPackages = computed(() => {
     if (deliveryFilter.value === 'not_started') return item.status === 'created' && deliveryProgress(item) === 0
     if (deliveryFilter.value === 'in_progress') return item.status === 'in_progress'
     if (deliveryFilter.value === 'overdue') return deliveryOverdueCount(item) > 0
+    if (deliveryFilter.value === 'sla_risk') return deliverySlaAttentionTasks(item).length > 0
     if (deliveryFilter.value === 'address_unlocked') return needsAddressLock(item)
     if (deliveryFilter.value === 'address_unbound') return needsAddressResourceBinding(item)
     if (deliveryFilter.value === 'done') return item.status === 'done'
@@ -3245,6 +3304,16 @@ interface DeliverySlaSummary {
   hint: string
   level: 'success' | 'warning' | 'danger'
   statusText: string
+}
+
+interface DeliverySlaQueueItem {
+  key: string
+  delivery: PrivateDeliveryPackage
+  level: 'warning' | 'danger'
+  statusText: string
+  title: string
+  desc: string
+  sort: number
 }
 
 const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
@@ -4435,6 +4504,51 @@ function deliverySlaItems(row: PrivateDeliveryPackage): DeliverySlaItem[] {
       reason: deliverySlaReason(task),
       action: deliverySlaAction(task)
     }))
+}
+
+function deliverySlaAttentionTasks(row: PrivateDeliveryPackage) {
+  return row.tasks
+    .filter(task => task.status !== 'done' && (task.status === 'overdue' || task.priority === '高'))
+    .sort((left, right) => {
+      const priority = taskSchedulePriority(right) - taskSchedulePriority(left)
+      if (priority !== 0) return priority
+      return taskDueSortValue(left) - taskDueSortValue(right)
+    })
+}
+
+function deliverySlaQueueItem(row: PrivateDeliveryPackage): DeliverySlaQueueItem | null {
+  const attentionTasks = deliverySlaAttentionTasks(row)
+  if (!attentionTasks.length) return null
+  const first = attentionTasks[0]
+  const overdue = attentionTasks.filter(task => task.status === 'overdue').length
+  const high = attentionTasks.filter(task => task.priority === '高' && task.status !== 'overdue').length
+  const level: DeliverySlaQueueItem['level'] = overdue > 0 ? 'danger' : 'warning'
+  return {
+    key: `delivery-sla-queue-${row.id}`,
+    delivery: row,
+    level,
+    statusText: overdue > 0 ? `${overdue} 个逾期` : `${high} 个高优`,
+    title: first.title.replace(row.companyName + ' - ', ''),
+    desc: `${first.ownerName} · ${first.dueTime} · ${deliverySlaReason(first)}`,
+    sort: overdue * 100 + high * 20 + taskSchedulePriority(first)
+  }
+}
+
+function deliverySlaQueueTag(level: DeliverySlaQueueItem['level']) {
+  return level
+}
+
+function showDeliverySlaRisk() {
+  focusedDeliveryPackageId.value = null
+  deliveryFilter.value = 'sla_risk'
+  scrollPrivateTabsIntoView()
+}
+
+function focusDeliverySlaQueue(item: DeliverySlaQueueItem) {
+  deliveryFilter.value = 'sla_risk'
+  focusedDeliveryPackageId.value = item.delivery.id
+  scrollPrivateTabsIntoView()
+  nextTick(() => openDeliveryPackage(item.delivery))
 }
 
 function deliverySlaSummary(row: PrivateDeliveryPackage): DeliverySlaSummary {
@@ -5792,8 +5906,8 @@ function goTodayReviewAction(action: TodayReviewAction) {
           : 'all'
   } else if (action === 'delivery') {
     activeTab.value = 'delivery'
-    deliveryFilter.value = deliveryStats.value.overdue > 0
-      ? 'overdue'
+    deliveryFilter.value = deliveryStats.value.slaAttention > 0
+      ? 'sla_risk'
       : deliveryStats.value.addressUnbound > 0
         ? 'address_unbound'
         : 'all'
@@ -6926,6 +7040,132 @@ watch(() => route.fullPath, applyRouteQueue)
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.delivery-sla-overview {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+
+  &.clear {
+    border-color: #bbf7d0;
+    background: #f7fdf9;
+  }
+}
+
+.delivery-sla-overview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    max-width: 680px;
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.delivery-sla-overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 18px;
+  }
+}
+
+.delivery-sla-queue {
+  display: grid;
+  gap: 8px;
+}
+
+.delivery-sla-queue-item {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto minmax(190px, 1.1fr);
+  gap: 8px 12px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #ffffff;
+  }
+
+  span {
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    overflow: hidden;
+    color: #245bdb;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  em {
+    grid-column: 1 / -1;
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 1.5;
+  }
+}
+
+.delivery-sla-empty-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #dcfce7;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #15803d;
+  font-size: 12px;
 }
 
 .address-binding-audit {
@@ -9373,6 +9613,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .task-metrics,
   .task-group-item,
   .delivery-summary,
+  .delivery-sla-overview-metrics,
+  .delivery-sla-queue-item,
   .delivery-progress-stats,
   .delivery-check-grid,
   .delivery-checklist,
@@ -9431,6 +9673,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .delivery-sla-head {
+    flex-direction: column;
+  }
+
+  .delivery-sla-overview-head {
     flex-direction: column;
   }
 

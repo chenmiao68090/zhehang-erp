@@ -1718,6 +1718,47 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">推荐触达内容</div>
+        <div class="contact-content-panel" :class="contactContentSummary(drawer.row).level">
+          <div class="contact-content-head">
+            <div>
+              <strong>{{ contactContentSummary(drawer.row).title }}</strong>
+              <p>{{ contactContentSummary(drawer.row).desc }}</p>
+            </div>
+            <el-tag :type="contactContentTag(contactContentSummary(drawer.row).level)" effect="plain">
+              {{ contactContentSummary(drawer.row).statusText }}
+            </el-tag>
+          </div>
+          <div v-if="contactContentRecommendations(drawer.row).length" class="contact-content-grid">
+            <div v-for="item in contactContentRecommendations(drawer.row)" :key="item.key" class="contact-content-card">
+              <div class="contact-content-card-head">
+                <strong>{{ item.content.title }}</strong>
+                <el-tag :type="contentStatusTag(item.content.status)" size="small" effect="plain">{{ item.content.type }}</el-tag>
+              </div>
+              <p>{{ item.reason }}</p>
+              <div class="contact-content-metrics">
+                <span>状态 <b>{{ contentStatusText(item.content.status) }}</b></span>
+                <span>线索 <b>{{ item.content.leadCount }}</b></span>
+                <span>成交 <b>{{ item.content.orderCount }}</b></span>
+                <span>匹配 <b>{{ item.score }}分</b></span>
+              </div>
+              <div class="contact-content-script">
+                <span>建议话术</span>
+                <p>{{ item.script }}</p>
+              </div>
+              <div class="contact-content-actions">
+                <el-button size="small" plain @click.stop="openRecommendedContent(item.content)">编辑素材</el-button>
+                <el-button size="small" type="primary" plain @click.stop="useRecommendedContent(drawer.row!, item)">用作跟进内容</el-button>
+              </div>
+            </div>
+          </div>
+          <div v-else class="contact-content-empty">
+            <strong>当前没有匹配内容</strong>
+            <p>先到内容触达页补这个服务线的文章、社群推送或销售话术,再回到客户详情使用。</p>
+            <el-button type="primary" plain size="small" @click.stop="openNewRecommendedContent()">新增素材</el-button>
+          </div>
+        </div>
+
         <div class="bd-section-title mt">责任分工</div>
         <div class="contact-duty-grid">
           <div v-for="item in contactDutyItems(drawer.row)" :key="item.role" class="contact-duty-card">
@@ -4126,6 +4167,22 @@ interface ContactActionItem {
   primary?: boolean
 }
 
+interface ContactContentRecommendation {
+  key: string
+  content: PrivateContent
+  score: number
+  businessMatch: boolean
+  reason: string
+  script: string
+}
+
+interface ContactContentSummary {
+  title: string
+  desc: string
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  statusText: string
+}
+
 interface ContactDutyItem {
   role: string
   ownerName: string
@@ -4433,6 +4490,218 @@ function contactActionItems(row: PrivateContact): ContactActionItem[] {
     { label: '发案例内容', key: 'follow_record' },
     { label: '保持复联', key: 'follow_task' }
   ]
+}
+
+function textHasKeyword(text: string, keyword: string) {
+  const normalized = `${text || ''}`.toLowerCase()
+  const tokens = `${keyword || ''}`
+    .toLowerCase()
+    .split(/[、,，;；/|｜\s]+/)
+    .map(item => item.trim())
+    .filter(item => item.length >= 2)
+  if (!tokens.length) return Boolean(keyword && normalized.includes(keyword.toLowerCase()))
+  return tokens.some(item => normalized.includes(item))
+}
+
+function contactContentContext(row: PrivateContact) {
+  return `${row.serviceLine} ${row.demand} ${row.tags.join(' ')} ${row.communityName} ${row.source} ${row.nextAction}`
+}
+
+function contentSourceTypeMatch(row: PrivateContact, content: PrivateContent) {
+  const sourceMap: Partial<Record<PrivateSource, PrivateContent['type'][]>> = {
+    企业微信: ['销售话术', '朋友圈'],
+    个人微信: ['销售话术', '朋友圈'],
+    微信群: ['社群推送', '销售话术'],
+    朋友圈: ['朋友圈'],
+    公众号: ['公众号文章', '销售话术'],
+    视频号: ['视频号直播', '公众号文章'],
+    老客转介绍: ['销售话术', '社群推送']
+  }
+  return (sourceMap[row.source] || []).includes(content.type)
+}
+
+function contentBusinessKeywords(content: PrivateContent) {
+  const keywordMap: Record<string, string[]> = {
+    代理记账: ['代理记账', '记账', '新公司', '税务报到', '小规模'],
+    工商注册: ['工商注册', '注册公司', '新公司', '开办', '核名'],
+    地址挂靠: ['地址', '挂靠', '注册地址', '经营异常', '地址异常'],
+    异常解除: ['异常', '地址异常', '税务异常', '年报异常', '解除'],
+    税务筹划: ['税务', '税筹', '电商', '一般纳税人', '成本票', '税负', '合规'],
+    公司注销: ['注销', '不经营', '清算', '税务注销'],
+    同行渠道: ['同行', '渠道', '批量地址', '返点', '月结', '库存'],
+    财税体检: ['体检', '风险', '税务', '合规', '账务'],
+    出口退税: ['出口退税', '退税', '跨境', '报关', '外贸']
+  }
+  return Array.from(new Set([
+    content.relatedService,
+    ...`${content.title} ${content.target}`.split(/[、,，;；/|｜\s]+/),
+    ...(keywordMap[content.relatedService] || [])
+  ])).filter(item => item && item.length >= 2)
+}
+
+function contentBusinessMatch(row: PrivateContact, content: PrivateContent) {
+  const context = contactContentContext(row)
+  if (content.relatedService && (row.serviceLine.includes(content.relatedService) || content.relatedService.includes(row.serviceLine))) return true
+  return contentBusinessKeywords(content).some(keyword => textHasKeyword(context, keyword))
+}
+
+function scoreContactContent(row: PrivateContact, content: PrivateContent) {
+  const context = contactContentContext(row)
+  let score = 0
+  const reasons: string[] = []
+  const businessMatch = contentBusinessMatch(row, content)
+
+  if (content.relatedService && (row.serviceLine.includes(content.relatedService) || content.relatedService.includes(row.serviceLine))) {
+    score += 42
+    reasons.push(`服务线匹配${content.relatedService}`)
+  } else if (businessMatch) {
+    score += 24
+    reasons.push(`业务关键词命中${content.relatedService}`)
+  }
+
+  if (textHasKeyword(context, content.target)) {
+    score += 18
+    reasons.push(`目标人群命中${content.target}`)
+  }
+  if (contentSourceTypeMatch(row, content)) {
+    score += 14
+    reasons.push(`${row.source}适合${content.type}`)
+  }
+  if (content.status === 'published') {
+    score += 14
+    reasons.push('已发布可直接发送')
+  } else if (content.status === 'scheduled') {
+    score += 8
+    reasons.push('已排期可提前告知')
+  } else {
+    score += 4
+    reasons.push('草稿可先完善')
+  }
+  if (isIntentContact(row) && content.type === '销售话术') {
+    score += 12
+    reasons.push('高意向客户适合话术跟进')
+  }
+  if (!isIntentContact(row) && ['公众号文章', '朋友圈', '社群推送'].includes(content.type)) {
+    score += 8
+    reasons.push('培育阶段适合内容铺垫')
+  }
+  score += Math.min(12, Math.round(content.leadCount / 2))
+  score += Math.min(12, content.orderCount * 3)
+
+  return {
+    score,
+    businessMatch,
+    reason: reasons.slice(0, 3).join(' / ') || '按业务线、来源触点和历史转化综合推荐'
+  }
+}
+
+function contactRecommendedScript(row: PrivateContact, content: PrivateContent) {
+  const need = row.demand || row.serviceLine
+  const next = row.nextAction || `确认${content.relatedService || row.serviceLine}需求、预算和资料`
+  if (content.type === '销售话术') {
+    return `先确认客户当前卡点是“${need}”,再按「${content.title}」口径沟通价格、资料和办理周期,最后约定: ${next}。`
+  }
+  if (content.type === '社群推送') {
+    return `在${row.communityName || '客户所在社群'}推送「${content.title}」,单独@${row.name}补一句“这条和你现在的情况接近,我晚点电话帮你核一下”。`
+  }
+  if (content.type === '朋友圈') {
+    return `朋友圈发布或转发「${content.title}」后,私聊${row.name}:“这个案例和你咨询的${row.serviceLine}比较像,我给你按公司情况算一版。”`
+  }
+  if (content.type === '视频号直播') {
+    return `邀请客户看「${content.title}」,直播后把客户问题沉淀到跟进记录,再推进: ${next}。`
+  }
+  return `发送「${content.title}」给${row.name},围绕“${need}”补充解释,并推进: ${next}。`
+}
+
+function contactContentRecommendations(row: PrivateContact): ContactContentRecommendation[] {
+  return contents.value
+    .map(content => {
+      const result = scoreContactContent(row, content)
+      return {
+        key: `${row.id}-${content.id}`,
+        content,
+        score: result.score,
+        businessMatch: result.businessMatch,
+        reason: result.reason,
+        script: contactRecommendedScript(row, content)
+      }
+    })
+    .filter(item => item.businessMatch && item.score >= 18)
+    .sort((left, right) => {
+      if (left.score !== right.score) return right.score - left.score
+      if (left.content.orderCount !== right.content.orderCount) return right.content.orderCount - left.content.orderCount
+      return right.content.leadCount - left.content.leadCount
+    })
+    .slice(0, 3)
+}
+
+function contactContentSummary(row: PrivateContact): ContactContentSummary {
+  const recommendations = contactContentRecommendations(row)
+  const published = recommendations.filter(item => item.content.status === 'published').length
+  if (!recommendations.length) {
+    return {
+      title: '缺少可推荐内容素材',
+      desc: `${row.serviceLine}当前没有命中素材,建议先补文章、社群推送或销售话术,否则销售只能凭经验跟。`,
+      level: 'danger',
+      statusText: '待补素材'
+    }
+  }
+  const top = recommendations[0]
+  if (published > 0) {
+    return {
+      title: `优先触达「${top.content.title}」`,
+      desc: `${recommendations.length} 条素材匹配当前客户,其中 ${published} 条已发布,可直接用于企微、电话或社群跟进。`,
+      level: isIntentContact(row) ? 'primary' : 'success',
+      statusText: isIntentContact(row) ? '高意向触达' : '可触达'
+    }
+  }
+  return {
+    title: `建议先完善「${top.content.title}」`,
+    desc: `${recommendations.length} 条素材匹配,但还没有已发布内容,先完善后再发给客户。`,
+    level: 'warning',
+    statusText: '待发布'
+  }
+}
+
+function contactContentTag(level: ContactContentSummary['level']) {
+  return level
+}
+
+function contentTouchMethod(type: PrivateContent['type']): PrivateFollowMethod {
+  if (type === '朋友圈') return '微信'
+  if (type === '社群推送') return '社群'
+  if (type === '销售话术') return '电话'
+  if (type === '视频号直播') return '微信'
+  return '企微'
+}
+
+function useRecommendedContent(row: PrivateContact, item: ContactContentRecommendation) {
+  Object.assign(followForm, {
+    contactId: row.id,
+    method: contentTouchMethod(item.content.type),
+    result: isIntentContact(row) ? '有意向' : '已联系',
+    content: `推荐触达「${item.content.title}」。建议话术: ${item.script}`,
+    quotedAmount: row.stage === 'quoted' || row.stage === 'ordered' ? row.estimatedAmount : 0,
+    nextAction: row.nextAction || `跟进客户对${item.content.relatedService || row.serviceLine}内容的反馈`,
+    nextTouchAt: nowMinuteText(),
+    ownerName: row.ownerName
+  })
+  followDialog.row = row
+  followDialog.visible = true
+}
+
+function openRecommendedContent(content: PrivateContent) {
+  drawer.visible = false
+  activeTab.value = 'contents'
+  scrollPrivateTabsIntoView()
+  nextTick(() => openContentForm(content))
+}
+
+function openNewRecommendedContent() {
+  drawer.visible = false
+  activeTab.value = 'contents'
+  scrollPrivateTabsIntoView()
+  nextTick(() => openContentForm())
 }
 
 function contactDeliveryPackage(row: PrivateContact) {
@@ -10971,6 +11240,178 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.contact-content-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+
+  &.primary {
+    border-left-color: #2563eb;
+  }
+}
+
+.contact-content-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.contact-content-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.contact-content-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+
+  > p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.contact-content-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 14px;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.contact-content-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+
+  span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 7px 8px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+  }
+
+  b {
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.contact-content-script {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 0;
+    color: #334155;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+}
+
+.contact-content-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+
+  :deep(.el-button) {
+    margin-left: 0;
+    border-radius: 999px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
+.contact-content-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  text-align: center;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    max-width: 420px;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+}
+
 .contact-duty-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11529,6 +11970,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .ownership-impact-list,
   .ownership-impact-metrics,
   .contact-ops-summary,
+  .contact-content-grid,
+  .contact-content-metrics,
   .contact-duty-grid,
   .contact-ownership-metrics,
   .contact-ownership-progress,
@@ -11649,6 +12092,10 @@ watch(() => route.fullPath, applyRouteQueue)
     flex-direction: column;
   }
 
+  .contact-content-head {
+    flex-direction: column;
+  }
+
   .verify-tags {
     justify-content: flex-start;
   }
@@ -11672,6 +12119,10 @@ watch(() => route.fullPath, applyRouteQueue)
 
   .contact-duty-action {
     grid-template-columns: 1fr;
+  }
+
+  .contact-content-actions {
+    justify-content: flex-start;
   }
 
   .contact-ownership-actions {

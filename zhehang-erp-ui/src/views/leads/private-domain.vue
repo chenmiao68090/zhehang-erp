@@ -796,7 +796,58 @@
                 {{ item.label }}
               </el-radio-button>
             </el-radio-group>
-            <span>{{ taskFilterHint }} 当前显示 {{ filteredTasks.length }} 条任务。</span>
+            <span>{{ taskFilterHint }}{{ focusedTaskOwner ? ` 已聚焦 ${focusedTaskOwner},` : '' }} 当前显示 {{ filteredTasks.length }} 条任务。</span>
+            <el-button v-if="focusedTaskOwner" type="primary" link size="small" @click="clearFocusedTaskOwner">清除负责人</el-button>
+          </div>
+          <div class="task-schedule-board">
+            <div class="task-schedule-head">
+              <div>
+                <strong>今日任务排班</strong>
+                <p>{{ taskScheduleSummary }}</p>
+              </div>
+              <el-button
+                type="primary"
+                plain
+                size="small"
+                :disabled="!taskScheduleFocus"
+                @click="applyTaskScheduleFocus"
+              >
+                {{ taskScheduleFocus ? `优先处理 ${taskScheduleFocus.ownerName}` : '暂无待排班' }}
+              </el-button>
+            </div>
+            <div class="task-owner-grid">
+              <button
+                v-for="owner in taskOwnerSummaries"
+                :key="owner.ownerName"
+                type="button"
+                class="task-owner-card"
+                :class="{ active: focusedTaskOwner === owner.ownerName }"
+                @click.stop="focusTaskOwner(owner)"
+              >
+                <div>
+                  <strong>{{ owner.ownerName }}</strong>
+                  <el-tag :type="owner.level" size="small" effect="plain">{{ owner.levelText }}</el-tag>
+                </div>
+                <p>{{ owner.pending }} 待办 · {{ owner.overdue }} 逾期 · {{ owner.high }} 高优</p>
+                <span>下一节点 {{ owner.nextDueText }}</span>
+              </button>
+            </div>
+            <div class="task-schedule-list">
+              <button
+                v-for="item in taskScheduleSuggestions"
+                :key="item.key"
+                type="button"
+                class="task-schedule-item"
+                @click.stop="focusScheduleTask(item)"
+              >
+                <div>
+                  <strong>{{ item.task.title }}</strong>
+                  <el-tag :type="item.level" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                </div>
+                <p>{{ item.desc }}</p>
+                <span>{{ item.actionText }}</span>
+              </button>
+            </div>
           </div>
           <div class="task-execution-summary">
             <div class="task-metrics">
@@ -1947,6 +1998,25 @@ type TaskGroupSummary = {
   delivery?: PrivateDeliveryPackage
   contact?: PrivateContact
 }
+interface TaskOwnerSummary {
+  ownerName: string
+  tasks: PrivateTask[]
+  pending: number
+  overdue: number
+  high: number
+  done: number
+  nextDueText: string
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  levelText: string
+}
+interface TaskScheduleSuggestion {
+  key: string
+  task: PrivateTask
+  level: 'warning' | 'danger' | 'primary'
+  statusText: string
+  desc: string
+  actionText: string
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -1987,6 +2057,7 @@ const followFilter = ref<FollowFilter>('all')
 const deliveryFilter = ref<DeliveryFilter>('all')
 const focusedDeliveryPackageId = ref<number | null>(null)
 const taskFilter = ref<TaskFilter>('all')
+const focusedTaskOwner = ref('')
 const importColumns = privateImportTemplateColumns
 const importPreview = ref<PrivateImportPreviewRow[]>([])
 const importFileName = ref('')
@@ -2482,6 +2553,7 @@ const taskFilterHint = computed(() => ({
   done: '已完成任务用于复盘执行闭环。'
 } as Record<TaskFilter, string>)[taskFilter.value])
 const filteredTasks = computed(() => tasks.value.filter(item => {
+  if (focusedTaskOwner.value && item.ownerName !== focusedTaskOwner.value) return false
   if (taskFilter.value === 'pending') return item.status === 'pending'
   if (taskFilter.value === 'overdue') return item.status === 'overdue'
   if (taskFilter.value === 'address_stock') return isAddressStockTask(item)
@@ -2489,6 +2561,73 @@ const filteredTasks = computed(() => tasks.value.filter(item => {
   if (taskFilter.value === 'done') return item.status === 'done'
   return true
 }))
+const taskOwnerSummaries = computed<TaskOwnerSummary[]>(() => {
+  const groups = new Map<string, PrivateTask[]>()
+  tasks.value.forEach(task => {
+    if (!groups.has(task.ownerName)) groups.set(task.ownerName, [])
+    groups.get(task.ownerName)?.push(task)
+  })
+  return Array.from(groups.entries())
+    .map(([ownerName, ownerTasks]) => {
+      const pending = ownerTasks.filter(item => item.status === 'pending').length
+      const overdue = ownerTasks.filter(item => item.status === 'overdue').length
+      const high = ownerTasks.filter(item => item.status !== 'done' && item.priority === '高').length
+      const done = ownerTasks.filter(item => item.status === 'done').length
+      const next = ownerTasks
+        .filter(item => item.status !== 'done')
+        .sort((left, right) => taskDueSortValue(left) - taskDueSortValue(right))[0]
+      const level: TaskOwnerSummary['level'] = overdue > 0 ? 'danger' : high > 0 ? 'warning' : pending > 0 ? 'primary' : 'success'
+      return {
+        ownerName,
+        tasks: ownerTasks,
+        pending,
+        overdue,
+        high,
+        done,
+        nextDueText: next?.dueTime || '无待办',
+        level,
+        levelText: overdue > 0 ? '先救火' : high > 0 ? '高优先' : pending > 0 ? '待推进' : '已清爽'
+      }
+    })
+    .sort((left, right) => {
+      if (left.overdue !== right.overdue) return right.overdue - left.overdue
+      if (left.high !== right.high) return right.high - left.high
+      if (left.pending !== right.pending) return right.pending - left.pending
+      return right.tasks.length - left.tasks.length
+    })
+    .slice(0, 6)
+})
+const taskScheduleSuggestions = computed<TaskScheduleSuggestion[]>(() => {
+  return tasks.value
+    .filter(item => item.status !== 'done')
+    .sort((left, right) => {
+      const statusScore = taskSchedulePriority(right) - taskSchedulePriority(left)
+      if (statusScore !== 0) return statusScore
+      return taskDueSortValue(left) - taskDueSortValue(right)
+    })
+    .slice(0, 4)
+    .map(task => {
+      const delivery = taskDeliveryPackage(task)
+      const level: TaskScheduleSuggestion['level'] = task.status === 'overdue' ? 'danger' : task.priority === '高' ? 'warning' : 'primary'
+      const source = delivery ? `${delivery.packageName} · ${delivery.serviceLine}` : task.companyName
+      return {
+        key: `schedule-${task.id}`,
+        task,
+        level,
+        statusText: task.status === 'overdue' ? '逾期补救' : task.priority === '高' ? '高优排班' : '今日推进',
+        desc: `${task.ownerName} · ${source} · ${task.dueTime}`,
+        actionText: task.status === 'overdue' ? '点击聚焦逾期队列' : '点击聚焦负责人'
+      }
+    })
+})
+const taskScheduleFocus = computed(() => taskScheduleSuggestions.value[0]?.task)
+const taskScheduleSummary = computed(() => {
+  if (!tasks.value.length) return '当前暂无任务,先从私域客户或成交交付包生成任务。'
+  if (taskStats.value.overdue > 0) return `有 ${taskStats.value.overdue} 个逾期任务,先按负责人排班补救。`
+  if (taskOwnerSummaries.value.some(item => item.high > 0)) return '当前没有逾期,优先安排高优先级客户和交付节点。'
+  if (taskStats.value.pending > 0) return `当前 ${taskStats.value.pending} 个待处理任务,按负责人依次推进即可。`
+  return '任务队列已经清爽,可以安排回访复盘或导入新客户。'
+})
 const taskSourceSummary = computed(() => {
   const list = filteredTasks.value
   const delivery = list.filter(item => taskDeliveryPackage(item)).length
@@ -3488,6 +3627,17 @@ function taskStatusTag(status: PrivateTaskStatus) {
   return ({ pending: 'warning', done: 'success', overdue: 'danger' } as Record<PrivateTaskStatus, any>)[status]
 }
 
+function taskDueSortValue(task: PrivateTask) {
+  return new Date(task.dueTime.replace(' ', 'T')).getTime() || 0
+}
+
+function taskSchedulePriority(task: PrivateTask) {
+  if (task.status === 'overdue') return 30
+  if (task.priority === '高') return 20
+  if (task.priority === '中') return 10
+  return 0
+}
+
 function taskContact(row: PrivateTask) {
   return contacts.value.find(item => item.companyName === row.companyName && item.name === row.contactName)
     || contacts.value.find(item => item.companyName === row.companyName)
@@ -3552,6 +3702,29 @@ function focusTaskGroup(group: TaskGroupSummary) {
     return
   }
   ElMessage.warning('未找到关联客户或交付包,请刷新后重试')
+}
+
+function focusTaskOwner(owner: TaskOwnerSummary) {
+  focusedTaskOwner.value = owner.ownerName
+  if (owner.overdue > 0) taskFilter.value = 'overdue'
+  else if (owner.pending > 0) taskFilter.value = 'pending'
+  else taskFilter.value = 'all'
+}
+
+function clearFocusedTaskOwner() {
+  focusedTaskOwner.value = ''
+}
+
+function focusScheduleTask(item: TaskScheduleSuggestion) {
+  focusedTaskOwner.value = item.task.ownerName
+  taskFilter.value = item.task.status === 'overdue' ? 'overdue' : 'pending'
+}
+
+function applyTaskScheduleFocus() {
+  const task = taskScheduleFocus.value
+  if (!task) return
+  focusedTaskOwner.value = task.ownerName
+  taskFilter.value = task.status === 'overdue' ? 'overdue' : 'pending'
 }
 
 function taskOpenItemsAfterUpdate(row: PrivateTask, delivery?: PrivateDeliveryPackage) {
@@ -7285,6 +7458,95 @@ watch(() => route.fullPath, applyRouteQueue)
   margin-top: 6px;
 }
 
+.task-schedule-board {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.task-schedule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.task-owner-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.task-owner-card,
+.task-schedule-item {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &:hover,
+  &.active {
+    border-color: #93c5fd;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+    transform: translateY(-1px);
+  }
+
+  > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  p {
+    margin: 8px 0 4px;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.task-schedule-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .task-execution-summary {
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
@@ -8017,6 +8279,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .audit-metrics,
   .audit-issue,
   .task-execution-summary,
+  .task-owner-grid,
+  .task-schedule-list,
   .task-metrics,
   .task-group-item,
   .delivery-summary,
@@ -8061,6 +8325,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .follow-funnel-head {
+    flex-direction: column;
+  }
+
+  .task-schedule-head {
     flex-direction: column;
   }
 

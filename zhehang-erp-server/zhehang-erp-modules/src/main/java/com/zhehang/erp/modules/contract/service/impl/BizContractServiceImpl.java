@@ -100,6 +100,9 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
         if (contract == null) {
             throw new BusinessException("合同不存在");
         }
+        if (contract.getStatus() != null && contract.getStatus() >= 4) {
+            throw new BusinessException("合同已签署,请勿重复确认"); // 防覆盖签署信息 + 防重复派单
+        }
         contract.setStatus(4);
         contract.setSignerTheirs(signerTheirs);
         contract.setSignDate(LocalDate.now());

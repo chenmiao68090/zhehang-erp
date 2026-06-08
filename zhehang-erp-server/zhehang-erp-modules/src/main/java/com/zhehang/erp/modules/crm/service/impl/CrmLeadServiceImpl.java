@@ -184,7 +184,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                     .eq(CrmLead::getId, id)
                     .eq(CrmLead::getOwnership, "pool")
                     .set(CrmLead::getOwnerId, userId)
-                    .set(CrmLead::getDeptId, SecurityUtils.getCurrentDeptId())
+                    .set(CrmLead::getDeptId, dataScopeHelper.deptIdOfUser(userId))
                     .set(CrmLead::getOwnership, "private")
                     .set(CrmLead::getClaimTime, now)
                     .set(CrmLead::getProtectionExpireDate, LocalDate.now().plusDays(PROTECTION_DAYS))
@@ -280,16 +280,16 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
         follow.setNextTime(nextTime);
         follow.setNextContent(nextContent);
         followMapper.insert(follow);
-        // 2) 回写线索:最后跟进时间/内容/次数/下次跟进(回收引擎按 lastFollowTime 判超时,避免误回收活跃客资)
-        lead.setLastFollowTime(LocalDateTime.now());
-        lead.setLastFollowContent(content);
-        lead.setFollowCount(lead.getFollowCount() == null ? 1 : lead.getFollowCount() + 1);
-        if (nextTime != null) {
-            lead.setNextFollowTime(nextTime.toLocalDate());
-        }
-        // 跟进即续命:顺延保护期,避免活跃客资被回收引擎释放("没跟进才回收")
-        lead.setProtectionExpireDate(LocalDate.now().plusDays(PROTECTION_DAYS));
-        leadMapper.updateById(lead);
+        // 2) 回写线索:lambdaUpdate + setSql 原子自增 followCount(避免并发跟进丢计数);
+        //    顺延保护期=跟进即续命(回收引擎按 lastFollowTime/保护期判超时,避免误回收活跃客资)
+        lambdaUpdate()
+                .eq(CrmLead::getId, leadId)
+                .set(CrmLead::getLastFollowTime, LocalDateTime.now())
+                .set(CrmLead::getLastFollowContent, content)
+                .set(nextTime != null, CrmLead::getNextFollowTime, nextTime != null ? nextTime.toLocalDate() : null)
+                .set(CrmLead::getProtectionExpireDate, LocalDate.now().plusDays(PROTECTION_DAYS))
+                .setSql("follow_count = IFNULL(follow_count, 0) + 1")
+                .update();
     }
 
     @Override

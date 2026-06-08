@@ -83,14 +83,13 @@ public class CrmRecycleServiceImpl extends ServiceImpl<CrmRecycleRuleMapper, Crm
      * 直接 setOwnerId(null)+updateById 不会真正清空 owner_id,会导致"半回收"(归属人未清)。
      */
     private void releaseToPool(CrmLead lead) {
-        int newRecycleCount = lead.getRecycleCount() == null ? 1 : lead.getRecycleCount() + 1;
         LambdaUpdateWrapper<CrmLead> uw = new LambdaUpdateWrapper<>();
         uw.eq(CrmLead::getId, lead.getId())
           .set(CrmLead::getOwnerId, null)
           .set(CrmLead::getDeptId, null)
           .set(CrmLead::getOwnership, "pool")
           .set(CrmLead::getProtectionExpireDate, null)
-          .set(CrmLead::getRecycleCount, newRecycleCount)
+          .setSql("recycle_count = IFNULL(recycle_count, 0) + 1") // 原子自增,避免并发回收丢计数
           .set(CrmLead::getLastRecycleTime, LocalDateTime.now());
         leadMapper.update(null, uw);
     }

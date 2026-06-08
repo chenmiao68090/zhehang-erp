@@ -1395,6 +1395,51 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">归属裁定</div>
+        <div class="contact-ownership-panel" :class="contactOwnershipRuling(drawer.row).level">
+          <div class="contact-ownership-head">
+            <div>
+              <strong>{{ contactOwnershipRuling(drawer.row).title }}</strong>
+              <p>{{ contactOwnershipRuling(drawer.row).desc }}</p>
+            </div>
+            <el-tag :type="contactOwnershipTag(contactOwnershipRuling(drawer.row).level)" effect="plain">
+              {{ contactOwnershipRuling(drawer.row).statusText }}
+            </el-tag>
+          </div>
+          <div class="contact-ownership-metrics">
+            <div>
+              <span>归属团队</span>
+              <b>{{ contactOwnershipRuling(drawer.row).team }}</b>
+            </div>
+            <div>
+              <span>当前负责人</span>
+              <b>{{ contactOwnershipRuling(drawer.row).ownerName }}</b>
+            </div>
+            <div>
+              <span>保护期剩余</span>
+              <b>{{ contactOwnershipRuling(drawer.row).protectLeftText }}</b>
+            </div>
+            <div>
+              <span>回收提醒</span>
+              <b>{{ contactOwnershipRuling(drawer.row).recycleText }}</b>
+            </div>
+          </div>
+          <div class="contact-ownership-progress">
+            <span>{{ contactOwnershipRuling(drawer.row).protectStartText }}</span>
+            <el-progress
+              :percentage="contactOwnershipRuling(drawer.row).protectPercent"
+              :status="contactOwnershipRuling(drawer.row).progressStatus"
+              :stroke-width="8"
+            />
+          </div>
+          <div class="contact-ownership-steps">
+            <div v-for="item in contactOwnershipSteps(drawer.row)" :key="item.key" class="contact-ownership-step" :class="item.level">
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.desc }}</p>
+            </div>
+          </div>
+        </div>
+
         <div class="bd-section-title mt">资料证据链</div>
         <div class="contact-evidence-panel">
           <div class="contact-evidence-summary">
@@ -3132,6 +3177,29 @@ interface ContactEvidenceItem {
   actionKey: ContactActionKey
 }
 
+type ContactOwnershipLevel = 'success' | 'warning' | 'danger' | 'primary'
+
+interface ContactOwnershipRuling {
+  title: string
+  desc: string
+  level: ContactOwnershipLevel
+  statusText: string
+  team: string
+  ownerName: string
+  protectLeftText: string
+  recycleText: string
+  protectStartText: string
+  protectPercent: number
+  progressStatus?: 'success' | 'warning' | 'exception'
+}
+
+interface ContactOwnershipStep {
+  key: string
+  title: string
+  desc: string
+  level: ContactOwnershipLevel
+}
+
 interface ContactMustHandleItem {
   key: string
   contact: PrivateContact
@@ -3612,6 +3680,198 @@ function contactDutyItems(row: PrivateContact): ContactDutyItem[] {
   }
 
   return [opsDuty, salesDuty, deliveryDuty, financeDuty]
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function parsePrivateDate(value?: string) {
+  const text = value || ''
+  const time = new Date(text.replace(' ', 'T')).getTime()
+  return Number.isFinite(time) ? time : Date.now()
+}
+
+function dateOnlyText(time: number) {
+  const d = new Date(time)
+  return `${d.getFullYear()}-${padTime(d.getMonth() + 1)}-${padTime(d.getDate())}`
+}
+
+function contactOwnershipRule(row: PrivateContact) {
+  return ownershipRules.value.find(item => item.source === row.source && item.enabled)
+    || ownershipRules.value.find(item => item.source === row.source)
+    || null
+}
+
+function ownerPolicyText(policy?: PrivateOwnerPolicy) {
+  return ownerPolicyOptions.find(item => item.value === policy)?.label || '未配置'
+}
+
+function collisionPolicyText(policy?: PrivateCollisionPolicy) {
+  return collisionPolicyOptions.find(item => item.value === policy)?.label || '未配置'
+}
+
+function contactProtectionStartText(row: PrivateContact) {
+  return contactFollowRecords(row)[0]?.createdAt || row.lastTouchAt || todayText()
+}
+
+function contactOwnershipClock(row: PrivateContact, rule: PrivateOwnershipRule | null) {
+  const start = parsePrivateDate(contactProtectionStartText(row))
+  const today = parsePrivateDate(todayText())
+  const elapsed = Math.max(0, Math.floor((today - start) / DAY_MS))
+  const protectDays = Math.max(0, rule?.protectDays || 0)
+  const recycleDays = Math.max(0, rule?.recycleDays || 0)
+  const protectEnd = start + protectDays * DAY_MS
+  const protectLeft = protectDays ? protectDays - elapsed : 0
+  const recycleLeft = recycleDays ? recycleDays - elapsed : 0
+  return {
+    start,
+    elapsed,
+    protectDays,
+    recycleDays,
+    protectLeft,
+    recycleLeft,
+    protectStartText: `从 ${dateOnlyText(start)} 最近有效触达起算,保护 ${protectDays || 0} 天,到期 ${dateOnlyText(protectEnd)}。`,
+    protectLeftText: protectDays === 0 ? '未设置' : protectLeft > 0 ? `${protectLeft} 天` : '已到期',
+    recycleText: recycleDays === 0 ? '不自动回收' : recycleLeft > 0 ? `${recycleLeft} 天后回收` : '已到回收',
+    protectPercent: protectDays === 0 ? 0 : Math.max(0, Math.min(100, Math.round(elapsed / protectDays * 100)))
+  }
+}
+
+function contactOwnershipTag(level: ContactOwnershipLevel) {
+  return level
+}
+
+function contactOwnershipRuling(row: PrivateContact): ContactOwnershipRuling {
+  const rule = contactOwnershipRule(row)
+  const clock = contactOwnershipClock(row, rule)
+  const risk = row.verification?.duplicateRisk
+  const ownerName = row.ownerName || rule?.defaultOwner || '待分配'
+  const team = rule?.ownerTeam || (row.source.includes('老客') ? '渠道经理' : '私域运营')
+  const hasRule = Boolean(rule)
+  const enabled = Boolean(rule?.enabled)
+  const duplicateBlocked = risk === 'hit'
+  const protectExpired = clock.protectDays > 0 && clock.protectLeft <= 0
+  const recycleDue = clock.recycleDays > 0 && clock.recycleLeft <= 0
+
+  if (!hasRule) {
+    return {
+      title: '缺归属规则,先不要直接流转',
+      desc: `${row.source} 没有配置归属规则,建议先在“归属规则”里补来源、保护期、回收和撞单策略。`,
+      level: 'danger',
+      statusText: '缺规则',
+      team,
+      ownerName,
+      protectLeftText: '待配置',
+      recycleText: '待配置',
+      protectStartText: '没有来源规则,无法计算保护期和回收节点。',
+      protectPercent: 0,
+      progressStatus: 'exception'
+    }
+  }
+
+  if (!enabled) {
+    return {
+      title: '归属规则未启用',
+      desc: `${row.source} 已有规则但未启用,当前负责人只能作为临时归属,建议启用后再进入分配或撞单裁定。`,
+      level: 'warning',
+      statusText: '待启用',
+      team,
+      ownerName,
+      protectLeftText: '未生效',
+      recycleText: '未生效',
+      protectStartText: clock.protectStartText,
+      protectPercent: clock.protectPercent,
+      progressStatus: 'warning'
+    }
+  }
+
+  if (duplicateBlocked) {
+    return {
+      title: '撞单强命中,先走仲裁',
+      desc: `${row.verification?.linkageText || '工商/手机号命中疑似历史客户'},按“${collisionPolicyText(rule.collisionPolicy)}”处理,不要直接改负责人。`,
+      level: 'danger',
+      statusText: '需仲裁',
+      team,
+      ownerName,
+      protectLeftText: clock.protectLeftText,
+      recycleText: clock.recycleText,
+      protectStartText: clock.protectStartText,
+      protectPercent: clock.protectPercent,
+      progressStatus: 'exception'
+    }
+  }
+
+  if (recycleDue || protectExpired) {
+    return {
+      title: recycleDue ? '已到回收节点' : '保护期已到期',
+      desc: recycleDue
+        ? `已超过 ${rule.recycleDays} 天回收规则,主管应判断继续保护、转公海或重新分配。`
+        : `保护期 ${rule.protectDays} 天已到期,如果仍有成交希望,需要补最近跟进记录延续保护。`,
+      level: 'warning',
+      statusText: recycleDue ? '可回收' : '已到期',
+      team,
+      ownerName,
+      protectLeftText: clock.protectLeftText,
+      recycleText: clock.recycleText,
+      protectStartText: clock.protectStartText,
+      protectPercent: clock.protectPercent,
+      progressStatus: 'warning'
+    }
+  }
+
+  return {
+    title: '归属清晰,仍在保护期内',
+    desc: `${row.source} 按“${ownerPolicyText(rule.ownerPolicy)}”归属到 ${team},撞单策略为“${collisionPolicyText(rule.collisionPolicy)}”。`,
+    level: risk === 'possible' ? 'warning' : 'success',
+    statusText: risk === 'possible' ? '待复核' : '保护中',
+    team,
+    ownerName,
+    protectLeftText: clock.protectLeftText,
+    recycleText: clock.recycleText,
+    protectStartText: clock.protectStartText,
+    protectPercent: clock.protectPercent,
+    progressStatus: risk === 'possible' ? 'warning' : 'success'
+  }
+}
+
+function contactOwnershipSteps(row: PrivateContact): ContactOwnershipStep[] {
+  const rule = contactOwnershipRule(row)
+  const clock = contactOwnershipClock(row, rule)
+  const ruling = contactOwnershipRuling(row)
+  const risk = row.verification?.duplicateRisk || 'none'
+  return [
+    {
+      key: 'rule',
+      title: rule?.enabled ? `${row.source} 规则已命中` : rule ? `${row.source} 规则待启用` : `${row.source} 缺规则`,
+      desc: rule
+        ? `${ownerPolicyText(rule.ownerPolicy)} · ${rule.ownerTeam || '待填团队'} · 优先级 ${rule.priority}`
+        : '没有来源规则时,导入、分配、保护期和撞单都会失去统一口径。',
+      level: rule?.enabled ? 'success' : rule ? 'warning' : 'danger'
+    },
+    {
+      key: 'owner',
+      title: `当前归属: ${ruling.ownerName}`,
+      desc: rule?.defaultOwner && rule.defaultOwner !== row.ownerName
+        ? `规则默认负责人为 ${rule.defaultOwner},当前客户负责人为 ${row.ownerName || '待分配'},建议主管确认是否需要同步。`
+        : `当前负责人和规则口径基本一致,继续由 ${ruling.ownerName} 做首触、报价和资料收集。`,
+      level: rule?.defaultOwner && rule.defaultOwner !== row.ownerName ? 'warning' : 'success'
+    },
+    {
+      key: 'protect',
+      title: clock.protectDays ? `保护期 ${clock.protectLeftText}` : '未设置保护期',
+      desc: clock.protectDays
+        ? `已用 ${clock.elapsed} 天 / 共 ${clock.protectDays} 天,${clock.recycleText}。`
+        : '建议至少设置 7 天保护期,老客转介绍和同行渠道建议不少于 30 天。',
+      level: !clock.protectDays ? 'warning' : clock.protectLeft <= 0 ? 'danger' : clock.protectLeft <= 3 ? 'warning' : 'success'
+    },
+    {
+      key: 'collision',
+      title: `撞单: ${duplicateRiskText(risk)}`,
+      desc: rule
+        ? `${collisionPolicyText(rule.collisionPolicy)} · ${risk === 'hit' ? '强命中必须先冻结/仲裁' : risk === 'possible' ? '疑似重复建议主管复核' : '未重复可正常推进'}。`
+        : '缺规则时,撞单后不知道是冻结、协作、仲裁还是合并。',
+      level: risk === 'hit' ? 'danger' : risk === 'possible' ? 'warning' : 'success'
+    }
+  ]
 }
 
 function contactEvidenceTag(status: DeliveryChecklistStatus): 'success' | 'warning' | 'danger' {
@@ -8643,6 +8903,149 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.contact-ownership-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+
+  &.primary {
+    border-left-color: #2563eb;
+  }
+}
+
+.contact-ownership-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.contact-ownership-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 11px;
+  }
+
+  b {
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.contact-ownership-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+
+  span {
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
+.contact-ownership-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.contact-ownership-step {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &.primary {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+  }
+
+  strong {
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
 .contact-evidence-panel {
   display: grid;
   gap: 10px;
@@ -8951,6 +9354,9 @@ watch(() => route.fullPath, applyRouteQueue)
   .import-quality-grid,
   .contact-ops-summary,
   .contact-duty-grid,
+  .contact-ownership-metrics,
+  .contact-ownership-progress,
+  .contact-ownership-steps,
   .contact-evidence-summary,
   .contact-evidence-grid,
   .follow-funnel-grid,
@@ -9025,6 +9431,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .delivery-sla-head {
+    flex-direction: column;
+  }
+
+  .contact-ownership-head {
     flex-direction: column;
   }
 

@@ -360,6 +360,7 @@
                 <input ref="fileInputRef" class="hidden-input" type="file" accept=".csv,.txt" @change="handleImportFile" />
                 <el-button type="primary" @click="downloadImportTemplate">下载模板</el-button>
                 <el-button @click="triggerFileSelect">选择 CSV 文件</el-button>
+                <el-button @click="fillImportSample">填充示例</el-button>
                 <el-button :disabled="!importPreview.length" @click="clearImportPreview">清空预览</el-button>
                 <el-button
                   type="success"
@@ -374,6 +375,23 @@
               <div class="import-hint">
                 <b>落地用法</b>
                 <span>下载模板 -> 用 Excel 填客户 -> 另存为 CSV -> 上传；也可以直接从 Excel 复制表格内容粘贴到下方。</span>
+              </div>
+
+              <div class="import-quality-panel">
+                <div class="import-quality-head">
+                  <strong>字段质量检查</strong>
+                  <span>{{ importQualitySummary }}</span>
+                </div>
+                <div class="import-quality-grid">
+                  <div v-for="item in importQualityItems" :key="item.key" class="import-quality-card" :class="item.level">
+                    <div>
+                      <strong>{{ item.title }}</strong>
+                      <el-tag :type="importQualityTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                    </div>
+                    <b>{{ item.value }}</b>
+                    <p>{{ item.desc }}</p>
+                  </div>
+                </div>
               </div>
 
               <el-table :data="importColumns" border stripe class="template-table">
@@ -1875,6 +1893,14 @@ interface TodayReviewCard {
   actionText: string
   action: TodayReviewAction
 }
+interface ImportQualityItem {
+  key: string
+  title: string
+  value: string
+  level: 'success' | 'warning' | 'danger' | 'info'
+  statusText: string
+  desc: string
+}
 type AddressBindingIssue = {
   delivery: PrivateDeliveryPackage
   lock: PrivateAddressLock
@@ -2125,6 +2151,71 @@ const previewStats = computed(() => ({
   error: importPreview.value.filter(item => item.status === 'error').length,
   verified: importPreview.value.filter(item => item.verification?.matched).length
 }))
+const importQualityItems = computed<ImportQualityItem[]>(() => {
+  const rows = importPreview.value
+  const total = previewStats.value.total
+  const requiredReady = Math.max(total - previewStats.value.error, 0)
+  const ownerReady = rows.filter(item => item.data.ownerName && item.data.source).length
+  const demandReady = rows.filter(item => item.data.demand && item.data.serviceLine && Number(item.data.estimatedAmount || 0) > 0).length
+  const actionReady = rows.filter(item => item.data.nextAction && item.data.lastTouchAt).length
+  const requiredRate = total ? Math.round(requiredReady / total * 100) : 0
+  return [
+    {
+      key: 'required',
+      title: '必填完整',
+      value: total ? `${requiredReady}/${total}` : '待预览',
+      level: !total ? 'info' : previewStats.value.error > 0 ? 'danger' : requiredReady === total ? 'success' : 'warning',
+      statusText: !total ? '未开始' : previewStats.value.error > 0 ? '有错误' : '已完整',
+      desc: total ? `必填字段完整率 ${requiredRate}%,错误行会阻断导入。` : '先填充示例、粘贴 Excel 或选择 CSV 文件。'
+    },
+    {
+      key: 'verify',
+      title: '工商命中',
+      value: total ? `${previewStats.value.verified}/${total}` : '待核验',
+      level: !total ? 'info' : previewStats.value.verified === total ? 'success' : previewStats.value.verified > 0 ? 'warning' : 'danger',
+      statusText: !total ? '未预览' : previewStats.value.verified === total ? '全命中' : '需复核',
+      desc: '公司名称越准确,后续主体、撞单、税务资质和报价归属越稳定。'
+    },
+    {
+      key: 'duplicate',
+      title: '重复风险',
+      value: total ? `${previewStats.value.duplicate}` : '待检查',
+      level: !total ? 'info' : previewStats.value.duplicate > 0 ? 'warning' : 'success',
+      statusText: !total ? '未预览' : previewStats.value.duplicate > 0 ? '需合并' : '无重复',
+      desc: '重复客户不要直接导入,先确认归属、保护期和撞单规则。'
+    },
+    {
+      key: 'owner',
+      title: '来源负责人',
+      value: total ? `${ownerReady}/${total}` : '待填写',
+      level: !total ? 'info' : ownerReady === total ? 'success' : 'warning',
+      statusText: !total ? '未预览' : ownerReady === total ? '已齐' : '待补',
+      desc: '来源触点和负责人决定归属、首触时限、保护期和回收规则。'
+    },
+    {
+      key: 'demand',
+      title: '需求预算',
+      value: total ? `${demandReady}/${total}` : '待填写',
+      level: !total ? 'info' : demandReady === total ? 'success' : 'warning',
+      statusText: !total ? '未预览' : demandReady === total ? '已齐' : '待补',
+      desc: '需求、服务线和预估金额决定销售报价和后续提单字段。'
+    },
+    {
+      key: 'action',
+      title: '下一动作',
+      value: total ? `${actionReady}/${total}` : '待填写',
+      level: !total ? 'info' : actionReady === total ? 'success' : 'warning',
+      statusText: !total ? '未预览' : actionReady === total ? '已排程' : '待排程',
+      desc: '没有下一动作和最近互动时间,导入后客户容易沉默。'
+    }
+  ]
+})
+const importQualitySummary = computed(() => {
+  if (!previewStats.value.total) return '先把数据放进预览,系统会检查必填、工商、重复、来源、需求和下一动作。'
+  if (previewStats.value.error > 0) return `有 ${previewStats.value.error} 行错误,先修正必填字段再导入。`
+  if (previewStats.value.duplicate > 0) return `有 ${previewStats.value.duplicate} 行重复风险,建议先确认归属再导入。`
+  return `当前 ${previewStats.value.ready} 行可导入,工商命中 ${previewStats.value.verified} 行。`
+})
 const wecomReady = computed(() => Boolean(wecomConfig.corpId && wecomConfig.contactSecret && wecomConfig.token && wecomConfig.aesKey))
 const followStats = computed(() => ({
   total: followRecords.value.length,
@@ -3923,6 +4014,10 @@ function importStatusTag(status: PrivateImportStatus): 'success' | 'warning' | '
   return ({ ready: 'success', duplicate: 'warning', error: 'danger' } as Record<PrivateImportStatus, 'success' | 'warning' | 'danger'>)[status]
 }
 
+function importQualityTag(level: ImportQualityItem['level']) {
+  return level
+}
+
 function duplicateRiskText(risk?: PrivateDuplicateRisk) {
   return ({ none: '未重复', possible: '疑似重复', hit: '强命中' } as Record<PrivateDuplicateRisk, string>)[risk || 'none']
 }
@@ -4058,6 +4153,12 @@ function csvCell(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`
 }
 
+function importRowsToText(rows: PrivateContactImportRow[]) {
+  const header = importColumns.map(column => column.label)
+  const body = rows.map(row => importColumns.map(column => String(row[column.key] ?? '')))
+  return [header, ...body].map(row => row.join('\t')).join('\n')
+}
+
 function downloadImportTemplate() {
   const header = importColumns.map(column => column.label)
   const rows = privateImportTemplateSamples.map(sample => importColumns.map(column => sample[column.key] ?? ''))
@@ -4141,6 +4242,11 @@ async function previewImportRows(rows: PrivateContactImportRow[], sourceName = '
   const ready = importPreview.value.filter(item => item.status === 'ready').length
   const blocked = importPreview.value.length - ready
   ElMessage.success(`已解析 ${importPreview.value.length} 行,可导入 ${ready} 行${blocked ? `,需处理 ${blocked} 行` : ''}`)
+}
+
+async function fillImportSample() {
+  pasteText.value = importRowsToText(privateImportTemplateSamples)
+  await previewImportRows(privateImportTemplateSamples, '模板示例数据')
 }
 
 function triggerFileSelect() {
@@ -6718,6 +6824,100 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.import-quality-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.import-quality-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  span {
+    max-width: 520px;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+    text-align: right;
+  }
+}
+
+.import-quality-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.import-quality-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &.info {
+    background: #f8fafc;
+  }
+
+  div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  b {
+    color: #111827;
+    font-size: 19px;
+    line-height: 1.1;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
 .template-table {
   margin-top: 12px;
 }
@@ -7612,6 +7812,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .config-grid,
   .toolbar,
   .preview-summary,
+  .import-quality-grid,
   .contact-ops-summary,
   .contact-duty-grid,
   .contact-evidence-summary,
@@ -7651,6 +7852,14 @@ watch(() => route.fullPath, applyRouteQueue)
 
   .today-review-head {
     flex-direction: column;
+  }
+
+  .import-quality-head {
+    flex-direction: column;
+
+    span {
+      text-align: left;
+    }
   }
 
   .follow-funnel-head {

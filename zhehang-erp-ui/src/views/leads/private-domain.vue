@@ -443,6 +443,8 @@
                 <el-button type="primary" @click="downloadImportTemplate">下载模板</el-button>
                 <el-button @click="triggerFileSelect">选择 CSV 文件</el-button>
                 <el-button @click="fillImportSample">填充示例</el-button>
+                <el-button :disabled="!importPreview.length" @click="downloadImportQualityReport">导出质量报告</el-button>
+                <el-button :disabled="!importProblemRows.length" @click="downloadImportProblemRows">下载问题行 {{ importProblemRows.length }}</el-button>
                 <el-button :disabled="!importPreview.length" @click="clearImportPreview">清空预览</el-button>
                 <el-button
                   type="success"
@@ -3287,6 +3289,10 @@ const previewStats = computed(() => ({
   duplicate: importPreview.value.filter(item => item.status === 'duplicate').length,
   error: importPreview.value.filter(item => item.status === 'error').length,
   verified: importPreview.value.filter(item => item.verification?.matched).length
+}))
+const importProblemRows = computed(() => importPreview.value.filter(item => {
+  if (item.status !== 'ready') return true
+  return item.verification?.duplicateRisk === 'possible'
 }))
 const importQualityItems = computed<ImportQualityItem[]>(() => {
   const rows = importPreview.value
@@ -6592,6 +6598,17 @@ function csvCell(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`
 }
 
+function downloadCsvFile(filename: string, rows: unknown[][]) {
+  const csv = rows.map(row => row.map(csvCell).join(',')).join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 function importRowsToText(rows: PrivateContactImportRow[]) {
   const header = importColumns.map(column => column.label)
   const body = rows.map(row => importColumns.map(column => String(row[column.key] ?? '')))
@@ -6601,15 +6618,63 @@ function importRowsToText(rows: PrivateContactImportRow[]) {
 function downloadImportTemplate() {
   const header = importColumns.map(column => column.label)
   const rows = privateImportTemplateSamples.map(sample => importColumns.map(column => sample[column.key] ?? ''))
-  const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\n')
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = '私域客户导入模板.csv'
-  link.click()
-  URL.revokeObjectURL(url)
+  downloadCsvFile('私域客户导入模板.csv', [header, ...rows])
   ElMessage.success('已下载私域客户导入模板,可直接用 Excel 打开')
+}
+
+function importExportProblem(row: PrivateImportPreviewRow) {
+  if (row.status === 'error') return row.errors.join('；') || '字段错误'
+  if (row.status === 'duplicate') return row.duplicateText || '公司名称或手机号重复'
+  if (row.verification?.duplicateRisk === 'possible') return `疑似撞单: ${row.verification.linkageText || row.verification.entityName || '需确认归属'}`
+  return importProblemText(row)
+}
+
+function importExportRow(row: PrivateImportPreviewRow) {
+  return [
+    row.rowNo,
+    importStatusText(row.status),
+    importExportProblem(row),
+    verificationText(row.verification),
+    duplicateRiskText(row.verification?.duplicateRisk),
+    row.verification?.creditCode || '',
+    row.verification?.businessStatus || '',
+    row.verification?.taxQualification || '',
+    ...importColumns.map(column => row.data[column.key] ?? '')
+  ]
+}
+
+function downloadImportProblemRows() {
+  if (!importProblemRows.value.length) {
+    ElMessage.info('当前没有错误、重复或疑似撞单行')
+    return
+  }
+  const header = ['预览行号', '预览状态', '问题说明', '工商状态', '撞单风险', '统一信用代码', '经营状态', '税务资质', ...importColumns.map(column => column.label)]
+  downloadCsvFile('私域客户导入问题行.csv', [header, ...importProblemRows.value.map(importExportRow)])
+  ElMessage.success(`已下载 ${importProblemRows.value.length} 条问题行`)
+}
+
+function downloadImportQualityReport() {
+  if (!importPreview.value.length) {
+    ElMessage.info('请先解析导入数据,再导出质量报告')
+    return
+  }
+  const summaryRows: unknown[][] = [
+    ['私域客户导入质量报告'],
+    ['导入来源', importFileName.value || '未命名预览'],
+    ['预览行数', previewStats.value.total],
+    ['可导入', previewStats.value.ready],
+    ['重复', previewStats.value.duplicate],
+    ['错误', previewStats.value.error],
+    ['工商命中', previewStats.value.verified],
+    [],
+    ['指标', '结果', '状态', '说明'],
+    ...importQualityItems.value.map(item => [item.title, item.value, item.statusText, item.desc]),
+    [],
+    ['预览行号', '预览状态', '问题说明', '工商状态', '撞单风险', '统一信用代码', '经营状态', '税务资质', ...importColumns.map(column => column.label)],
+    ...importPreview.value.map(importExportRow)
+  ]
+  downloadCsvFile('私域客户导入质量报告.csv', summaryRows)
+  ElMessage.success('已导出私域客户导入质量报告')
 }
 
 function detectDelimiter(firstLine: string) {

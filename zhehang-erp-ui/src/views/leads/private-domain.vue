@@ -280,6 +280,25 @@
               <span>已启用 {{ ownershipRules.filter(item => item.enabled).length }} 条规则</span>
               <span>同行/挂靠地址客户默认独立保护，撞单先冻结再仲裁。</span>
             </div>
+            <div class="ownership-audit-panel" :class="ownershipAuditLevel">
+              <div class="ownership-audit-head">
+                <div>
+                  <strong>归属规则体检</strong>
+                  <p>{{ ownershipAuditSummary }}</p>
+                </div>
+                <el-tag :type="ownershipAuditTag(ownershipAuditLevel)" effect="plain">{{ ownershipAuditStatusText }}</el-tag>
+              </div>
+              <div class="ownership-audit-grid">
+                <div v-for="item in ownershipAuditItems" :key="item.key" class="ownership-audit-card" :class="item.level">
+                  <div>
+                    <strong>{{ item.title }}</strong>
+                    <el-tag :type="ownershipAuditTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <b>{{ item.value }}</b>
+                  <p>{{ item.desc }}</p>
+                </div>
+              </div>
+            </div>
             <el-table :data="ownershipRules" border stripe class="ownership-table">
               <el-table-column prop="source" label="来源触点" width="110" fixed="left" />
               <el-table-column label="启用" width="80" align="center">
@@ -2017,6 +2036,14 @@ interface TaskScheduleSuggestion {
   desc: string
   actionText: string
 }
+interface OwnershipAuditItem {
+  key: string
+  title: string
+  value: string
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  statusText: string
+  desc: string
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -2210,6 +2237,114 @@ const collisionPolicyOptions: Array<{ label: string; value: PrivateCollisionPoli
 ]
 const followMethodOptions: PrivateFollowMethod[] = ['企微', '电话', '微信', '短信', '社群', '线下', '其他']
 const followResultOptions: PrivateFollowResult[] = ['无响应', '已联系', '有意向', '已报价', '已成交', '暂缓', '流失']
+const ownershipAuditItems = computed<OwnershipAuditItem[]>(() => {
+  const enabledRules = ownershipRules.value.filter(item => item.enabled)
+  const enabledSources = new Set(enabledRules.map(item => item.source))
+  const missingSources = sourceOptions.filter(item => !enabledSources.has(item))
+  const shortProtect = enabledRules.filter(item => item.protectDays < 7)
+  const recycleConflict = enabledRules.filter(item => item.recycleDays >= item.protectDays && item.protectDays > 0)
+  const slowFirstTouch = enabledRules.filter(item => item.firstTouchMinutes > 60)
+  const missingOwner = enabledRules.filter(item => !item.ownerTeam || !item.defaultOwner)
+  const channelRule = enabledRules.find(item => item.source === '老客转介绍')
+  const riskyCollision = enabledRules.filter(item => {
+    if (item.source === '老客转介绍') return item.collisionPolicy !== 'block'
+    if (item.ownerPolicy === 'channel_dedicated') return item.collisionPolicy !== 'block'
+    return item.collisionPolicy === 'collaborate' && item.protectDays < 10
+  })
+  const priorityBuckets = enabledRules.reduce<Record<number, PrivateOwnershipRule[]>>((map, rule) => {
+    map[rule.priority] = [...(map[rule.priority] || []), rule]
+    return map
+  }, {})
+  const duplicatedPriority = Object.values(priorityBuckets).filter(list => list.length > 1).flat()
+
+  return [
+    {
+      key: 'coverage',
+      title: '来源覆盖',
+      value: `${enabledRules.length}/${sourceOptions.length}`,
+      level: missingSources.length ? 'danger' : 'success',
+      statusText: missingSources.length ? '有未启用' : '已覆盖',
+      desc: missingSources.length ? `未启用: ${missingSources.join('、')},这些来源进来后容易无人接。` : '主要私域触点都已经启用归属规则。'
+    },
+    {
+      key: 'protect',
+      title: '保护期/回收',
+      value: !enabledRules.length ? '待启用' : recycleConflict.length ? `${recycleConflict.length} 冲突` : shortProtect.length ? `${shortProtect.length} 偏短` : '正常',
+      level: !enabledRules.length ? 'warning' : recycleConflict.length ? 'danger' : shortProtect.length ? 'warning' : 'success',
+      statusText: !enabledRules.length ? '未启用' : recycleConflict.length ? '回收冲突' : shortProtect.length ? '保护偏短' : '已校验',
+      desc: !enabledRules.length
+        ? '先至少启用一条来源规则,再检查保护期和回收天数。'
+        : recycleConflict.length
+        ? `${recycleConflict.map(item => item.source).join('、')} 的回收天数不应大于等于保护期。`
+        : shortProtect.length
+          ? `${shortProtect.map(item => item.source).join('、')} 保护期少于 7 天,高意向客户可能过早流转。`
+          : '保护期和回收天数没有明显冲突。'
+    },
+    {
+      key: 'first-touch',
+      title: '首触时限',
+      value: !enabledRules.length ? '待启用' : slowFirstTouch.length ? `${slowFirstTouch.length} 超 60 分钟` : '达标',
+      level: !enabledRules.length || slowFirstTouch.length ? 'warning' : 'success',
+      statusText: !enabledRules.length ? '未启用' : slowFirstTouch.length ? '需提速' : '已达标',
+      desc: !enabledRules.length ? '先启用来源规则,再检查首触时限是否适合网销/私域客户。' : slowFirstTouch.length ? `${slowFirstTouch.map(item => item.source).join('、')} 首触时限偏长,网销/私域客户容易冷掉。` : '所有启用来源都能在 60 分钟内首触。'
+    },
+    {
+      key: 'collision',
+      title: '撞单策略',
+      value: !enabledRules.length ? '待启用' : riskyCollision.length ? `${riskyCollision.length} 风险` : '稳妥',
+      level: !enabledRules.length ? 'warning' : riskyCollision.length ? 'danger' : 'success',
+      statusText: !enabledRules.length ? '未启用' : riskyCollision.length ? '易串单' : '已收口',
+      desc: !enabledRules.length ? '没有启用规则时,撞单无法按来源冻结、仲裁或合并。' : riskyCollision.length ? `${riskyCollision.map(item => item.source).join('、')} 建议先冻结或主管仲裁,避免销售/渠道/公海口径冲突。` : '渠道、转介绍和高风险来源的撞单策略已收口。'
+    },
+    {
+      key: 'owner',
+      title: '负责人',
+      value: !enabledRules.length ? '待启用' : missingOwner.length ? `${missingOwner.length} 待补` : '已明确',
+      level: !enabledRules.length || missingOwner.length ? 'warning' : 'success',
+      statusText: !enabledRules.length ? '未启用' : missingOwner.length ? '待补人' : '已明确',
+      desc: !enabledRules.length ? '启用来源后必须同步指定来源部门和默认负责人。' : missingOwner.length ? `${missingOwner.map(item => item.source).join('、')} 缺来源部门或默认负责人。` : '所有启用规则都有来源部门和默认负责人。'
+    },
+    {
+      key: 'priority',
+      title: '优先级',
+      value: !enabledRules.length ? '待启用' : duplicatedPriority.length ? `${duplicatedPriority.length} 重复` : '清晰',
+      level: !enabledRules.length || duplicatedPriority.length ? 'warning' : 'success',
+      statusText: !enabledRules.length ? '未启用' : duplicatedPriority.length ? '需排序' : '已区分',
+      desc: !enabledRules.length ? '启用来源后再按客户价值、转介绍和渠道关系设置优先级。' : duplicatedPriority.length ? `${duplicatedPriority.map(item => item.source).join('、')} 优先级重复,撞单裁定时可能不好排序。` : '启用规则优先级没有重复。'
+    },
+    {
+      key: 'channel',
+      title: '同行/挂靠保护',
+      value: channelRule ? `${channelRule.protectDays} 天` : '缺规则',
+      level: !channelRule ? 'danger' : channelRule.collisionPolicy === 'block' && channelRule.protectDays >= 30 ? 'success' : 'warning',
+      statusText: !channelRule ? '缺老客规则' : channelRule.collisionPolicy === 'block' && channelRule.protectDays >= 30 ? '强保护' : '需加强',
+      desc: !channelRule
+        ? '老客转介绍和同行渠道没有独立规则,挂靠地址客户容易和销售线索混在一起。'
+        : channelRule.collisionPolicy === 'block' && channelRule.protectDays >= 30
+          ? '老客转介绍/同行渠道已按强保护处理,适合挂靠地址和渠道结算业务。'
+          : '建议老客转介绍/同行渠道使用先冻结不流转,保护期不少于 30 天。'
+    }
+  ]
+})
+const ownershipAuditLevel = computed<OwnershipAuditItem['level']>(() => {
+  if (ownershipAuditItems.value.some(item => item.level === 'danger')) return 'danger'
+  if (ownershipAuditItems.value.some(item => item.level === 'warning')) return 'warning'
+  if (ownershipAuditItems.value.some(item => item.level === 'primary')) return 'primary'
+  return 'success'
+})
+const ownershipAuditStatusText = computed(() => ({
+  danger: '有阻断风险',
+  warning: '有待优化项',
+  primary: '可继续细化',
+  success: '规则健康'
+} as Record<OwnershipAuditItem['level'], string>)[ownershipAuditLevel.value])
+const ownershipAuditSummary = computed(() => {
+  const danger = ownershipAuditItems.value.filter(item => item.level === 'danger').length
+  const warning = ownershipAuditItems.value.filter(item => item.level === 'warning').length
+  if (danger > 0) return `发现 ${danger} 个阻断风险,先处理来源覆盖、保护期和撞单策略。`
+  if (warning > 0) return `发现 ${warning} 个待优化项,建议在上线前补齐负责人、首触和优先级口径。`
+  return '归属规则覆盖、保护期、首触、撞单和渠道保护均无明显风险。'
+})
 const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
 const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
 const routeDeliveryFilters: DeliveryFilter[] = ['all', 'not_started', 'in_progress', 'overdue', 'address_unlocked', 'address_unbound', 'done']
@@ -3584,6 +3719,10 @@ function integrationTag(status: IntegrationStatus): 'success' | 'warning' | 'dan
 }
 
 function wecomCheckTag(level: WecomCheckItem['level']): 'success' | 'warning' | 'danger' {
+  return level
+}
+
+function ownershipAuditTag(level: OwnershipAuditItem['level']) {
   return level
 }
 
@@ -5952,6 +6091,106 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.ownership-audit-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning,
+  &.primary {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+}
+
+.ownership-audit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.ownership-audit-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ownership-audit-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f8fff9;
+  }
+
+  &.warning,
+  &.primary {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff7f7;
+  }
+
+  > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  strong {
+    color: #1f2937;
+    font-size: 13px;
+  }
+
+  b {
+    color: #0f172a;
+    font-size: 20px;
+    line-height: 1.1;
+  }
+
+  p {
+    min-height: 50px;
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
 .ownership-table {
   :deep(.el-input-number) {
     width: 84px;
@@ -8273,6 +8512,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .contact-evidence-summary,
   .contact-evidence-grid,
   .follow-funnel-grid,
+  .ownership-audit-grid,
   .wecom-check-grid,
   .must-handle-list,
   .must-handle-item,
@@ -8325,6 +8565,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .follow-funnel-head {
+    flex-direction: column;
+  }
+
+  .ownership-audit-head {
     flex-direction: column;
   }
 

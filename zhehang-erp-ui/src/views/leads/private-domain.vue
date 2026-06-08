@@ -1430,15 +1430,23 @@
       <template #timeline>
         <div v-if="deliveryDrawer.row" class="real-timeline">
           <div v-if="deliveryTimelineItems(deliveryDrawer.row).length === 0" class="empty-timeline">暂无交付时间线记录</div>
-          <div v-for="item in deliveryTimelineItems(deliveryDrawer.row).slice(0, 6)" :key="item.id" class="bd-timeline-item">
-            <span class="bd-timeline-dot" :class="item.statusLevel"></span>
-            <div>
-              <div class="timeline-title-row">
-                <strong>{{ item.title }}</strong>
-                <el-tag :type="item.statusLevel" size="small" effect="plain">{{ item.statusText }}</el-tag>
+          <div v-else class="timeline-group-list">
+            <section v-for="group in deliveryTimelineGroups(deliveryDrawer.row)" :key="group.type" class="timeline-group">
+              <div class="timeline-group-head">
+                <strong>{{ group.label }}</strong>
+                <span>{{ group.items.length }} 条 · {{ group.desc }}</span>
               </div>
-              <p>{{ item.time }} · {{ item.ownerName }} · {{ item.content }}</p>
-            </div>
+              <div v-for="item in group.items" :key="item.id" class="bd-timeline-item">
+                <span class="bd-timeline-dot" :class="item.statusLevel"></span>
+                <div>
+                  <div class="timeline-title-row">
+                    <strong>{{ item.title }}</strong>
+                    <el-tag :type="item.statusLevel" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.time }} · {{ item.ownerName }} · {{ item.content }}</p>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </template>
@@ -1961,6 +1969,7 @@ const stageOptions: Array<{ label: string; value: PrivateStage }> = [
 ]
 
 type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead' | 'mark_intent'
+type DeliveryTimelineType = 'address' | 'follow' | 'task'
 
 interface ContactActionItem {
   key: ContactActionKey
@@ -1975,6 +1984,12 @@ const contactTimelineTypeMeta: Record<PrivateTimelineType, { label: string; desc
   task: { label: '待办任务', desc: '跟进、督办和补救动作' },
   delivery: { label: '交付流转', desc: '交付包、任务和最晚节点' },
   contact: { label: '客户入库', desc: '来源触点和原始需求' }
+}
+const deliveryTimelineTypeOrder: DeliveryTimelineType[] = ['address', 'task', 'follow']
+const deliveryTimelineTypeMeta: Record<DeliveryTimelineType, { label: string; desc: string }> = {
+  address: { label: '地址资源', desc: '库存锁定和 ADR 绑定' },
+  task: { label: '交付任务', desc: '工商、财税和督办节点' },
+  follow: { label: '客户跟进', desc: '报价、收款和客户沟通' }
 }
 
 function todayText() {
@@ -2951,6 +2966,7 @@ function deliveryFollowRecords(row: PrivateDeliveryPackage) {
 function deliveryTimelineItems(row: PrivateDeliveryPackage) {
   const items: Array<{
     id: string | number
+    type: DeliveryTimelineType
     title: string
     statusText: string
     statusLevel: 'success' | 'warning' | 'info' | 'danger' | 'primary'
@@ -2962,6 +2978,7 @@ function deliveryTimelineItems(row: PrivateDeliveryPackage) {
   if (lock) {
     items.push({
       id: `address-lock-${lock.id}`,
+      type: 'address',
       title: '地址库存锁定',
       statusText: lock.resourceId ? '已锁定' : '待补 ADR',
       statusLevel: lock.resourceId ? 'success' : 'warning',
@@ -2971,6 +2988,7 @@ function deliveryTimelineItems(row: PrivateDeliveryPackage) {
     })
     items.push({
       id: `address-resource-${lock.id}`,
+      type: 'address',
       title: lock.resourceId ? 'ADR 资源绑定' : 'ADR 资源待补绑定',
       statusText: lock.resourceId ? '已绑定' : '待处理',
       statusLevel: lock.resourceId ? 'success' : 'warning',
@@ -2984,6 +3002,7 @@ function deliveryTimelineItems(row: PrivateDeliveryPackage) {
   deliveryFollowRecords(row).forEach(item => {
     items.push({
       id: `follow-${item.id}`,
+      type: 'follow',
       title: `${item.method} · ${item.result}`,
       statusText: item.result,
       statusLevel: followResultTag(item.result),
@@ -2992,7 +3011,30 @@ function deliveryTimelineItems(row: PrivateDeliveryPackage) {
       content: item.content
     })
   })
+  row.tasks.forEach(item => {
+    items.push({
+      id: `delivery-task-${item.id}`,
+      type: 'task',
+      title: item.title.replace(`${row.companyName} - `, ''),
+      statusText: taskStatusText(item.status),
+      statusLevel: taskStatusTag(item.status),
+      time: item.dueTime,
+      ownerName: item.ownerName,
+      content: `${item.action} · 优先级 ${item.priority}`
+    })
+  })
   return items.sort((a, b) => b.time.localeCompare(a.time))
+}
+
+function deliveryTimelineGroups(row: PrivateDeliveryPackage) {
+  const items = deliveryTimelineItems(row)
+  return deliveryTimelineTypeOrder
+    .map(type => ({
+      type,
+      ...deliveryTimelineTypeMeta[type],
+      items: items.filter(item => item.type === type)
+    }))
+    .filter(group => group.items.length > 0)
 }
 
 function openDeliveryPackage(row: PrivateDeliveryPackage) {

@@ -1448,6 +1448,18 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">回访续费</div>
+        <div class="delivery-review-card">
+          <div>
+            <strong>{{ deliveryReviewTitle(deliveryDrawer.row) }}</strong>
+            <p>{{ deliveryReviewDesc(deliveryDrawer.row) }}</p>
+          </div>
+          <div class="delivery-review-actions">
+            <el-button type="primary" size="small" @click.stop="openDeliveryReview(deliveryDrawer.row)">记录回访</el-button>
+            <el-button size="small" @click.stop="createDeliveryReviewTask(deliveryDrawer.row)">生成回访任务</el-button>
+          </div>
+        </div>
+
         <div class="bd-section-title mt">任务清单</div>
         <div class="delivery-task-detail-list">
           <div
@@ -1531,6 +1543,7 @@
       <template #footer>
         <el-button @click="deliveryDrawer.visible = false">关闭</el-button>
         <el-button v-if="deliveryDrawer.row" @click.stop="openDeliveryContact(deliveryDrawer.row)">查看客户</el-button>
+        <el-button v-if="deliveryDrawer.row" @click.stop="openDeliveryReview(deliveryDrawer.row)">记录回访</el-button>
         <el-button v-if="deliveryDrawer.row?.orderNo" type="primary" @click.stop="openDeliveryOrder(deliveryDrawer.row)">查看提单</el-button>
       </template>
     </BusinessDetailDrawer>
@@ -2643,6 +2656,55 @@ function deliveryRiskText(row: PrivateDeliveryPackage) {
   if (deliveryProgress(row) === 0) return '交付尚未启动,当天需确认资料和责任人'
   if (deliveryProgress(row) < 100) return '交付推进中,关注最晚节点和回款要求'
   return '任务已全部完成,可进入回访和续费沉淀'
+}
+
+function deliveryReviewTitle(row: PrivateDeliveryPackage) {
+  if (deliveryOverdueCount(row) > 0) return '先补救交付异常,再做客户回访'
+  if (deliveryProgress(row) < 100) return '交付中同步预约回访节点'
+  return '交付完成后进入回访和续费经营'
+}
+
+function deliveryReviewDesc(row: PrivateDeliveryPackage) {
+  if (deliveryOverdueCount(row) > 0) {
+    return `当前还有 ${deliveryOverdueCount(row)} 个逾期任务,回访前先和客户同步补救节点、责任人和预计完成时间。`
+  }
+  if (deliveryProgress(row) < 100) return '建议在最晚节点前预约客户确认资料、回款、办理进度和是否有新增服务需求。'
+  return '建议 7 天内做满意度回访,沉淀资料归档、续费提醒、转介绍和新增服务机会。'
+}
+
+function deliveryReviewNextAction(row: PrivateDeliveryPackage) {
+  if (deliveryOverdueCount(row) > 0) return '同步交付补救节点并记录客户反馈'
+  if (deliveryProgress(row) < 100) return '预约交付进度回访并确认资料/回款'
+  return '完成满意度回访,确认续费/转介绍/新增需求'
+}
+
+function openDeliveryReview(row: PrivateDeliveryPackage) {
+  const contact = deliveryContact(row)
+  if (!contact) {
+    ElMessage.warning('未找到关联私域客户,请刷新后重试')
+    return
+  }
+  deliveryDrawer.visible = false
+  openFollowDialog(contact)
+  Object.assign(followForm, {
+    method: '电话',
+    result: '已联系',
+    content: `${row.packageName}回访:核对交付进度、回款/资料、客户满意度和新增服务需求。`,
+    quotedAmount: 0,
+    nextAction: deliveryReviewNextAction(row),
+    nextTouchAt: nextTouchTime(deliveryProgress(row) >= 100 ? 7 : 2, 10, 0),
+    ownerName: contact.ownerName || row.ownerName
+  })
+}
+
+async function createDeliveryReviewTask(row: PrivateDeliveryPackage) {
+  const contact = deliveryContact(row)
+  if (!contact) {
+    ElMessage.warning('未找到关联私域客户,请刷新后重试')
+    return
+  }
+  deliveryDrawer.visible = false
+  await createFollowTask(contact)
 }
 
 function addressStatusText(status: PrivateAddressInventoryStatus) {
@@ -4657,6 +4719,39 @@ watch(() => route.fullPath, applyRouteQueue)
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.delivery-review-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  strong {
+    color: #111827;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.delivery-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+
+  :deep(.el-button) {
+    margin-left: 0;
+  }
+}
+
 .address-lock-panel {
   display: grid;
   gap: 10px;
@@ -5856,6 +5951,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .delivery-summary,
   .delivery-progress-stats,
   .delivery-check-grid,
+  .delivery-review-card,
   .address-inventory-list,
   .verify-detail-grid,
   .config-meta {

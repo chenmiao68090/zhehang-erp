@@ -81,6 +81,10 @@ const visible = computed({
   }
 }
 
+:global(.business-detail-drawer.open) {
+  transform: none !important;
+}
+
 .bd-shell {
   min-height: 100%;
   padding: 16px;

@@ -580,7 +580,7 @@
               <el-table-column prop="createdAt" label="记录时间" width="150" />
               <el-table-column label="客户" min-width="240">
                 <template #default="{ row }">
-                  <strong>{{ row.companyName }}</strong>
+                  <button class="link-btn" @click.stop="openContactFromFollow(row)">{{ row.companyName }}</button>
                   <div class="sub-line">{{ row.contactName }} · {{ row.ownerName }}</div>
                 </template>
               </el-table-column>
@@ -2951,6 +2951,15 @@ function openContact(row: PrivateContact) {
   drawer.row = row
   drawer.visible = true
   loadDrawerTimeline(row.id)
+}
+
+function openContactFromFollow(row: PrivateFollowRecord) {
+  const contact = contacts.value.find(item => item.id === row.contactId)
+  if (!contact) {
+    ElMessage.warning('未找到关联私域客户,请刷新后重试')
+    return
+  }
+  openContact(contact)
 }
 
 function deliveryContact(row: PrivateDeliveryPackage) {

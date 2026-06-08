@@ -244,6 +244,22 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
     }
 
     @Override
+    public IPage<CrmLead> selectTodoFollow(int pageNum, int pageSize) {
+        LambdaQueryWrapper<CrmLead> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:电销看自己、主管看本部门
+        dataScopeHelper.apply(wrapper, CrmLead::getOwnerId, CrmLead::getDeptId);
+        wrapper.eq(CrmLead::getOwnership, "private")
+               // 下次跟进时间已到/逾期,或从未设置(从没跟进)
+               .and(q -> q.le(CrmLead::getNextFollowTime, LocalDate.now())
+                          .or()
+                          .isNull(CrmLead::getNextFollowTime))
+               // 从未跟进(null)排最前,其次按下次跟进时间升序,再按保护期临近
+               .orderByAsc(CrmLead::getNextFollowTime)
+               .orderByAsc(CrmLead::getProtectionExpireDate);
+        return leadMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void addFollow(Long leadId, Integer type, String content, LocalDateTime nextTime, String nextContent) {
         CrmLead lead = leadMapper.selectById(leadId);
@@ -302,6 +318,32 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                 new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
         qw.select("status", "COUNT(*) AS cnt").groupBy("status").orderByAsc("status");
         return leadMapper.selectMaps(qw);
+    }
+
+    @Override
+    public Map<String, Object> conversionSummary() {
+        long total = countScoped(null);
+        long converted = countScoped(3);   // 3已转化
+        long converting = countScoped(2);  // 2跟进中
+        long newLeads = countScoped(1);    // 1新建
+        long invalid = countScoped(4);     // 4无效
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("total", total);
+        m.put("newLeads", newLeads);
+        m.put("converting", converting);
+        m.put("converted", converted);
+        m.put("invalid", invalid);
+        // 转化率 = 已转化 / 总数,保留两位百分比
+        m.put("conversionRate", total == 0 ? 0.0 : Math.round(converted * 10000.0 / total) / 100.0);
+        return m;
+    }
+
+    /** 在当前用户数据范围内按状态计数(status 为 null 则计总数) */
+    private long countScoped(Integer status) {
+        LambdaQueryWrapper<CrmLead> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.apply(wrapper, CrmLead::getOwnerId, CrmLead::getDeptId);
+        wrapper.eq(status != null, CrmLead::getStatus, status);
+        return leadMapper.selectCount(wrapper);
     }
 
     /** 当前用户今日已领取数量 */

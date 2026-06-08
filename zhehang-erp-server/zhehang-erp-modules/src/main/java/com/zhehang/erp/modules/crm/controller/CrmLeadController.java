@@ -98,6 +98,14 @@ public class CrmLeadController {
         return R.ok(leadService.selectMyPage(pageNum, pageSize, name, status));
     }
 
+    /** 今天该打谁:数据范围内、待跟进(逾期/今天到期/从未跟进)的线索 */
+    @GetMapping("/todo-follow")
+    public R<IPage<CrmLead>> todoFollow(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return R.ok(leadService.selectTodoFollow(pageNum, pageSize));
+    }
+
     /** 领取(从公海领到当前登录人名下) */
     @PostMapping("/claim")
     @Log(module = "线索管理", type = Log.OperationType.UPDATE)
@@ -153,6 +161,12 @@ public class CrmLeadController {
     @GetMapping("/stats/stage")
     public R<List<Map<String, Object>>> stageStats() {
         return R.ok(leadService.stageStats());
+    }
+
+    /** 转化率汇总(数据范围内:电销看自己/主管看部门) */
+    @GetMapping("/stats/conversion")
+    public R<Map<String, Object>> conversionStats() {
+        return R.ok(leadService.conversionSummary());
     }
 
     /** 宽松解析下次跟进时间:支持 yyyy-MM-dd / yyyy-MM-dd HH:mm / yyyy-MM-dd HH:mm:ss / 带T,解析失败返回 null */

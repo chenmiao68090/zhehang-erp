@@ -17,6 +17,12 @@ public interface ICrmLeadService extends IService<CrmLead> {
     /** 我的客资:当前登录人名下、归属 private 的线索 */
     IPage<CrmLead> selectMyPage(int pageNum, int pageSize, String name, Integer status);
 
+    /**
+     * 今天该打谁:数据范围内(电销看自己/主管看部门)、归属 private、
+     * 且"下次跟进时间已到/逾期或从未设置"的线索,按紧迫度排序。供电销每日跟进待办用。
+     */
+    IPage<CrmLead> selectTodoFollow(int pageNum, int pageSize);
+
     /** 领取:把公海线索领到当前登录人名下(置 private、记领取时间) */
     void claim(List<Long> ids);
 
@@ -41,5 +47,8 @@ public interface ICrmLeadService extends IService<CrmLead> {
 
     /** 线索阶段漏斗:按 status 聚合数量(营销统计用) */
     List<java.util.Map<String, Object>> stageStats();
+
+    /** 转化率汇总(数据范围内:电销看自己/主管看部门):总数/各阶段数/转化率,供复盘看板 */
+    java.util.Map<String, Object> conversionSummary();
 }
 

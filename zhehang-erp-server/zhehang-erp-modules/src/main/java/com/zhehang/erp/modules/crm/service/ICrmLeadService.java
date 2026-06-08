@@ -42,6 +42,9 @@ public interface ICrmLeadService extends IService<CrmLead> {
     /** 查重:按手机号/名称匹配已存在线索 */
     List<CrmLead> checkDuplicate(String phone, String name);
 
+    /** 从工商库按关键词批量导入企业为公海线索(去重+自动补工商),返回新建数量。"新公司入池" */
+    int importFromCompanyLibrary(String keyword, int limit);
+
     /** 线索来源分布:按 source 聚合数量(营销统计用) */
     List<java.util.Map<String, Object>> sourceStats();
 

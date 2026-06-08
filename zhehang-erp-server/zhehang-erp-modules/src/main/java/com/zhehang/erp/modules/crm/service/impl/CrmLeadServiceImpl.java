@@ -20,6 +20,7 @@ import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import com.zhehang.erp.modules.company.domain.CompanyInfo;
 import com.zhehang.erp.modules.company.service.CompanyInfoService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> implements ICrmLeadService {
@@ -164,6 +166,20 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
         customer.setStatus(0);
         customer.setOwnerId(lead.getOwnerId());
         customer.setDeptId(lead.getDeptId());
+        // 转客户时带工商信息(统一社会信用代码/行业/规模/地址),供客户税务档案按信用代码勾稽
+        if (StringUtils.hasText(customer.getName())) {
+            try {
+                CompanyInfo info = companyInfoService.detail(customer.getName());
+                if (info != null) {
+                    customer.setCreditCode(info.getCreditCode());
+                    customer.setIndustry(info.getIndustry());
+                    customer.setScale(info.getEmployeeScale());
+                    customer.setAddress(info.getAddress());
+                }
+            } catch (Exception ignore) {
+                // 工商带出失败不阻断转化
+            }
+        }
         customerMapper.insert(customer);
 
         // 创建联系人
@@ -356,6 +372,37 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                 .set(CrmLead::getProtectionExpireDate, LocalDate.now().plusDays(PROTECTION_DAYS))
                 .setSql("follow_count = IFNULL(follow_count, 0) + 1")
                 .update();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int importFromCompanyLibrary(String keyword, int limit) {
+        java.util.List<CompanyInfo> list = companyInfoService.suggest(keyword, limit <= 0 ? 20 : limit);
+        if (list == null || list.isEmpty()) {
+            return 0;
+        }
+        int created = 0;
+        for (CompanyInfo info : list) {
+            if (info == null || !StringUtils.hasText(info.getName())) {
+                continue;
+            }
+            // 去重:同名公司已有线索则跳过
+            Long exist = leadMapper.selectCount(new LambdaQueryWrapper<CrmLead>()
+                    .eq(CrmLead::getCompany, info.getName()));
+            if (exist != null && exist > 0) {
+                continue;
+            }
+            CrmLead lead = new CrmLead();
+            lead.setName(info.getName());
+            lead.setCompany(info.getName());
+            lead.setOwnership("pool"); // 进公海待领取/分配
+            lead.setStatus(1);
+            lead.setRemark("工商库导入");
+            save(lead); // 走 save():自动补工商信息;无负责人则不写dept,保持公海
+            created++;
+        }
+        log.info("工商库导入线索完成,关键词[{}],新建 {} 条", keyword, created);
+        return created;
     }
 
     @Override

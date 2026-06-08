@@ -143,6 +143,15 @@ public class CrmLeadController {
         return R.ok();
     }
 
+    /** 从工商库批量导入企业为公海线索(去重+自动补工商):新公司入池 */
+    @PostMapping("/import-companies")
+    @Log(module = "线索管理", type = Log.OperationType.INSERT)
+    public R<Integer> importCompanies(@RequestBody Map<String, Object> body) {
+        String keyword = body.get("keyword") == null ? null : body.get("keyword").toString();
+        int limit = body.get("limit") == null ? 20 : Integer.parseInt(body.get("limit").toString());
+        return R.ok(leadService.importFromCompanyLibrary(keyword, limit));
+    }
+
     /** 查重(按手机号/名称) */
     @GetMapping("/duplicate")
     public R<List<CrmLead>> duplicate(

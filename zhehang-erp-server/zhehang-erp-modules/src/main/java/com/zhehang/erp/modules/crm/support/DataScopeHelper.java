@@ -63,6 +63,31 @@ public class DataScopeHelper {
     }
 
     /**
+     * 财务类业务表(订单/合同/收款/提成)的数据范围过滤。
+     * 与 apply 的区别:财务(finance)角色视为"看全部"——财务对账/确认收款/核发提成需跨人查看,
+     * 否则财务按本人过滤会查不到要处理的单据。规则:
+     * 管理员 或 finance角色 或 scope=1 → 全部;部门主管(3/4) → 本部门(及以下);其余(销售/员工) → 仅本人。
+     */
+    public <T> void applyFinancial(LambdaQueryWrapper<T> wrapper,
+                                   SFunction<T, ?> ownerColumn,
+                                   SFunction<T, ?> deptColumn) {
+        if (SecurityUtils.isCurrentAdmin() || SecurityUtils.hasAnyRole("finance")) {
+            return; // 全部(管理员/财务)
+        }
+        Integer scope = SecurityUtils.getCurrentDataScope();
+        if (scope != null && scope == 1) {
+            return;
+        }
+        Long deptId = SecurityUtils.getCurrentDeptId();
+        if (deptId != null && scope != null && (scope == 3 || scope == 4)) {
+            List<Long> deptIds = (scope == 4) ? listSelfAndChildren(deptId) : List.of(deptId);
+            wrapper.in(deptColumn, deptIds);
+            return;
+        }
+        wrapper.eq(ownerColumn, SecurityUtils.getCurrentUserId());
+    }
+
+    /**
      * 判断当前登录用户能否访问"归属人=ownerId、归属部门=deptId"的一条记录(与 apply 同口径)。
      * 用于单条操作(如给某线索写跟进)的越权校验。
      */

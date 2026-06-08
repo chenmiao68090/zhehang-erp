@@ -12,6 +12,7 @@ import com.zhehang.erp.modules.order.mapper.BizOrderApprovalMapper;
 import com.zhehang.erp.modules.order.mapper.BizOrderItemMapper;
 import com.zhehang.erp.modules.order.mapper.BizOrderMapper;
 import com.zhehang.erp.modules.order.service.IBizOrderService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,10 +32,13 @@ public class BizOrderServiceImpl extends ServiceImpl<BizOrderMapper, BizOrder> i
     private final BizOrderMapper orderMapper;
     private final BizOrderItemMapper itemMapper;
     private final BizOrderApprovalMapper approvalMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<BizOrder> selectPage(int pageNum, int pageSize, Integer status, Long customerId, String orderNo) {
         LambdaQueryWrapper<BizOrder> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:销售看本人订单、主管看本部门、财务/管理员看全部(对账)
+        dataScopeHelper.applyFinancial(wrapper, BizOrder::getSalesmanId, BizOrder::getDeptId);
         wrapper.eq(status != null, BizOrder::getStatus, status)
                 .eq(customerId != null, BizOrder::getCustomerId, customerId)
                 .like(StringUtils.hasText(orderNo), BizOrder::getOrderNo, orderNo)

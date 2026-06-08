@@ -25,6 +25,10 @@ public class BizReceipt extends BaseEntity {
     private Long customerId;
     /** 客户名称 */
     private String customerName;
+    /** 归属销售ID(从订单继承,数据范围用) */
+    private Long salesmanId;
+    /** 归属部门ID(从订单继承,数据范围用) */
+    private Long deptId;
     /** 收款金额 */
     private BigDecimal amount;
     /** 币种 */

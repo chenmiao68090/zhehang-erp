@@ -26,4 +26,7 @@ public interface AuthUser {
 
     /** 是否管理员(看全部数据,数据权限直接放行) */
     boolean isAdmin();
+
+    /** 当前用户角色标识列表(如 sales/finance/dept_manager);用于角色感知的数据范围。可为 null */
+    java.util.List<String> getRoleKeys();
 }

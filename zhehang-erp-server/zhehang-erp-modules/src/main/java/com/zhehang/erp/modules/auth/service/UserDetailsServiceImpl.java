@@ -52,6 +52,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 || "admin".equals(user.getUsername())
                 || (roleKeys != null && (roleKeys.contains("super_admin") || roleKeys.contains("sys_admin")));
         loginUser.setAdmin(isAdmin);
+        loginUser.setRoleKeys(roleKeys); // 存角色列表,供角色感知的数据范围(如财务/管理层看全部财务数据)
         if (isAdmin) {
             loginUser.setDataScope(1); // 管理员看全部
         } else {

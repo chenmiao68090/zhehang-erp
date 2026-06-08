@@ -26,6 +26,10 @@ public class BizContract extends BaseEntity {
     private Long customerId;
     /** 客户名称 */
     private String customerName;
+    /** 归属销售ID(从订单继承,数据范围用) */
+    private Long salesmanId;
+    /** 归属部门ID(从订单继承,数据范围用) */
+    private Long deptId;
     /** 模板ID */
     private Long templateId;
     /** 合同类型(new首签 renew续签 supplement补充) */

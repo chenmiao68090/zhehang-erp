@@ -10,6 +10,7 @@ import com.zhehang.erp.modules.order.mapper.BizOrderMapper;
 import com.zhehang.erp.modules.task.domain.BizCommission;
 import com.zhehang.erp.modules.task.mapper.BizCommissionMapper;
 import com.zhehang.erp.modules.task.service.IBizCommissionService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,12 +28,15 @@ public class BizCommissionServiceImpl extends ServiceImpl<BizCommissionMapper, B
 
     private final BizCommissionMapper commissionMapper;
     private final BizOrderMapper orderMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     private static final BigDecimal DEFAULT_RATE = new BigDecimal("5");
 
     @Override
     public IPage<BizCommission> selectPage(int pageNum, int pageSize, Long salesmanId, String period, Integer status) {
         LambdaQueryWrapper<BizCommission> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:销售看本人提成、主管看本部门、财务/管理员看全部(核发)
+        dataScopeHelper.applyFinancial(wrapper, BizCommission::getSalesmanId, BizCommission::getDeptId);
         wrapper.eq(salesmanId != null, BizCommission::getSalesmanId, salesmanId)
                 .eq(StringUtils.hasText(period), BizCommission::getPeriod, period)
                 .eq(status != null, BizCommission::getStatus, status)

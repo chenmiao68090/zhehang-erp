@@ -18,6 +18,7 @@ import com.zhehang.erp.modules.task.mapper.BizTaskMapper;
 import com.zhehang.erp.modules.task.mapper.BizCommissionMapper;
 import com.zhehang.erp.modules.task.service.IBizTaskService;
 import com.zhehang.erp.modules.task.service.IBizCommissionService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
     private final BizTaskMapper bizTaskMapper;
     private final IBizCommissionService commissionService;
     private final BizCommissionMapper bizCommissionMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     /** 合同签署后自动派发的交付任务模板(代账主流程) */
     private static final String[] DELIVERY_TASKS = {"客户资料收集", "建账初始化", "税务报到"};
@@ -47,6 +49,8 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
     @Override
     public IPage<BizContract> selectPage(int pageNum, int pageSize, String contractNo, Long customerId, Integer status) {
         LambdaQueryWrapper<BizContract> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:销售看本人合同、主管看本部门、财务/管理员看全部
+        dataScopeHelper.applyFinancial(wrapper, BizContract::getSalesmanId, BizContract::getDeptId);
         wrapper.like(StringUtils.hasText(contractNo), BizContract::getContractNo, contractNo)
                 .eq(customerId != null, BizContract::getCustomerId, customerId)
                 .eq(status != null, BizContract::getStatus, status)
@@ -67,6 +71,8 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
         contract.setOrderId(orderId);
         contract.setCustomerId(order.getCustomerId());
         contract.setCustomerName(order.getCustomerName());
+        contract.setSalesmanId(order.getSalesmanId()); // 归属继承订单(数据范围用)
+        contract.setDeptId(order.getDeptId());
         contract.setTemplateId(templateId);
         contract.setContractType("new");
         contract.setAmount(order.getPayableAmount() != null ? order.getPayableAmount() : order.getTotalAmount());
@@ -172,6 +178,8 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
         renew.setOrderId(origin.getOrderId());
         renew.setCustomerId(origin.getCustomerId());
         renew.setCustomerName(origin.getCustomerName());
+        renew.setSalesmanId(origin.getSalesmanId());
+        renew.setDeptId(origin.getDeptId());
         renew.setTemplateId(origin.getTemplateId());
         renew.setContractType("renew");
         renew.setParentId(origin.getId());

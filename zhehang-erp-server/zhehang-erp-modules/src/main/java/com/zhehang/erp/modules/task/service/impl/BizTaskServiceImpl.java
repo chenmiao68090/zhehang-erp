@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.contract.domain.BizContract;
 import com.zhehang.erp.modules.contract.mapper.BizContractMapper;
 import com.zhehang.erp.modules.task.domain.BizTask;
@@ -40,6 +41,10 @@ public class BizTaskServiceImpl extends ServiceImpl<BizTaskMapper, BizTask> impl
     @Override
     public IPage<BizTask> selectPage(int pageNum, int pageSize, String taskType, Integer status, Long executorId) {
         LambdaQueryWrapper<BizTask> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:管理员/主管看全部交付任务(便于派活/跟踪),其余(执行人)只看分配给自己的
+        if (!SecurityUtils.isCurrentAdmin() && !SecurityUtils.hasAnyRole("dept_manager")) {
+            wrapper.eq(BizTask::getExecutorId, SecurityUtils.getCurrentUserId());
+        }
         wrapper.eq(StringUtils.hasText(taskType), BizTask::getTaskType, taskType)
                 .eq(status != null, BizTask::getStatus, status)
                 .eq(executorId != null, BizTask::getExecutorId, executorId)

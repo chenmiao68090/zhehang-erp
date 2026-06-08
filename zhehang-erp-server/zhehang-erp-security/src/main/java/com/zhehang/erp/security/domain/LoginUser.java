@@ -28,6 +28,8 @@ public class LoginUser implements UserDetails, AuthUser {
     private Integer dataScope;
     /** 是否管理员(看全部数据) */
     private boolean admin;
+    /** 角色标识列表(sales/finance/dept_manager...),用于角色感知的数据范围 */
+    private java.util.List<String> roleKeys;
 
     @JsonIgnore
     private transient Collection<? extends GrantedAuthority> authorities;

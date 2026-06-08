@@ -51,6 +51,27 @@ public class SecurityUtils {
         return Long.valueOf(1L).equals(authUser.getUserId()) || "admin".equals(authUser.getUsername());
     }
 
+    /** 当前用户角色标识列表(未取到时空列表) */
+    public static java.util.List<String> getCurrentRoleKeys() {
+        AuthUser authUser = currentAuthUser();
+        java.util.List<String> keys = authUser != null ? authUser.getRoleKeys() : null;
+        return keys != null ? keys : java.util.Collections.emptyList();
+    }
+
+    /** 当前用户是否拥有指定角色中的任意一个 */
+    public static boolean hasAnyRole(String... roleKeys) {
+        if (roleKeys == null || roleKeys.length == 0) {
+            return false;
+        }
+        java.util.List<String> mine = getCurrentRoleKeys();
+        for (String r : roleKeys) {
+            if (mine.contains(r)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static String getCurrentUsername() {
         AuthUser authUser = currentAuthUser();
         if (authUser != null) {

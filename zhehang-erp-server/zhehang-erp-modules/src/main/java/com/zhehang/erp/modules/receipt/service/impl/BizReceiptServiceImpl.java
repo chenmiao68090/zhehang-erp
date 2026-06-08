@@ -15,6 +15,9 @@ import com.zhehang.erp.modules.receipt.service.IBizReceiptService;
 import com.zhehang.erp.modules.contract.domain.BizContract;
 import com.zhehang.erp.modules.contract.mapper.BizContractMapper;
 import com.zhehang.erp.modules.contract.service.IBizContractService;
+import com.zhehang.erp.modules.order.domain.BizOrder;
+import com.zhehang.erp.modules.order.mapper.BizOrderMapper;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,10 +42,14 @@ public class BizReceiptServiceImpl extends ServiceImpl<BizReceiptMapper, BizRece
     private final BizInvoiceMapper invoiceMapper;
     private final IBizContractService contractService;
     private final BizContractMapper contractMapper;
+    private final BizOrderMapper orderMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<BizReceipt> selectPage(int pageNum, int pageSize, Long customerId, Long orderId, Integer status) {
         LambdaQueryWrapper<BizReceipt> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:销售看本人订单收款、主管看本部门、财务/管理员看全部(对账)
+        dataScopeHelper.applyFinancial(wrapper, BizReceipt::getSalesmanId, BizReceipt::getDeptId);
         wrapper.eq(customerId != null, BizReceipt::getCustomerId, customerId)
                 .eq(orderId != null, BizReceipt::getOrderId, orderId)
                 .eq(status != null, BizReceipt::getStatus, status)
@@ -61,6 +68,14 @@ public class BizReceiptServiceImpl extends ServiceImpl<BizReceiptMapper, BizRece
         receipt.setConfirmTime(LocalDateTime.now());
         if (receipt.getReceiveTime() == null) {
             receipt.setReceiveTime(LocalDateTime.now());
+        }
+        // 归属继承订单(数据范围:销售看本人收款、财务看全部对账)
+        if (receipt.getOrderId() != null && receipt.getSalesmanId() == null) {
+            BizOrder order = orderMapper.selectById(receipt.getOrderId());
+            if (order != null) {
+                receipt.setSalesmanId(order.getSalesmanId());
+                receipt.setDeptId(order.getDeptId());
+            }
         }
         if (receipt.getId() == null) {
             receiptMapper.insert(receipt);

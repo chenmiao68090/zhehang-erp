@@ -332,6 +332,36 @@
                 </div>
               </div>
             </div>
+            <div class="ownership-impact-panel" :class="ownershipImpactLevel">
+              <div class="ownership-impact-head">
+                <div>
+                  <strong>规则影响预览</strong>
+                  <p>{{ ownershipImpactSummaryText }}</p>
+                </div>
+                <el-tag :type="ownershipAuditTag(ownershipImpactLevel)" effect="plain">{{ ownershipImpactStatusText }}</el-tag>
+              </div>
+              <div class="ownership-impact-summary">
+                <div><span>受影响客户</span><b>{{ ownershipImpactSummary.total }}</b></div>
+                <div><span>高意向客户</span><b>{{ ownershipImpactSummary.intent }}</b></div>
+                <div><span>未核验主体</span><b>{{ ownershipImpactSummary.unverified }}</b></div>
+                <div><span>无规则承接</span><b>{{ ownershipImpactSummary.disabled }}</b></div>
+              </div>
+              <div class="ownership-impact-list">
+                <div v-for="item in ownershipImpactItems" :key="item.source" class="ownership-impact-item" :class="item.level">
+                  <div class="ownership-impact-item-head">
+                    <strong>{{ item.source }}</strong>
+                    <el-tag :type="ownershipAuditTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.desc }}</p>
+                  <div class="ownership-impact-metrics">
+                    <span>客户 <b>{{ item.total }}</b></span>
+                    <span>高意向 <b>{{ item.intent }}</b></span>
+                    <span>未核验 <b>{{ item.unverified }}</b></span>
+                    <span>撞单风险 <b>{{ item.duplicate }}</b></span>
+                  </div>
+                </div>
+              </div>
+            </div>
             <el-table :data="ownershipRules" border stripe class="ownership-table">
               <el-table-column prop="source" label="来源触点" width="110" fixed="left" />
               <el-table-column label="启用" width="80" align="center">
@@ -2506,6 +2536,17 @@ interface WecomCheckItem {
   statusText: string
   desc: string
 }
+interface OwnershipImpactItem {
+  source: PrivateSource
+  enabled: boolean
+  total: number
+  intent: number
+  unverified: number
+  duplicate: number
+  level: OwnershipAuditItem['level']
+  statusText: string
+  desc: string
+}
 type AddressBindingIssue = {
   delivery: PrivateDeliveryPackage
   lock: PrivateAddressLock
@@ -2959,6 +3000,72 @@ const ownershipAuditSummary = computed(() => {
   if (danger > 0) return `发现 ${danger} 个阻断风险,先处理来源覆盖、保护期和撞单策略。`
   if (warning > 0) return `发现 ${warning} 个待优化项,建议在上线前补齐负责人、首触和优先级口径。`
   return '归属规则覆盖、保护期、首触、撞单和渠道保护均无明显风险。'
+})
+const ownershipImpactItems = computed<OwnershipImpactItem[]>(() => ownershipRules.value.map(rule => {
+  const rows = contacts.value.filter(item => item.source === rule.source)
+  const total = rows.length
+  const intent = rows.filter(isIntentContact).length
+  const unverified = rows.filter(isUnverifiedContact).length
+  const duplicate = rows.filter(item => item.verification?.duplicateRisk && item.verification.duplicateRisk !== 'none').length
+  const ownerText = rule.ownerTeam || rule.defaultOwner || '待补负责人'
+  const protectionText = rule.protectDays ? `${rule.protectDays} 天保护期` : '未设保护期'
+  const collisionText = collisionPolicyText(rule.collisionPolicy)
+  const level: OwnershipImpactItem['level'] = !total
+    ? 'primary'
+    : !rule.enabled
+      ? 'danger'
+      : duplicate > 0 && rule.collisionPolicy !== 'block'
+        ? 'warning'
+        : intent > 0 || rule.ownerPolicy === 'channel_dedicated'
+          ? 'success'
+          : 'primary'
+  const statusText = !total
+    ? '暂无客户'
+    : !rule.enabled
+      ? '无承接'
+      : duplicate > 0 && rule.collisionPolicy !== 'block'
+        ? '需复核'
+        : '可承接'
+  const desc = !total
+    ? `${rule.source} 当前没有客户,规则会影响后续新导入和同步客户。`
+    : !rule.enabled
+      ? `${total} 个${rule.source}客户将没有自动归属口径,新导入客户也无法按来源承接。`
+      : `${total} 个${rule.source}客户按“${ownerPolicyText(rule.ownerPolicy)}”归到 ${ownerText},${protectionText},撞单按“${collisionText}”。`
+  return {
+    source: rule.source,
+    enabled: rule.enabled,
+    total,
+    intent,
+    unverified,
+    duplicate,
+    level,
+    statusText,
+    desc
+  }
+}))
+const ownershipImpactSummary = computed(() => ({
+  total: ownershipImpactItems.value.reduce((sum, item) => sum + item.total, 0),
+  intent: ownershipImpactItems.value.reduce((sum, item) => sum + item.intent, 0),
+  unverified: ownershipImpactItems.value.reduce((sum, item) => sum + item.unverified, 0),
+  disabled: ownershipImpactItems.value.filter(item => !item.enabled).reduce((sum, item) => sum + item.total, 0)
+}))
+const ownershipImpactLevel = computed<OwnershipAuditItem['level']>(() => {
+  if (ownershipImpactSummary.value.disabled > 0) return 'danger'
+  if (ownershipImpactItems.value.some(item => item.level === 'warning')) return 'warning'
+  if (ownershipImpactSummary.value.total === 0) return 'primary'
+  return 'success'
+})
+const ownershipImpactStatusText = computed(() => ({
+  danger: '有承接断点',
+  warning: '需复核',
+  primary: '待积累客户',
+  success: '影响可控'
+} as Record<OwnershipAuditItem['level'], string>)[ownershipImpactLevel.value])
+const ownershipImpactSummaryText = computed(() => {
+  if (ownershipImpactSummary.value.disabled > 0) return `${ownershipImpactSummary.value.disabled} 个客户所在来源规则已停用,保存前先确认是否要临时冻结承接。`
+  if (ownershipImpactItems.value.some(item => item.level === 'warning')) return '存在撞单风险但未采用冻结策略的来源,保存前建议主管复核。'
+  if (!ownershipImpactSummary.value.total) return '当前客户池暂无可预览客户,规则会影响后续导入、企微同步和公众号留资。'
+  return `当前规则会影响 ${ownershipImpactSummary.value.total} 个私域客户,其中 ${ownershipImpactSummary.value.intent} 个高意向客户需要优先保护。`
 })
 const routeTabOptions = ['diagnosis', 'ownership', 'import', 'contacts', 'follow', 'groups', 'contents', 'tasks', 'delivery', 'config']
 const routeFollowFilters: FollowFilter[] = ['all', 'quote_no_order', 'order_pending', 'completed_no_delivery', 'next_touch']
@@ -7868,6 +7975,149 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.ownership-impact-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning,
+  &.primary {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+}
+
+.ownership-impact-head,
+.ownership-impact-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ownership-impact-head {
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.ownership-impact-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 20px;
+    line-height: 1.1;
+  }
+}
+
+.ownership-impact-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ownership-impact-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning,
+  &.primary {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #ef4444;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.ownership-impact-item-head {
+  align-items: center;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.ownership-impact-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+
+  span {
+    display: grid;
+    gap: 2px;
+    padding: 7px;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 14px;
+  }
+}
+
 .ownership-table {
   :deep(.el-input-number) {
     width: 84px;
@@ -11080,6 +11330,9 @@ watch(() => route.fullPath, applyRouteQueue)
   .preview-summary,
   .import-quality-grid,
   .import-next-grid,
+  .ownership-impact-summary,
+  .ownership-impact-list,
+  .ownership-impact-metrics,
   .contact-ops-summary,
   .contact-duty-grid,
   .contact-ownership-metrics,
@@ -11168,6 +11421,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .ownership-audit-head {
+    flex-direction: column;
+  }
+
+  .ownership-impact-head {
     flex-direction: column;
   }
 

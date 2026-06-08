@@ -17,12 +17,15 @@ import com.zhehang.erp.modules.crm.mapper.CrmLeadMapper;
 import com.zhehang.erp.modules.crm.service.ICrmHoldingService;
 import com.zhehang.erp.modules.crm.service.ICrmLeadService;
 import com.zhehang.erp.modules.crm.support.DataScopeHelper;
+import com.zhehang.erp.modules.company.domain.CompanyInfo;
+import com.zhehang.erp.modules.company.service.CompanyInfoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -52,14 +55,77 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
     private final StringRedisTemplate stringRedisTemplate;
     private final ICrmHoldingService holdingService;
     private final DataScopeHelper dataScopeHelper;
+    private final CompanyInfoService companyInfoService;
 
     @Override
     public boolean save(CrmLead entity) {
+        // 自动补工商信息:填了公司名但工商字段为空时,从工商库带出补全(区域/规模/注册资本/成立日期)
+        enrichFromCompany(entity);
         // 新建线索:若已指定负责人(私海)则补归属部门;无负责人(进公海)保持无部门,待领取时再写
         if (entity.getOwnerId() != null && entity.getDeptId() == null) {
             entity.setDeptId(dataScopeHelper.deptIdOfUser(entity.getOwnerId()));
         }
         return super.save(entity);
+    }
+
+    /** 自动补工商信息:有公司名且工商字段为空时,调工商带出补全。失败不阻断建线索。 */
+    private void enrichFromCompany(CrmLead lead) {
+        if (lead == null || !StringUtils.hasText(lead.getCompany())) {
+            return;
+        }
+        // 已手填区域+规模则视为不需补全,避免覆盖
+        if (StringUtils.hasText(lead.getRegion()) && StringUtils.hasText(lead.getEnterpriseScale())) {
+            return;
+        }
+        try {
+            CompanyInfo info = companyInfoService.detail(lead.getCompany());
+            if (info == null) {
+                return;
+            }
+            if (!StringUtils.hasText(lead.getRegion())) {
+                lead.setRegion(StringUtils.hasText(info.getCity()) ? info.getCity() : info.getProvince());
+            }
+            if (!StringUtils.hasText(lead.getEnterpriseScale()) && StringUtils.hasText(info.getEmployeeScale())) {
+                lead.setEnterpriseScale(info.getEmployeeScale());
+            }
+            if (lead.getRegisteredCapital() == null) {
+                lead.setRegisteredCapital(parseCapital(info.getRegisteredCapital()));
+            }
+            if (lead.getEstablishedDate() == null) {
+                lead.setEstablishedDate(parseDate(info.getEstablishDate()));
+            }
+        } catch (Exception ignore) {
+            // 工商带出失败(无网/未命中)不影响建线索
+        }
+    }
+
+    /** 从"1000万元"之类字符串提取数值;失败返回 null */
+    private BigDecimal parseCapital(String s) {
+        if (!StringUtils.hasText(s)) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[0-9]+(\\.[0-9]+)?").matcher(s);
+        if (m.find()) {
+            try {
+                return new BigDecimal(m.group());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** 宽松解析成立日期(yyyy-MM-dd / yyyy/MM/dd);失败返回 null */
+    private LocalDate parseDate(String s) {
+        if (!StringUtils.hasText(s)) {
+            return null;
+        }
+        try {
+            String t = s.trim().replace('/', '-');
+            return LocalDate.parse(t.substring(0, Math.min(10, t.length())));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override

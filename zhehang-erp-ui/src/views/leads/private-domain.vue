@@ -770,6 +770,48 @@
               <div><span>待锁地址</span><b>{{ deliveryStats.addressUnlocked }}</b></div>
               <div><span>待绑资源</span><b>{{ deliveryStats.addressUnbound }}</b></div>
             </div>
+            <div class="address-binding-audit" :class="{ clear: !addressBindingIssues.length }">
+              <div class="audit-head">
+                <div>
+                  <strong>ADR 补绑定前检查</strong>
+                  <p v-if="addressBindingIssues.length">先核候选资源、区域和供应商,再进详情补绑定,避免地址资源绑错导致渠道应收和客户归属串账。</p>
+                  <p v-else>当前没有锁定地址缺 ADR 的交付包,地址资源、渠道应收和客户归属可以继续保持闭环。</p>
+                </div>
+                <el-button
+                  type="primary"
+                  plain
+                  size="small"
+                  :disabled="!addressBindingIssues.length"
+                  @click="showAddressBindingQueue"
+                >
+                  {{ addressBindingIssues.length ? '只看待绑资源' : '已检查' }}
+                </el-button>
+              </div>
+              <div class="audit-metrics">
+                <div><span>待处理</span><b>{{ addressBindingIssues.length }}</b></div>
+                <div><span>可直接复核</span><b>{{ addressBindingReadyCount }}</b></div>
+                <div><span>需人工复核</span><b>{{ addressBindingReviewCount }}</b></div>
+                <div><span>无候选</span><b>{{ addressBindingBlockedCount }}</b></div>
+              </div>
+              <div class="audit-issue-list">
+                <button
+                  v-for="issue in addressBindingIssues.slice(0, 4)"
+                  :key="issue.lock.id"
+                  type="button"
+                  class="audit-issue"
+                  @click.stop="focusAddressBindingIssue(issue)"
+                >
+                  <span>{{ issue.delivery.companyName }}</span>
+                  <el-tag :type="issue.statusLevel" size="small" effect="plain">{{ issue.statusText }}</el-tag>
+                  <strong>{{ issue.topText }}</strong>
+                  <em>{{ issue.candidateCount }} 个候选 · {{ issue.reason }}</em>
+                </button>
+              </div>
+              <div v-if="!addressBindingIssues.length" class="audit-empty-line">
+                <el-tag type="success" size="small" effect="plain">已闭环</el-tag>
+                <span>如果后续出现历史锁定缺少 ADR 编号,这里会自动列出候选资源和复核建议。</span>
+              </div>
+            </div>
             <div class="delivery-filter-bar">
               <el-radio-group v-model="deliveryFilter">
                 <el-radio-button v-for="item in deliveryFilterOptions" :key="item.value" :label="item.value" :value="item.value">
@@ -1583,6 +1625,15 @@ type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'addre
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 type StarterAction = 'import' | 'contacts' | 'follow' | 'quote' | 'delivery'
 type ContactQuickFilter = 'all' | 'today_unfollowed' | 'intent' | 'unverified'
+type AddressBindingIssue = {
+  delivery: PrivateDeliveryPackage
+  lock: PrivateAddressLock
+  candidateCount: number
+  statusText: string
+  statusLevel: 'success' | 'warning' | 'danger'
+  topText: string
+  reason: string
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -1916,6 +1967,29 @@ const deliveryStats = computed(() => ({
   done: deliveryPackages.value.filter(item => item.status === 'done').length,
   pending: deliveryPackages.value.filter(item => item.status !== 'done').length
 }))
+const addressBindingIssues = computed<AddressBindingIssue[]>(() => deliveryPackages.value
+  .filter(item => needsAddressResourceBinding(item))
+  .map(delivery => {
+    const lock = activeAddressLock(delivery) as PrivateAddressLock
+    const inventory = addressInventoryOf(lock)
+    const candidates = addressResourceCandidates(lock)
+    const top = candidates[0]
+    const score = top ? addressResourceMatch(top, inventory).score : 0
+    const statusLevel: AddressBindingIssue['statusLevel'] = !top ? 'danger' : score >= 90 ? 'success' : 'warning'
+    const statusText = !top ? '无候选' : score >= 90 ? '可直接复核' : '需人工复核'
+    const topText = top
+      ? `${top.resourceNo} · ${top.district} · ${top.supplierName}`
+      : '资源池没有可用候选'
+    const reason = !top
+      ? '先补录或释放可用地址资源,再回交付包补绑定。'
+      : score >= 90
+        ? '候选资源与锁定库存同区同供应商,可进详情确认后补绑定。'
+        : '候选资源区域或供应商不完全一致,需要交付人工确认。'
+    return { delivery, lock, candidateCount: candidates.length, statusText, statusLevel, topText, reason }
+  }))
+const addressBindingReadyCount = computed(() => addressBindingIssues.value.filter(item => item.statusLevel === 'success').length)
+const addressBindingReviewCount = computed(() => addressBindingIssues.value.filter(item => item.statusLevel === 'warning').length)
+const addressBindingBlockedCount = computed(() => addressBindingIssues.value.filter(item => item.statusLevel === 'danger').length)
 const deliveryFilterOptions = computed(() => [
   { label: `全部 ${deliveryStats.value.all}`, value: 'all' },
   { label: `待启动 ${deliveryStats.value.notStarted}`, value: 'not_started' },
@@ -3560,7 +3634,23 @@ function goCompletedDeliveryQueue() {
 
 function showAllDeliveryPackages() {
   deliveryFilter.value = 'all'
+  focusedDeliveryPackageId.value = null
   scrollPrivateTabsIntoView()
+}
+
+function showAddressBindingQueue() {
+  activeTab.value = 'delivery'
+  deliveryFilter.value = 'address_unbound'
+  focusedDeliveryPackageId.value = null
+  scrollPrivateTabsIntoView()
+}
+
+function focusAddressBindingIssue(issue: AddressBindingIssue) {
+  activeTab.value = 'delivery'
+  deliveryFilter.value = 'address_unbound'
+  focusedDeliveryPackageId.value = issue.delivery.id
+  scrollPrivateTabsIntoView()
+  nextTick(() => openDeliveryPackage(issue.delivery))
 }
 
 function goImportPrivateContacts() {
@@ -4114,6 +4204,114 @@ watch(() => route.fullPath, applyRouteQueue)
     color: #111827;
     font-size: 20px;
   }
+}
+
+.address-binding-audit {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.clear {
+    border-color: #bbf7d0;
+    background: #f7fdf9;
+  }
+}
+
+.audit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    max-width: 680px;
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.audit-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 18px;
+  }
+}
+
+.audit-issue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.audit-issue {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto minmax(220px, 1.2fr);
+  gap: 8px 12px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    color: #111827;
+    font-weight: 700;
+  }
+
+  strong {
+    color: #245bdb;
+    font-size: 13px;
+  }
+
+  em {
+    grid-column: 1 / -1;
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+  }
+}
+
+.audit-empty-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #dcfce7;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #15803d;
+  font-size: 12px;
 }
 
 .contact-quick-bar,
@@ -5413,6 +5611,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .toolbar,
   .preview-summary,
   .contact-ops-summary,
+  .audit-metrics,
+  .audit-issue,
   .delivery-summary,
   .delivery-progress-stats,
   .delivery-check-grid,
@@ -5423,6 +5623,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .verify-detail-head {
+    flex-direction: column;
+  }
+
+  .audit-head {
     flex-direction: column;
   }
 

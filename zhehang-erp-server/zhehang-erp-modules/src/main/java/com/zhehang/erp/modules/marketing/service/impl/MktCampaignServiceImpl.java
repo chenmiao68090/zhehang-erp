@@ -47,6 +47,12 @@ public class MktCampaignServiceImpl extends ServiceImpl<MktCampaignMapper, MktCa
             Number cnt = crmLeadMapper.selectCount(
                     new LambdaQueryWrapper<CrmLead>().eq(CrmLead::getCampaignId, c.getId()));
             long leadsCount = cnt == null ? 0L : cnt.longValue();
+            // 本活动已转化(成交)线索数与转化率
+            Number convNum = crmLeadMapper.selectCount(new LambdaQueryWrapper<CrmLead>()
+                    .eq(CrmLead::getCampaignId, c.getId()).eq(CrmLead::getStatus, 3));
+            long convertedCount = convNum == null ? 0L : convNum.longValue();
+            double conversionRate = leadsCount > 0
+                    ? Math.round(convertedCount * 10000.0 / leadsCount) / 100.0 : 0.0;
             BigDecimal cost = c.getActualCost() == null ? BigDecimal.ZERO : c.getActualCost();
             BigDecimal cac = leadsCount > 0
                     ? cost.divide(BigDecimal.valueOf(leadsCount), 2, RoundingMode.HALF_UP)
@@ -60,6 +66,8 @@ public class MktCampaignServiceImpl extends ServiceImpl<MktCampaignMapper, MktCa
             m.put("impressions", c.getImpressions());
             m.put("clicks", c.getClicks());
             m.put("leadsCount", leadsCount);
+            m.put("convertedCount", convertedCount);
+            m.put("conversionRate", conversionRate);
             m.put("cac", cac);
             m.put("status", c.getStatus());
             result.add(m);

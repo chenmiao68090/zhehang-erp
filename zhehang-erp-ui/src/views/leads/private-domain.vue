@@ -1161,6 +1161,24 @@
                 </el-col>
               </el-row>
             </el-form>
+            <div class="wecom-check-panel" :class="wecomPrecheckLevel">
+              <div class="wecom-check-head">
+                <div>
+                  <strong>企微接入前置检查</strong>
+                  <p>{{ wecomPrecheckSummary }}</p>
+                </div>
+                <el-tag :type="wecomCheckTag(wecomPrecheckLevel)" effect="plain">{{ wecomPrecheckStatusText }}</el-tag>
+              </div>
+              <div class="wecom-check-grid">
+                <div v-for="item in wecomCheckItems" :key="item.key" class="wecom-check-item" :class="item.level">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <el-tag :type="wecomCheckTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+                  </div>
+                  <p>{{ item.desc }}</p>
+                </div>
+              </div>
+            </div>
             <div class="profile-actions">
               <span>最近更新：{{ wecomConfig.updatedAt || '-' }}</span>
               <el-button type="primary" :loading="wecomSaving" @click="saveWecomConfig">保存企微配置</el-button>
@@ -1901,6 +1919,13 @@ interface ImportQualityItem {
   statusText: string
   desc: string
 }
+interface WecomCheckItem {
+  key: string
+  label: string
+  level: 'success' | 'warning' | 'danger'
+  statusText: string
+  desc: string
+}
 type AddressBindingIssue = {
   delivery: PrivateDeliveryPackage
   lock: PrivateAddressLock
@@ -2217,6 +2242,80 @@ const importQualitySummary = computed(() => {
   return `当前 ${previewStats.value.ready} 行可导入,工商命中 ${previewStats.value.verified} 行。`
 })
 const wecomReady = computed(() => Boolean(wecomConfig.corpId && wecomConfig.contactSecret && wecomConfig.token && wecomConfig.aesKey))
+const wecomSyncScopes = computed(() => [
+  wecomConfig.syncExternalContact ? '外部联系人' : '',
+  wecomConfig.syncCustomerGroup ? '客户群' : '',
+  wecomConfig.syncTag ? '标签' : '',
+  wecomConfig.syncInteraction ? '互动记录' : ''
+].filter(Boolean))
+const wecomCheckItems = computed<WecomCheckItem[]>(() => [
+  {
+    key: 'corp',
+    label: '企业身份',
+    level: wecomConfig.corpId ? 'success' : 'danger',
+    statusText: wecomConfig.corpId ? '已填写' : '缺 CorpId',
+    desc: wecomConfig.corpId ? `CorpId ${wecomConfig.corpId}` : '先到企业微信后台获取企业 ID,否则无法识别同步来源。'
+  },
+  {
+    key: 'secret',
+    label: '客户联系 Secret',
+    level: wecomConfig.contactSecret ? 'success' : 'danger',
+    statusText: wecomConfig.contactSecret ? '已填写' : '缺 Secret',
+    desc: wecomConfig.contactSecret ? '外部联系人同步具备授权参数。' : '缺客户联系 Secret 时,客户、联系人和互动记录不能自动同步。'
+  },
+  {
+    key: 'group',
+    label: '客户群 Secret',
+    level: !wecomConfig.syncCustomerGroup || wecomConfig.customerGroupSecret ? 'success' : 'warning',
+    statusText: !wecomConfig.syncCustomerGroup ? '未启用客户群' : wecomConfig.customerGroupSecret ? '已填写' : '待补 Secret',
+    desc: !wecomConfig.syncCustomerGroup ? '当前不拉客户群,可后续再开启。' : wecomConfig.customerGroupSecret ? '客户群同步已具备参数。' : '已勾选客户群同步,但还缺客户群 Secret。'
+  },
+  {
+    key: 'callback',
+    label: '回调地址',
+    level: wecomConfig.callbackUrl ? 'success' : 'warning',
+    statusText: wecomConfig.callbackUrl ? '已填写' : '待配置',
+    desc: wecomConfig.callbackUrl ? wecomConfig.callbackUrl : '真实接入时需要配置公网 HTTPS 回调地址,本地保存只做参数沉淀。'
+  },
+  {
+    key: 'security',
+    label: 'Token/AESKey',
+    level: wecomConfig.token && wecomConfig.aesKey ? 'success' : 'danger',
+    statusText: wecomConfig.token && wecomConfig.aesKey ? '已齐' : '缺安全密钥',
+    desc: wecomConfig.token && wecomConfig.aesKey ? '回调验签和消息解密参数已具备。' : 'Token 与 EncodingAESKey 都需要填写,否则回调无法验签。'
+  },
+  {
+    key: 'scope',
+    label: '同步范围',
+    level: wecomSyncScopes.value.length ? 'success' : 'warning',
+    statusText: wecomSyncScopes.value.length ? `${wecomSyncScopes.value.length} 项` : '未选择',
+    desc: wecomSyncScopes.value.length ? `当前同步: ${wecomSyncScopes.value.join('、')}。` : '至少选择外部联系人,后续才能沉淀私域客户。'
+  },
+  {
+    key: 'cadence',
+    label: '负责人/频率',
+    level: wecomConfig.ownerName && wecomConfig.syncIntervalMinutes >= 5 ? 'success' : 'warning',
+    statusText: wecomConfig.ownerName ? `${wecomConfig.syncIntervalMinutes} 分钟` : '待补负责人',
+    desc: wecomConfig.ownerName ? `${wecomConfig.ownerName} 负责同步,间隔 ${wecomConfig.syncIntervalMinutes} 分钟。` : '建议指定同步负责人,方便异常时追踪。'
+  }
+])
+const wecomPrecheckReadyCount = computed(() => wecomCheckItems.value.filter(item => item.level === 'success').length)
+const wecomPrecheckLevel = computed<WecomCheckItem['level']>(() => {
+  if (wecomCheckItems.value.some(item => item.level === 'danger')) return 'danger'
+  if (wecomCheckItems.value.some(item => item.level === 'warning')) return 'warning'
+  return 'success'
+})
+const wecomPrecheckStatusText = computed(() => ({
+  danger: '缺关键参数',
+  warning: '可保存待补',
+  success: '可进入联调'
+} as Record<WecomCheckItem['level'], string>)[wecomPrecheckLevel.value])
+const wecomPrecheckSummary = computed(() => {
+  const total = wecomCheckItems.value.length
+  if (wecomPrecheckLevel.value === 'danger') return `已完成 ${wecomPrecheckReadyCount.value}/${total},还缺 CorpId、Secret 或安全密钥等关键参数。`
+  if (wecomPrecheckLevel.value === 'warning') return `已完成 ${wecomPrecheckReadyCount.value}/${total},可以保存配置,但真实联调前仍需补齐警告项。`
+  return `已完成 ${total}/${total},参数、范围和责任人都具备,可以进入企微回调/定时同步联调。`
+})
 const followStats = computed(() => ({
   total: followRecords.value.length,
   quoteAmount: followRecords.value.reduce((sum, item) => sum + Number(item.quotedAmount || 0), 0),
@@ -3343,6 +3442,10 @@ function integrationText(status: IntegrationStatus) {
 
 function integrationTag(status: IntegrationStatus): 'success' | 'warning' | 'danger' {
   return ({ connected: 'success', pending: 'warning', blocked: 'danger' } as Record<IntegrationStatus, any>)[status]
+}
+
+function wecomCheckTag(level: WecomCheckItem['level']): 'success' | 'warning' | 'danger' {
+  return level
 }
 
 function opsCheckText(status: OpsCheckStatus) {
@@ -5561,6 +5664,96 @@ watch(() => route.fullPath, applyRouteQueue)
 
 .wecom-config-card {
   margin-bottom: 12px;
+}
+
+.wecom-check-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &.success {
+    border-left-color: #16a34a;
+  }
+
+  &.warning {
+    border-left-color: #f59e0b;
+  }
+
+  &.danger {
+    border-left-color: #dc2626;
+  }
+}
+
+.wecom-check-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.wecom-check-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wecom-check-item {
+  padding: 10px;
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  background: #ffffff;
+
+  > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  strong {
+    color: #1f2937;
+    font-size: 13px;
+  }
+
+  p {
+    margin: 8px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f8fff9;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff7f7;
+  }
 }
 
 .rule-toolbar,
@@ -7818,6 +8011,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .contact-evidence-summary,
   .contact-evidence-grid,
   .follow-funnel-grid,
+  .wecom-check-grid,
   .must-handle-list,
   .must-handle-item,
   .audit-metrics,
@@ -7860,6 +8054,10 @@ watch(() => route.fullPath, applyRouteQueue)
     span {
       text-align: left;
     }
+  }
+
+  .wecom-check-head {
+    flex-direction: column;
   }
 
   .follow-funnel-head {

@@ -1072,7 +1072,16 @@
             <p>{{ contactActionDesc(drawer.row) }}</p>
           </div>
           <div class="contact-next-action-steps">
-            <span v-for="step in contactActionSteps(drawer.row)" :key="step">{{ step }}</span>
+            <el-button
+              v-for="item in contactActionItems(drawer.row)"
+              :key="`${item.key}-${item.label}`"
+              :type="item.primary ? 'primary' : 'default'"
+              size="small"
+              plain
+              @click.stop="handleContactActionItem(drawer.row, item.key)"
+            >
+              {{ item.label }}
+            </el-button>
           </div>
         </div>
 
@@ -1942,6 +1951,14 @@ const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '沉默', value: 'silent' }
 ]
 
+type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead'
+
+interface ContactActionItem {
+  key: ContactActionKey
+  label: string
+  primary?: boolean
+}
+
 function todayText() {
   const d = new Date()
   return `${d.getFullYear()}-${padTime(d.getMonth() + 1)}-${padTime(d.getDate())}`
@@ -2048,16 +2065,62 @@ function contactActionDesc(row: PrivateContact) {
   return '暂不强推提单,按客户需求持续补内容、发案例、约下次触达。'
 }
 
-function contactActionSteps(row: PrivateContact) {
+function contactActionItems(row: PrivateContact): ContactActionItem[] {
   const record = contactLatestDealRecord(row)
-  if (hasDeliveryPackage(row.id)) return ['看交付包', '查逾期任务', '安排回访']
-  if (isUnverifiedContact(row)) return ['工商核验', '确认主体', '再报价']
-  if (record?.orderStatus === 'completed' || row.stage === 'ordered') return ['生成交付包', '分配责任人', '同步财税/工商']
-  if (record?.orderNo) return ['盯审批', '确认收款', '审批后建包']
-  if ((record && !record.orderNo) || row.stage === 'quoted') return ['生成提单', '盯审批', '收款确认']
-  if (isIntentContact(row)) return ['记录报价', '约下次触达', '必要时入库线索']
-  if (isTodayUnfollowed(row)) return ['生成跟进任务', '电话/企微触达', '更新下一动作']
-  return ['持续培育', '发案例内容', '保持复联']
+  if (hasDeliveryPackage(row.id)) {
+    return [
+      { label: '看交付包', key: 'delivery_tab', primary: true },
+      { label: '查逾期任务', key: 'delivery_tab' },
+      { label: '安排回访', key: 'follow_task' }
+    ]
+  }
+  if (isUnverifiedContact(row)) {
+    return [
+      { label: '工商核验', key: 'verify', primary: true },
+      { label: '确认主体', key: 'verify' },
+      { label: '再报价', key: 'follow_record' }
+    ]
+  }
+  if (record?.orderStatus === 'completed' || row.stage === 'ordered') {
+    return [
+      { label: '生成交付包', key: 'delivery', primary: true },
+      { label: '分配责任人', key: 'delivery' },
+      { label: '同步财税/工商', key: 'delivery_tab' }
+    ]
+  }
+  if (record?.orderNo) {
+    return [
+      { label: '盯审批', key: 'follow_queue', primary: true },
+      { label: '确认收款', key: 'follow_queue' },
+      { label: '审批后建包', key: 'delivery' }
+    ]
+  }
+  if ((record && !record.orderNo) || row.stage === 'quoted') {
+    return [
+      { label: '生成提单', key: 'order_draft', primary: true },
+      { label: '盯审批', key: 'follow_queue' },
+      { label: '收款确认', key: 'follow_queue' }
+    ]
+  }
+  if (isIntentContact(row)) {
+    return [
+      { label: '记录报价', key: 'follow_record', primary: true },
+      { label: '约下次触达', key: 'follow_task' },
+      { label: '必要时入库线索', key: 'online_lead' }
+    ]
+  }
+  if (isTodayUnfollowed(row)) {
+    return [
+      { label: '生成跟进任务', key: 'follow_task', primary: true },
+      { label: '电话/企微触达', key: 'follow_record' },
+      { label: '更新下一动作', key: 'follow_record' }
+    ]
+  }
+  return [
+    { label: '持续培育', key: 'follow_task', primary: true },
+    { label: '发案例内容', key: 'follow_record' },
+    { label: '保持复联', key: 'follow_task' }
+  ]
 }
 
 function contactActionLevel(row: PrivateContact) {
@@ -2075,6 +2138,72 @@ function contactActionTag(row: PrivateContact) {
   if (level === 'warning') return 'warning'
   if (level === 'primary') return 'primary'
   return 'info'
+}
+
+async function handleContactActionItem(row: PrivateContact, key: ContactActionKey) {
+  if (key === 'verify') {
+    await verifyContact(row)
+    return
+  }
+  if (key === 'follow_record') {
+    openFollowDialog(row)
+    return
+  }
+  if (key === 'follow_task') {
+    await createFollowTask(row)
+    return
+  }
+  if (key === 'online_lead') {
+    await convertLead(row)
+    return
+  }
+  if (key === 'delivery') {
+    await createDeliveryPackage(row)
+    return
+  }
+  if (key === 'delivery_tab') {
+    focusContactDelivery(row)
+    return
+  }
+  if (key === 'order_draft') {
+    const record = contactLatestDealRecord(row)
+    if (record && !record.orderNo) {
+      await createOrderDraft(record)
+      return
+    }
+    drawer.visible = false
+    activeTab.value = 'follow'
+    followFilter.value = 'quote_no_order'
+    scrollPrivateTabsIntoView()
+    ElMessage.info('请先在跟进记录里补一条已报价记录,再生成提单草稿。')
+    return
+  }
+  if (key === 'follow_queue') {
+    const record = contactLatestDealRecord(row)
+    drawer.visible = false
+    activeTab.value = 'follow'
+    followFilter.value = record?.orderStatus === 'completed' ? 'completed_no_delivery' : record?.orderNo ? 'order_pending' : 'quote_no_order'
+    scrollPrivateTabsIntoView()
+    ElMessage.info('已切到对应跟进队列,请继续盯审批、收款和提单状态。')
+  }
+}
+
+function focusContactDelivery(row: PrivateContact) {
+  const target = deliveryPackages.value.find(item => item.contactId === row.id)
+  if (!target) {
+    activeTab.value = 'delivery'
+    deliveryFilter.value = 'all'
+    drawer.visible = false
+    scrollPrivateTabsIntoView()
+    ElMessage.info('该客户还没有交付包,可以先点击“生成交付包”。')
+    return
+  }
+  drawer.visible = false
+  activeTab.value = 'delivery'
+  deliveryFilter.value = 'all'
+  focusedDeliveryPackageId.value = target.id
+  scrollPrivateTabsIntoView()
+  nextTick(() => openDeliveryPackage(target))
 }
 
 function formatMoney(value: number) {
@@ -4816,14 +4945,10 @@ watch(() => route.fullPath, applyRouteQueue)
   gap: 6px;
   max-width: 210px;
 
-  span {
-    padding: 4px 8px;
-    border: 1px solid rgb(148 163 184 / 30%);
+  :deep(.el-button) {
+    margin-left: 0;
     border-radius: 999px;
-    background: rgb(255 255 255 / 75%);
-    color: #334155;
     font-size: 12px;
-    line-height: 1.4;
     white-space: nowrap;
   }
 }

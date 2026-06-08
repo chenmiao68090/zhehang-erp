@@ -60,6 +60,35 @@
       </div>
     </section>
 
+    <section class="today-review-panel" :class="todayReviewLevel">
+      <div class="today-review-head">
+        <div>
+          <span>TODAY REVIEW</span>
+          <strong>{{ todayReviewTitle }}</strong>
+          <p>{{ todayReviewDesc }}</p>
+        </div>
+        <el-tag :type="todayReviewLevelTag(todayReviewLevel)" effect="plain">{{ todayReviewStatusText }}</el-tag>
+      </div>
+      <div class="today-review-grid">
+        <button
+          v-for="item in todayReviewCards"
+          :key="item.key"
+          type="button"
+          class="today-review-card"
+          :class="item.level"
+          @click.stop="goTodayReviewAction(item.action)"
+        >
+          <div class="today-review-card-head">
+            <strong>{{ item.title }}</strong>
+            <el-tag :type="todayReviewLevelTag(item.level)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+          </div>
+          <b>{{ item.value }}</b>
+          <p>{{ item.desc }}</p>
+          <span>{{ item.actionText }}</span>
+        </button>
+      </div>
+    </section>
+
     <section class="starter-strip">
       <div class="starter-head">
         <div>
@@ -1792,6 +1821,7 @@ type DeliveryFilter = 'all' | 'not_started' | 'in_progress' | 'overdue' | 'addre
 type TaskFilter = 'all' | 'pending' | 'overdue' | 'address_stock' | 'supervisor' | 'done'
 type StarterAction = 'import' | 'contacts' | 'follow' | 'quote' | 'delivery'
 type ContactQuickFilter = 'all' | 'today_unfollowed' | 'intent' | 'unverified'
+type TodayReviewAction = 'contacts' | 'follow' | 'delivery' | 'tasks'
 interface FollowFunnelIssue {
   key: string
   filter: FollowFilter
@@ -1802,6 +1832,16 @@ interface FollowFunnelIssue {
   statusText: string
   desc: string
   actionText: string
+}
+interface TodayReviewCard {
+  key: string
+  title: string
+  value: string | number
+  desc: string
+  level: 'success' | 'warning' | 'danger' | 'primary'
+  statusText: string
+  actionText: string
+  action: TodayReviewAction
 }
 type AddressBindingIssue = {
   delivery: PrivateDeliveryPackage
@@ -2287,6 +2327,79 @@ const deliveryStats = computed(() => ({
   done: deliveryPackages.value.filter(item => item.status === 'done').length,
   pending: deliveryPackages.value.filter(item => item.status !== 'done').length
 }))
+const todayReviewLevel = computed<TodayReviewCard['level']>(() => {
+  if (deliveryStats.value.overdue > 0 || followQueueCounts.value.completed_no_delivery > 0 || followQueueCounts.value.quote_no_order > 0) return 'danger'
+  if (taskStats.value.overdue > 0 || deliveryStats.value.addressUnbound > 0 || followQueueCounts.value.order_pending > 0) return 'warning'
+  if (contactQuickCounts.value.today_unfollowed > 0 || followQueueCounts.value.next_touch > 0) return 'primary'
+  return 'success'
+})
+const todayReviewStatusText = computed(() => ({
+  danger: '先补阻断',
+  warning: '盯住卡点',
+  primary: '排班推进',
+  success: '链路顺畅'
+} as Record<TodayReviewCard['level'], string>)[todayReviewLevel.value])
+const todayReviewTitle = computed(() => {
+  if (deliveryStats.value.overdue > 0) return '今天先稳交付逾期'
+  if (followQueueCounts.value.quote_no_order > 0) return '今天先补报价提单'
+  if (followQueueCounts.value.completed_no_delivery > 0) return '今天先补交付建包'
+  if (followQueueCounts.value.order_pending > 0) return '今天先盯提单审批'
+  if (contactQuickCounts.value.today_unfollowed > 0) return '今天先排触达复联'
+  return '今天私域链路整体顺畅'
+})
+const todayReviewDesc = computed(() => {
+  if (todayReviewLevel.value === 'danger') return '存在会直接影响成交、交付或客户体验的阻断项,先按下方卡片处理。'
+  if (todayReviewLevel.value === 'warning') return '当前主要是审批、地址资源或逾期任务卡点,需要主管和负责人盯节点。'
+  if (todayReviewLevel.value === 'primary') return '经营链路没有严重阻断,重点把未触达和待复联客户排进今天节奏。'
+  return '客户、跟进、提单和交付当前没有明显异常,可以继续补充导入和内容触达。'
+})
+const todayReviewCards = computed<TodayReviewCard[]>(() => {
+  const funnelBlock = followQueueCounts.value.quote_no_order + followQueueCounts.value.completed_no_delivery
+  const deliveryRisk = deliveryStats.value.overdue + deliveryStats.value.addressUnbound
+  const executionRisk = taskStats.value.overdue + dailyActions.value.filter(item => item.status === 'blocked').length
+  return [
+    {
+      key: 'contacts',
+      title: '客户沉淀',
+      value: summary.contactCount,
+      desc: `${summary.intentCount} 个高意向,${contactQuickCounts.value.today_unfollowed} 个今天还没触达。`,
+      level: contactQuickCounts.value.today_unfollowed > 0 ? 'primary' : 'success',
+      statusText: contactQuickCounts.value.today_unfollowed > 0 ? '待触达' : '已触达',
+      actionText: '看客户雷达',
+      action: 'contacts'
+    },
+    {
+      key: 'funnel',
+      title: '报价提单',
+      value: followQueueCounts.value.quote_no_order + followQueueCounts.value.order_pending + followQueueCounts.value.completed_no_delivery,
+      desc: `未提单 ${followQueueCounts.value.quote_no_order},审批中 ${followQueueCounts.value.order_pending},完成待交付 ${followQueueCounts.value.completed_no_delivery}。`,
+      level: funnelBlock > 0 ? 'danger' : followQueueCounts.value.order_pending > 0 ? 'warning' : 'success',
+      statusText: funnelBlock > 0 ? '阻断' : followQueueCounts.value.order_pending > 0 ? '审批中' : '顺畅',
+      actionText: '看跟进漏斗',
+      action: 'follow'
+    },
+    {
+      key: 'delivery',
+      title: '交付回款',
+      value: deliveryRisk,
+      desc: `${deliveryStats.value.overdue} 个交付包逾期,${deliveryStats.value.addressUnbound} 个地址资源待绑 ADR。`,
+      level: deliveryStats.value.overdue > 0 ? 'danger' : deliveryStats.value.addressUnbound > 0 ? 'warning' : 'success',
+      statusText: deliveryStats.value.overdue > 0 ? '有逾期' : deliveryStats.value.addressUnbound > 0 ? '待绑资源' : '正常',
+      actionText: '看交付包',
+      action: 'delivery'
+    },
+    {
+      key: 'tasks',
+      title: '今日执行',
+      value: taskStats.value.pending + taskStats.value.overdue,
+      desc: `${taskStats.value.pending} 个待办,${taskStats.value.overdue} 个逾期,${executionRisk} 个执行卡点。`,
+      level: executionRisk > 0 ? 'warning' : taskStats.value.pending > 0 ? 'primary' : 'success',
+      statusText: executionRisk > 0 ? '需督办' : taskStats.value.pending > 0 ? '待推进' : '已清爽',
+      actionText: '看任务队列',
+      action: 'tasks'
+    }
+  ]
+})
 const addressBindingIssues = computed<AddressBindingIssue[]>(() => deliveryPackages.value
   .filter(item => needsAddressResourceBinding(item))
   .map(delivery => {
@@ -3123,6 +3236,10 @@ function contentStatusTag(status: PrivateContent['status']) {
 }
 
 function followFunnelIssueTag(level: FollowFunnelIssue['level']) {
+  return level
+}
+
+function todayReviewLevelTag(level: TodayReviewCard['level']) {
   return level
 }
 
@@ -4509,6 +4626,33 @@ function focusFollowIssue(item: FollowFunnelIssue) {
   }
 }
 
+function goTodayReviewAction(action: TodayReviewAction) {
+  if (action === 'contacts') {
+    activeTab.value = 'contacts'
+    contactQuickFilter.value = contactQuickCounts.value.today_unfollowed > 0 ? 'today_unfollowed' : 'all'
+  } else if (action === 'follow') {
+    activeTab.value = 'follow'
+    followFilter.value = followQueueCounts.value.quote_no_order > 0
+      ? 'quote_no_order'
+      : followQueueCounts.value.completed_no_delivery > 0
+        ? 'completed_no_delivery'
+        : followQueueCounts.value.order_pending > 0
+          ? 'order_pending'
+          : 'all'
+  } else if (action === 'delivery') {
+    activeTab.value = 'delivery'
+    deliveryFilter.value = deliveryStats.value.overdue > 0
+      ? 'overdue'
+      : deliveryStats.value.addressUnbound > 0
+        ? 'address_unbound'
+        : 'all'
+  } else if (action === 'tasks') {
+    activeTab.value = 'tasks'
+    taskFilter.value = taskStats.value.overdue > 0 ? 'overdue' : taskStats.value.pending > 0 ? 'pending' : 'all'
+  }
+  scrollPrivateTabsIntoView()
+}
+
 function showAllDeliveryPackages() {
   deliveryFilter.value = 'all'
   focusedDeliveryPackageId.value = null
@@ -4818,6 +4962,141 @@ watch(() => route.fullPath, applyRouteQueue)
     color: #111827;
     font-size: 25px;
     line-height: 1.1;
+  }
+}
+
+.today-review-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+  box-shadow: 0 6px 18px rgba(31, 47, 70, 0.04);
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff7f7;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f7fdf9;
+  }
+}
+
+.today-review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    display: block;
+    margin-top: 4px;
+    color: #111827;
+    font-size: 18px;
+  }
+
+  p {
+    max-width: 820px;
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.today-review-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.today-review-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.primary {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+  }
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+    transform: translateY(-1px);
+  }
+
+  b {
+    color: #111827;
+    font-size: 24px;
+    line-height: 1.1;
+  }
+
+  p {
+    min-height: 42px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.today-review-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -7040,7 +7319,8 @@ watch(() => route.fullPath, applyRouteQueue)
 @media (max-width: 1280px) {
   .connect-strip,
   .metric-grid,
-  .daily-action-grid {
+  .daily-action-grid,
+  .today-review-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -7073,6 +7353,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .connect-strip,
   .metric-grid,
   .daily-action-grid,
+  .today-review-grid,
   .starter-steps,
   .group-grid,
   .config-grid,
@@ -7110,6 +7391,10 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 
   .must-handle-head {
+    flex-direction: column;
+  }
+
+  .today-review-head {
     flex-direction: column;
   }
 

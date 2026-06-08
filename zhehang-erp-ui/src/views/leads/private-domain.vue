@@ -1501,6 +1501,17 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">回款资料核对</div>
+        <div class="delivery-checklist">
+          <div v-for="item in deliveryChecklistItems(deliveryDrawer.row)" :key="item.key" class="delivery-check-item" :class="item.status">
+            <div class="delivery-check-head">
+              <strong>{{ item.label }}</strong>
+              <el-tag :type="deliveryChecklistTag(item.status)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+            </div>
+            <p>{{ item.desc }}</p>
+          </div>
+        </div>
+
         <div class="bd-section-title mt">回访续费</div>
         <div class="delivery-review-card">
           <div>
@@ -2225,6 +2236,7 @@ const stageOptions: Array<{ label: string; value: PrivateStage }> = [
 
 type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead' | 'mark_intent'
 type DeliveryTimelineType = 'address' | 'follow' | 'task'
+type DeliveryChecklistStatus = 'done' | 'todo' | 'risk'
 
 interface ContactActionItem {
   key: ContactActionKey
@@ -2255,6 +2267,14 @@ interface ContactMustHandleItem {
   actionLabel: string
   actionKey: ContactActionKey
   sort: number
+}
+
+interface DeliveryChecklistItem {
+  key: string
+  label: string
+  status: DeliveryChecklistStatus
+  statusText: string
+  desc: string
 }
 
 const contactTimelineTypeOrder: PrivateTimelineType[] = ['verify', 'follow', 'task', 'delivery', 'contact']
@@ -3001,6 +3021,66 @@ function deliveryRiskText(row: PrivateDeliveryPackage) {
   if (deliveryProgress(row) === 0) return '交付尚未启动,当天需确认资料和责任人'
   if (deliveryProgress(row) < 100) return '交付推进中,关注最晚节点和回款要求'
   return '任务已全部完成,可进入回访和续费沉淀'
+}
+
+function deliveryChecklistTag(status: DeliveryChecklistStatus): 'success' | 'warning' | 'danger' {
+  return ({ done: 'success', todo: 'warning', risk: 'danger' } as Record<DeliveryChecklistStatus, 'success' | 'warning' | 'danger'>)[status]
+}
+
+function deliveryChecklistItems(row: PrivateDeliveryPackage): DeliveryChecklistItem[] {
+  const addressLock = activeAddressLock(row)
+  const isAddress = isAddressDelivery(row)
+  const doneCount = deliveryDoneCount(row)
+  const pendingCount = deliveryPendingCount(row)
+  const overdueCount = deliveryOverdueCount(row)
+  const hasOrder = Boolean(row.orderNo)
+  const hasPaymentRule = Boolean(row.paymentTimeReq)
+  const hasOrderItems = Boolean(row.orderItemNames?.length)
+
+  return [
+    {
+      key: 'payment',
+      label: '回款/账期',
+      status: row.orderStatus === 'completed' && hasPaymentRule ? 'done' : hasPaymentRule ? 'todo' : 'risk',
+      statusText: row.orderStatus === 'completed' && hasPaymentRule ? '已核对' : hasPaymentRule ? '待确认' : '缺规则',
+      desc: hasPaymentRule ? `${paymentMethodText(row.paymentMethod)} · ${row.paymentTimeReq}` : '缺少收款要求,财务无法判断首款、尾款、月结或账期。'
+    },
+    {
+      key: 'contract',
+      label: '合同/服务项',
+      status: hasOrder && hasOrderItems ? 'done' : hasOrder ? 'todo' : 'risk',
+      statusText: hasOrder && hasOrderItems ? '已关联' : hasOrder ? '待补项' : '缺提单',
+      desc: hasOrder ? `${row.orderNo} · ${(row.orderItemNames?.join('、') || row.serviceLine)}` : '还没有关联提单,交付范围、报价和审批凭证不完整。'
+    },
+    {
+      key: 'materials',
+      label: '客户资料',
+      status: doneCount > 0 ? 'done' : pendingCount > 0 ? 'todo' : 'risk',
+      statusText: doneCount > 0 ? '已启动' : pendingCount > 0 ? '待收集' : '无任务',
+      desc: doneCount > 0 ? `已有 ${doneCount} 个任务完成,继续盯剩余资料和办理节点。` : '先确认法人、股东、地址授权、开票主体等资料是否齐全。'
+    },
+    {
+      key: 'address',
+      label: '地址/资源',
+      status: !isAddress || hasBoundAddressResource(row) ? 'done' : addressLock ? 'todo' : 'risk',
+      statusText: !isAddress ? '无需地址' : hasBoundAddressResource(row) ? '已绑定' : addressLock ? '待绑 ADR' : '未锁定',
+      desc: !isAddress ? '该服务包暂不涉及地址库存。' : addressLock ? `${formatAddressResourceNo(addressLock.resourceId)} · ${addressLock.remark}` : '地址类业务需先锁定资源池并绑定 ADR 编号。'
+    },
+    {
+      key: 'tasks',
+      label: '交付任务',
+      status: overdueCount > 0 ? 'risk' : pendingCount > 0 ? 'todo' : 'done',
+      statusText: overdueCount > 0 ? `${overdueCount} 个逾期` : pendingCount > 0 ? `${pendingCount} 个待办` : '已闭环',
+      desc: `当前 ${doneCount}/${row.tasks.length || row.taskIds.length} 个任务完成,最晚节点 ${row.dueDate}。`
+    },
+    {
+      key: 'archive',
+      label: '归档/续费',
+      status: deliveryProgress(row) >= 100 ? 'done' : deliveryProgress(row) > 0 ? 'todo' : 'risk',
+      statusText: deliveryProgress(row) >= 100 ? '可回访' : deliveryProgress(row) > 0 ? '待完成' : '未启动',
+      desc: deliveryProgress(row) >= 100 ? '可做满意度回访、资料归档、续费提醒和转介绍沉淀。' : '交付未完成前先沉淀资料清单,完成后自动进入回访续费。'
+    }
+  ]
 }
 
 function deliveryReviewTitle(row: PrivateDeliveryPackage) {
@@ -5172,6 +5252,60 @@ watch(() => route.fullPath, applyRouteQueue)
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.delivery-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.delivery-check-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &.done {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.todo {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.risk {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.delivery-check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .delivery-review-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -6484,6 +6618,7 @@ watch(() => route.fullPath, applyRouteQueue)
   .delivery-summary,
   .delivery-progress-stats,
   .delivery-check-grid,
+  .delivery-checklist,
   .delivery-review-card,
   .address-inventory-list,
   .verify-detail-grid,

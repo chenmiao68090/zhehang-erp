@@ -1062,6 +1062,20 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">下一步行动建议</div>
+        <div class="contact-next-action-card" :class="contactActionLevel(drawer.row)">
+          <div class="contact-next-action-copy">
+            <el-tag :type="contactActionTag(drawer.row)" size="small" effect="plain">
+              {{ contactActionStage(drawer.row) }}
+            </el-tag>
+            <strong>{{ contactActionTitle(drawer.row) }}</strong>
+            <p>{{ contactActionDesc(drawer.row) }}</p>
+          </div>
+          <div class="contact-next-action-steps">
+            <span v-for="step in contactActionSteps(drawer.row)" :key="step">{{ step }}</span>
+          </div>
+        </div>
+
         <div class="bd-section-title">私域标签</div>
         <div class="tag-list drawer-tags">
           <el-tag v-for="tag in drawer.row.tags" :key="tag" effect="plain">{{ tag }}</el-tag>
@@ -1986,6 +2000,81 @@ function contactConversionHint(row: PrivateContact) {
   if (row.convertedLeadId) return '已进入网销线索池,继续盯提单'
   if (row.stage === 'ordered') return '成交客户需当天建交付包'
   return '还在私域培育或报价阶段'
+}
+
+function contactLatestDealRecord(row: PrivateContact) {
+  return contactFollowRecords(row).find(item => canCreateOrderDraft(item))
+}
+
+function contactActionStage(row: PrivateContact) {
+  if (hasDeliveryPackage(row.id)) return '已闭环'
+  if (isUnverifiedContact(row)) return '先核验'
+  const record = contactLatestDealRecord(row)
+  if (record?.orderStatus === 'completed') return '待交付'
+  if (record?.orderNo) return '盯审批'
+  if (record && !record.orderNo) return '待提单'
+  if (row.stage === 'ordered') return '待建包'
+  if (row.stage === 'quoted') return '待提单'
+  if (isIntentContact(row)) return '待报价'
+  if (isTodayUnfollowed(row)) return '待复联'
+  return '持续培育'
+}
+
+function contactActionTitle(row: PrivateContact) {
+  if (hasDeliveryPackage(row.id)) return '交付包已建立,下一步盯任务和回访'
+  if (isUnverifiedContact(row)) return '先完成工商核验,再推进报价或提单'
+  const record = contactLatestDealRecord(row)
+  if (record?.orderStatus === 'completed') return '审批已完成,今天补建交付包'
+  if (record?.orderNo) return '提单已生成,继续盯审批和收款'
+  if (record && !record.orderNo) return '已有报价/成交记录,优先生成提单草稿'
+  if (row.stage === 'ordered') return '客户已成交,先补交付包防止掉单'
+  if (row.stage === 'quoted') return '已报价未提单,需要锁定下一步付款或审批'
+  if (isIntentContact(row)) return '高意向客户要当天报价并记录结果'
+  if (isTodayUnfollowed(row)) return '今天还没触达,先生成跟进任务'
+  return '继续培育,保持触达节奏'
+}
+
+function contactActionDesc(row: PrivateContact) {
+  const record = contactLatestDealRecord(row)
+  if (hasDeliveryPackage(row.id)) return '该客户已进入交付链路,重点检查任务是否逾期、地址资源是否锁定、是否需要主管督办。'
+  if (isUnverifiedContact(row)) return '公司主体未核准时,报价、归属和撞单判断都不稳定,建议先点底部“工商核验”。'
+  if (record?.orderStatus === 'completed') return `提单 ${record.orderNo || ''} 已审批完成,应当天点击底部“生成交付包”交给工商/财税团队。`
+  if (record?.orderNo) return `提单 ${record.orderNo} 已生成,当前状态为${orderStatusText(record.orderStatus)},请销售盯审批、财务确认收款。`
+  if (record && !record.orderNo) return `最近记录为${record.result},报价¥${formatMoney(record.quotedAmount)},请到跟进记录里生成提单草稿。`
+  if (row.stage === 'ordered') return '客户阶段已成交但还没有交付包,先补交付包,再由交付团队拆任务。'
+  if (row.stage === 'quoted') return '已报价客户如果没有形成提单,很容易停在口头沟通,建议补一条跟进并生成提单。'
+  if (isIntentContact(row)) return '评分或阶段已进入高意向,建议记录一次报价跟进,同步预计金额和下次触达时间。'
+  if (isTodayUnfollowed(row)) return '今天没有互动记录,建议先生成跟进任务或记录一次企微/电话触达。'
+  return '暂不强推提单,按客户需求持续补内容、发案例、约下次触达。'
+}
+
+function contactActionSteps(row: PrivateContact) {
+  const record = contactLatestDealRecord(row)
+  if (hasDeliveryPackage(row.id)) return ['看交付包', '查逾期任务', '安排回访']
+  if (isUnverifiedContact(row)) return ['工商核验', '确认主体', '再报价']
+  if (record?.orderStatus === 'completed' || row.stage === 'ordered') return ['生成交付包', '分配责任人', '同步财税/工商']
+  if (record?.orderNo) return ['盯审批', '确认收款', '审批后建包']
+  if ((record && !record.orderNo) || row.stage === 'quoted') return ['生成提单', '盯审批', '收款确认']
+  if (isIntentContact(row)) return ['记录报价', '约下次触达', '必要时入库线索']
+  if (isTodayUnfollowed(row)) return ['生成跟进任务', '电话/企微触达', '更新下一动作']
+  return ['持续培育', '发案例内容', '保持复联']
+}
+
+function contactActionLevel(row: PrivateContact) {
+  if (isUnverifiedContact(row) || isTodayUnfollowed(row)) return 'warning'
+  if (hasDeliveryPackage(row.id)) return 'success'
+  if (row.stage === 'ordered' || contactLatestDealRecord(row)?.orderStatus === 'completed') return 'danger'
+  if (isIntentContact(row)) return 'primary'
+  return 'info'
+}
+
+function contactActionTag(row: PrivateContact) {
+  const level = contactActionLevel(row)
+  if (level === 'danger') return 'danger'
+  if (level === 'success') return 'success'
+  if (level === 'warning') return 'warning'
+  if (level === 'primary') return 'primary'
+  return 'info'
 }
 
 function formatMoney(value: number) {
@@ -4669,6 +4758,76 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.contact-next-action-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  &.success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.danger {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &.info {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+  }
+}
+
+.contact-next-action-copy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+
+  strong {
+    color: #111827;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+}
+
+.contact-next-action-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 210px;
+
+  span {
+    padding: 4px 8px;
+    border: 1px solid rgb(148 163 184 / 30%);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 75%);
+    color: #334155;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+}
+
 .mt {
   margin-top: 14px;
 }
@@ -4867,6 +5026,15 @@ watch(() => route.fullPath, applyRouteQueue)
   .task-filter-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .contact-next-action-card {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-next-action-steps {
+    justify-content: flex-start;
+    max-width: none;
   }
 
   .import-hint {

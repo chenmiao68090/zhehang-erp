@@ -522,36 +522,22 @@
             <el-table-column label="需求" min-width="260" prop="demand" show-overflow-tooltip />
             <el-table-column label="最近互动" width="150" prop="lastTouchAt" />
             <el-table-column label="下一动作" min-width="230" prop="nextAction" show-overflow-tooltip />
-            <el-table-column label="操作" width="480" fixed="right">
+            <el-table-column label="操作" width="340" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click.stop="openContact(row)">详情</el-button>
-                <el-button link type="primary" @click.stop="openFollowDialog(row)">记录跟进</el-button>
-                <el-button
-                  link
-                  type="primary"
-                  :loading="isVerifying(row.id)"
-                  @click.stop="verifyContact(row)"
-                >
-                  工商核验
-                </el-button>
-                <el-button
-                  link
-                  type="success"
-                  :loading="isConverting(row.id)"
-                  :disabled="!!row.convertedLeadId || isConverting(row.id)"
-                  @click.stop="convertLead(row)"
-                >
-                  {{ row.convertedLeadId ? '已入库' : '入库线索' }}
-                </el-button>
-                <el-button
-                  link
-                  type="success"
-                  :loading="isCreatingDelivery(row.id)"
-                  @click.stop="createDeliveryPackage(row)"
-                >
-                  交付包
-                </el-button>
-                <el-button link type="warning" @click.stop="markIntent(row)">标记意向</el-button>
+                <div class="contact-table-actions">
+                  <el-button link type="primary" @click.stop="openContact(row)">详情</el-button>
+                  <el-button
+                    v-for="item in contactRowActions(row)"
+                    :key="`${row.id}-${item.key}-${item.label}`"
+                    link
+                    :type="contactActionButtonType(row, item)"
+                    :loading="contactActionButtonLoading(row, item.key)"
+                    :disabled="contactActionButtonDisabled(row, item.key)"
+                    @click.stop="handleContactActionItem(row, item.key)"
+                  >
+                    {{ item.label }}
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -1960,7 +1946,7 @@ const stageOptions: Array<{ label: string; value: PrivateStage }> = [
   { label: '沉默', value: 'silent' }
 ]
 
-type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead'
+type ContactActionKey = 'verify' | 'follow_record' | 'follow_task' | 'order_draft' | 'follow_queue' | 'delivery' | 'delivery_tab' | 'online_lead' | 'mark_intent'
 
 interface ContactActionItem {
   key: ContactActionKey
@@ -2141,6 +2127,18 @@ function contactActionItems(row: PrivateContact): ContactActionItem[] {
   ]
 }
 
+function contactRowActions(row: PrivateContact): ContactActionItem[] {
+  const deduped: ContactActionItem[] = []
+  contactActionItems(row).forEach(item => {
+    if (deduped.some(action => action.key === item.key)) return
+    deduped.push(item)
+  })
+  if (!isIntentContact(row) && row.stage !== 'ordered') {
+    deduped.push({ label: '标记意向', key: 'mark_intent' })
+  }
+  return deduped.slice(0, 3)
+}
+
 function contactActionLevel(row: PrivateContact) {
   if (isUnverifiedContact(row) || isTodayUnfollowed(row)) return 'warning'
   if (hasDeliveryPackage(row.id)) return 'success'
@@ -2156,6 +2154,28 @@ function contactActionTag(row: PrivateContact) {
   if (level === 'warning') return 'warning'
   if (level === 'primary') return 'primary'
   return 'info'
+}
+
+function contactActionButtonType(_row: PrivateContact, item: ContactActionItem) {
+  if (item.primary) return 'primary'
+  if (item.key === 'delivery' || item.key === 'delivery_tab') return 'success'
+  if (item.key === 'verify' || item.key === 'order_draft' || item.key === 'follow_queue') return 'warning'
+  if (item.key === 'mark_intent') return 'warning'
+  return 'primary'
+}
+
+function contactActionButtonLoading(row: PrivateContact, key: ContactActionKey) {
+  if (key === 'verify') return isVerifying(row.id)
+  if (key === 'delivery') return isCreatingDelivery(row.id)
+  if (key === 'online_lead') return isConverting(row.id)
+  return false
+}
+
+function contactActionButtonDisabled(row: PrivateContact, key: ContactActionKey) {
+  if (key === 'online_lead') return !!row.convertedLeadId || isConverting(row.id)
+  if (key === 'verify') return isVerifying(row.id)
+  if (key === 'delivery') return isCreatingDelivery(row.id)
+  return false
 }
 
 async function handleContactActionItem(row: PrivateContact, key: ContactActionKey) {
@@ -2177,6 +2197,10 @@ async function handleContactActionItem(row: PrivateContact, key: ContactActionKe
   }
   if (key === 'delivery') {
     await createDeliveryPackage(row)
+    return
+  }
+  if (key === 'mark_intent') {
+    await markIntent(row)
     return
   }
   if (key === 'delivery_tab') {
@@ -4757,6 +4781,17 @@ watch(() => route.fullPath, applyRouteQueue)
   color: #245bdb;
   font-weight: 700;
   cursor: pointer;
+}
+
+.contact-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+
+  :deep(.el-button) {
+    margin-left: 0;
+  }
 }
 
 .sub-line {

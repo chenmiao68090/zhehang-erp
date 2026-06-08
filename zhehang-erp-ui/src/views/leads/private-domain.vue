@@ -1211,6 +1211,38 @@
           </div>
         </div>
 
+        <div class="bd-section-title mt">资料证据链</div>
+        <div class="contact-evidence-panel">
+          <div class="contact-evidence-summary">
+            <div>
+              <strong>{{ contactEvidenceSummary(drawer.row).title }}</strong>
+              <p>{{ contactEvidenceSummary(drawer.row).hint }}</p>
+            </div>
+            <el-progress
+              :percentage="contactEvidenceSummary(drawer.row).percent"
+              :status="contactEvidenceSummary(drawer.row).status"
+              :stroke-width="8"
+            />
+          </div>
+          <div class="contact-evidence-grid">
+            <button
+              v-for="item in contactEvidenceItems(drawer.row)"
+              :key="item.key"
+              type="button"
+              class="contact-evidence-card"
+              :class="item.status"
+              @click.stop="handleContactActionItem(drawer.row, item.actionKey)"
+            >
+              <div class="contact-evidence-head">
+                <strong>{{ item.label }}</strong>
+                <el-tag :type="contactEvidenceTag(item.status)" size="small" effect="plain">{{ item.statusText }}</el-tag>
+              </div>
+              <p>{{ item.desc }}</p>
+              <span>{{ item.actionLabel }}</span>
+            </button>
+          </div>
+        </div>
+
         <div class="bd-section-title">私域标签</div>
         <div class="tag-list drawer-tags">
           <el-tag v-for="tag in drawer.row.tags" :key="tag" effect="plain">{{ tag }}</el-tag>
@@ -2256,6 +2288,16 @@ interface ContactDutyItem {
   actionPrimary?: boolean
 }
 
+interface ContactEvidenceItem {
+  key: string
+  label: string
+  status: DeliveryChecklistStatus
+  statusText: string
+  desc: string
+  actionLabel: string
+  actionKey: ContactActionKey
+}
+
 interface ContactMustHandleItem {
   key: string
   contact: PrivateContact
@@ -2710,6 +2752,107 @@ function contactDutyItems(row: PrivateContact): ContactDutyItem[] {
   }
 
   return [opsDuty, salesDuty, deliveryDuty, financeDuty]
+}
+
+function contactEvidenceTag(status: DeliveryChecklistStatus): 'success' | 'warning' | 'danger' {
+  return ({ done: 'success', todo: 'warning', risk: 'danger' } as Record<DeliveryChecklistStatus, 'success' | 'warning' | 'danger'>)[status]
+}
+
+function contactEvidenceSummary(row: PrivateContact) {
+  const items = contactEvidenceItems(row)
+  const done = items.filter(item => item.status === 'done').length
+  const risk = items.filter(item => item.status === 'risk').length
+  const todo = items.filter(item => item.status === 'todo').length
+  return {
+    title: `资料完整度 ${done}/${items.length}`,
+    hint: risk > 0 ? `还有 ${risk} 个阻断项,先补齐再推进提单/交付。` : todo > 0 ? `还有 ${todo} 个待确认项,适合今天安排责任人补证据。` : '主体、报价、提单、交付和回款证据已基本闭环。',
+    percent: items.length ? Math.round(done / items.length * 100) : 0,
+    status: risk > 0 ? 'exception' : todo > 0 ? 'warning' : 'success'
+  } as { title: string; hint: string; percent: number; status: 'success' | 'exception' | 'warning' }
+}
+
+function contactEvidenceItems(row: PrivateContact): ContactEvidenceItem[] {
+  const delivery = contactDeliveryPackage(row)
+  const record = contactLatestDealRecord(row)
+  const latestFollow = contactFollowRecords(row)[0]
+  const hasVerifiedCompany = Boolean(row.verification?.matched || row.creditCode || row.entityId)
+  const hasContactInfo = Boolean(row.name && row.phone)
+  const hasDemandInfo = Boolean(row.demand && row.serviceLine && row.estimatedAmount > 0)
+  const hasQuotedEvidence = Boolean(record?.quotedAmount || latestFollow?.quotedAmount || row.stage === 'quoted' || row.stage === 'ordered')
+  const hasOrder = Boolean(record?.orderNo || delivery?.orderNo)
+  const orderCompleted = record?.orderStatus === 'completed' || delivery?.orderStatus === 'completed'
+  const deliveryOverdue = delivery ? deliveryOverdueCount(delivery) : 0
+  const deliveryDone = delivery ? deliveryDoneCount(delivery) : 0
+  const deliveryTotal = delivery ? (delivery.tasks.length || delivery.taskIds.length) : 0
+
+  return [
+    {
+      key: 'company',
+      label: '公司主体',
+      status: hasVerifiedCompany ? 'done' : 'risk',
+      statusText: hasVerifiedCompany ? '已核验' : '待核验',
+      desc: hasVerifiedCompany
+        ? `${row.verification?.entityName || row.companyName} · ${row.creditCode || row.verification?.creditCode || '主体已挂接'}`
+        : '缺少工商核验结果,撞单、税务资质和报价归属都不稳定。',
+      actionLabel: hasVerifiedCompany ? '复查工商' : '去工商核验',
+      actionKey: 'verify'
+    },
+    {
+      key: 'contact',
+      label: '联系人资料',
+      status: hasContactInfo ? 'done' : 'risk',
+      statusText: hasContactInfo ? '已具备' : '缺资料',
+      desc: hasContactInfo ? `${row.name} · ${row.phone} · ${row.source}` : '联系人、手机号或来源触点缺失,后续跟进无法追责。',
+      actionLabel: '补跟进资料',
+      actionKey: 'follow_record'
+    },
+    {
+      key: 'demand',
+      label: '需求与预算',
+      status: hasDemandInfo ? 'done' : isIntentContact(row) ? 'todo' : 'risk',
+      statusText: hasDemandInfo ? '已明确' : isIntentContact(row) ? '待补齐' : '不清晰',
+      desc: hasDemandInfo ? `${row.serviceLine} · 预计¥${formatMoney(row.estimatedAmount)} · ${row.demand}` : '缺需求、服务线或预算金额,销售无法形成可审批报价。',
+      actionLabel: '记录需求',
+      actionKey: 'follow_record'
+    },
+    {
+      key: 'quote',
+      label: '跟进报价',
+      status: hasQuotedEvidence ? 'done' : isIntentContact(row) ? 'todo' : 'risk',
+      statusText: hasQuotedEvidence ? '有报价' : isIntentContact(row) ? '待报价' : '无证据',
+      desc: hasQuotedEvidence
+        ? `${record?.createdAt || latestFollow?.createdAt || row.lastTouchAt} · 报价¥${formatMoney(record?.quotedAmount || latestFollow?.quotedAmount || row.estimatedAmount)}`
+        : '没有报价/成交跟进记录,后面提单、审批和回款都缺起点。',
+      actionLabel: hasQuotedEvidence ? '补充跟进' : '记录报价',
+      actionKey: 'follow_record'
+    },
+    {
+      key: 'order',
+      label: '提单审批',
+      status: orderCompleted ? 'done' : hasOrder ? 'todo' : row.stage === 'ordered' || row.stage === 'quoted' ? 'risk' : 'todo',
+      statusText: orderCompleted ? '已完成' : hasOrder ? orderStatusText(record?.orderStatus || delivery?.orderStatus) : '未提单',
+      desc: hasOrder
+        ? `${record?.orderNo || delivery?.orderNo} · ${orderStatusText(record?.orderStatus || delivery?.orderStatus)}`
+        : row.stage === 'ordered' || row.stage === 'quoted'
+          ? '已报价/成交但没有提单,审批、合同、回款证据会断档。'
+          : '暂未进入提单阶段,报价后要当天生成提单草稿。',
+      actionLabel: hasOrder ? '看审批队列' : '生成提单',
+      actionKey: hasOrder ? 'follow_queue' : 'order_draft'
+    },
+    {
+      key: 'delivery',
+      label: '交付回款',
+      status: delivery ? deliveryOverdue > 0 ? 'risk' : deliveryProgress(delivery) >= 100 ? 'done' : 'todo' : row.stage === 'ordered' || orderCompleted ? 'risk' : 'todo',
+      statusText: delivery ? deliveryOverdue > 0 ? `${deliveryOverdue} 个逾期` : deliveryStatusText(delivery.status) : '未建包',
+      desc: delivery
+        ? `${delivery.packageName} · ${deliveryDone}/${deliveryTotal} 个任务完成 · ${delivery.paymentTimeReq || '待补回款要求'}`
+        : row.stage === 'ordered' || orderCompleted
+          ? '成交或审批完成后还没有交付包,工商、财税、地址和回款无法闭环。'
+          : '客户成交后自动拆成交付包,同步合同、资料、回款和回访。',
+      actionLabel: delivery ? '看交付包' : '生成交付包',
+      actionKey: delivery ? 'delivery_tab' : 'delivery'
+    }
+  ]
 }
 
 function contactRowActions(row: PrivateContact): ContactActionItem[] {
@@ -6402,6 +6545,105 @@ watch(() => route.fullPath, applyRouteQueue)
   }
 }
 
+.contact-evidence-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.contact-evidence-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.contact-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.contact-evidence-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &.done {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  &.todo {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &.risk {
+    border-color: #fecaca;
+    background: #fff1f2;
+  }
+
+  &:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+    transform: translateY(-1px);
+  }
+
+  p {
+    min-height: 38px;
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  span {
+    color: #245bdb;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.contact-evidence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .mt {
   margin-top: 14px;
 }
@@ -6608,6 +6850,8 @@ watch(() => route.fullPath, applyRouteQueue)
   .preview-summary,
   .contact-ops-summary,
   .contact-duty-grid,
+  .contact-evidence-summary,
+  .contact-evidence-grid,
   .must-handle-list,
   .must-handle-item,
   .audit-metrics,

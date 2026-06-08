@@ -12,6 +12,9 @@ import com.zhehang.erp.modules.receipt.mapper.BizInvoiceMapper;
 import com.zhehang.erp.modules.receipt.mapper.BizReceiptMapper;
 import com.zhehang.erp.modules.receipt.mapper.BizReceiptPlanMapper;
 import com.zhehang.erp.modules.receipt.service.IBizReceiptService;
+import com.zhehang.erp.modules.contract.domain.BizContract;
+import com.zhehang.erp.modules.contract.mapper.BizContractMapper;
+import com.zhehang.erp.modules.contract.service.IBizContractService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,8 @@ public class BizReceiptServiceImpl extends ServiceImpl<BizReceiptMapper, BizRece
     private final BizReceiptMapper receiptMapper;
     private final BizReceiptPlanMapper planMapper;
     private final BizInvoiceMapper invoiceMapper;
+    private final IBizContractService contractService;
+    private final BizContractMapper contractMapper;
 
     @Override
     public IPage<BizReceipt> selectPage(int pageNum, int pageSize, Long customerId, Long orderId, Integer status) {
@@ -64,6 +69,16 @@ public class BizReceiptServiceImpl extends ServiceImpl<BizReceiptMapper, BizRece
         }
         if (receipt.getPlanId() != null) {
             payPlan(receipt.getPlanId(), receipt.getAmount());
+        }
+        // 收款确认→自动生成合同草稿(该订单尚无合同时;幂等,避免重复出合同)
+        if (receipt.getOrderId() != null) {
+            Long existing = contractMapper.selectCount(new LambdaQueryWrapper<BizContract>()
+                    .eq(BizContract::getOrderId, receipt.getOrderId()));
+            if (existing == null || existing == 0) {
+                Long contractId = contractService.generateFromOrder(receipt.getOrderId(), null, null);
+                log.info("收款单[{}]确认,订单[{}]自动生成合同草稿[{}]",
+                        receipt.getReceiptNo(), receipt.getOrderId(), contractId);
+            }
         }
     }
 

@@ -694,6 +694,35 @@
             </el-radio-group>
             <span>{{ taskFilterHint }} 当前显示 {{ filteredTasks.length }} 条任务。</span>
           </div>
+          <div class="task-execution-summary">
+            <div class="task-metrics">
+              <div><span>客户跟进</span><b>{{ taskSourceSummary.follow }}</b></div>
+              <div><span>交付任务</span><b>{{ taskSourceSummary.delivery }}</b></div>
+              <div><span>督办/补货</span><b>{{ taskSourceSummary.rescue }}</b></div>
+              <div><span>当前逾期</span><b>{{ taskSourceSummary.overdue }}</b></div>
+            </div>
+            <div class="task-group-panel">
+              <div class="task-group-head">
+                <strong>按客户/交付包归组</strong>
+                <span>优先处理逾期多、待办多的任务组。</span>
+              </div>
+              <div v-if="taskGroupSummaries.length" class="task-group-list">
+                <button
+                  v-for="group in taskGroupSummaries"
+                  :key="group.key"
+                  type="button"
+                  class="task-group-item"
+                  @click.stop="focusTaskGroup(group)"
+                >
+                  <span>{{ group.label }}</span>
+                  <el-tag :type="group.statusLevel" size="small" effect="plain">{{ taskGroupStatusText(group) }}</el-tag>
+                  <strong>{{ group.tasks.length }} 个任务 · {{ group.done }} 已完成</strong>
+                  <em>{{ group.desc }}</em>
+                </button>
+              </div>
+              <div v-else class="task-group-empty">当前筛选下暂无可归组任务。</div>
+            </div>
+          </div>
           <el-table :data="filteredTasks" border stripe empty-text="当前筛选下暂无任务">
             <el-table-column label="任务" min-width="300">
               <template #default="{ row }">
@@ -1634,6 +1663,18 @@ type AddressBindingIssue = {
   topText: string
   reason: string
 }
+type TaskGroupSummary = {
+  key: string
+  label: string
+  desc: string
+  tasks: PrivateTask[]
+  pending: number
+  overdue: number
+  done: number
+  statusLevel: 'success' | 'warning' | 'danger' | 'primary'
+  delivery?: PrivateDeliveryPackage
+  contact?: PrivateContact
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -1956,6 +1997,55 @@ const filteredTasks = computed(() => tasks.value.filter(item => {
   if (taskFilter.value === 'done') return item.status === 'done'
   return true
 }))
+const taskSourceSummary = computed(() => {
+  const list = filteredTasks.value
+  const delivery = list.filter(item => taskDeliveryPackage(item)).length
+  const rescue = list.filter(item => isSupervisorTask(item) || isAddressStockTask(item)).length
+  const overdue = list.filter(item => item.status === 'overdue').length
+  return {
+    follow: Math.max(list.length - delivery - rescue, 0),
+    delivery,
+    rescue,
+    overdue
+  }
+})
+const taskGroupSummaries = computed<TaskGroupSummary[]>(() => {
+  const groups = new Map<string, TaskGroupSummary>()
+  filteredTasks.value.forEach(task => {
+    const delivery = taskDeliveryPackage(task)
+    const contact = taskContact(task)
+    const key = delivery ? `delivery-${delivery.id}` : contact ? `contact-${contact.id}` : `contact-${task.companyName}-${task.contactName}`
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: delivery ? delivery.packageName : task.companyName,
+        desc: delivery ? `${delivery.companyName} · ${delivery.contactName}` : `${task.contactName} · ${task.ownerName}`,
+        tasks: [],
+        pending: 0,
+        overdue: 0,
+        done: 0,
+        statusLevel: 'primary',
+        delivery,
+        contact
+      })
+    }
+    groups.get(key)?.tasks.push(task)
+  })
+  return Array.from(groups.values())
+    .map(group => {
+      const pending = group.tasks.filter(item => item.status === 'pending').length
+      const overdue = group.tasks.filter(item => item.status === 'overdue').length
+      const done = group.tasks.filter(item => item.status === 'done').length
+      const statusLevel: TaskGroupSummary['statusLevel'] = overdue > 0 ? 'danger' : pending > 0 ? 'warning' : 'success'
+      return { ...group, pending, overdue, done, statusLevel }
+    })
+    .sort((left, right) => {
+      if (left.overdue !== right.overdue) return right.overdue - left.overdue
+      if (left.pending !== right.pending) return right.pending - left.pending
+      return right.tasks.length - left.tasks.length
+    })
+    .slice(0, 5)
+})
 const deliveryStats = computed(() => ({
   all: deliveryPackages.value.length,
   totalTasks: deliveryPackages.value.reduce((sum, item) => sum + (item.tasks.length || item.taskIds.length), 0),
@@ -2463,6 +2553,24 @@ function openDeliveryFromTask(row: PrivateTask) {
     return
   }
   openDeliveryPackage(pkg)
+}
+
+function taskGroupStatusText(group: TaskGroupSummary) {
+  if (group.overdue > 0) return `${group.overdue} 个逾期`
+  if (group.pending > 0) return `${group.pending} 个待处理`
+  return '已闭环'
+}
+
+function focusTaskGroup(group: TaskGroupSummary) {
+  if (group.delivery) {
+    openDeliveryPackage(group.delivery)
+    return
+  }
+  if (group.contact) {
+    openContact(group.contact)
+    return
+  }
+  ElMessage.warning('未找到关联客户或交付包,请刷新后重试')
 }
 
 function isSupervisorTask(task: PrivateTask) {
@@ -5173,6 +5281,111 @@ watch(() => route.fullPath, applyRouteQueue)
   margin-top: 6px;
 }
 
+.task-execution-summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.task-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  div {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  b {
+    color: #111827;
+    font-size: 18px;
+  }
+}
+
+.task-group-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.task-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+}
+
+.task-group-list {
+  display: grid;
+  gap: 8px;
+}
+
+.task-group-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto minmax(120px, 0.7fr);
+  gap: 6px 10px;
+  align-items: center;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fbff;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    overflow: hidden;
+    color: #111827;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #245bdb;
+    font-size: 12px;
+  }
+
+  em {
+    grid-column: 1 / -1;
+    color: #64748b;
+    font-size: 12px;
+    font-style: normal;
+  }
+}
+
+.task-group-empty {
+  padding: 14px;
+  border: 1px dashed #dbe5f2;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
 .contact-table-actions {
   display: flex;
   flex-wrap: wrap;
@@ -5613,6 +5826,9 @@ watch(() => route.fullPath, applyRouteQueue)
   .contact-ops-summary,
   .audit-metrics,
   .audit-issue,
+  .task-execution-summary,
+  .task-metrics,
+  .task-group-item,
   .delivery-summary,
   .delivery-progress-stats,
   .delivery-check-grid,

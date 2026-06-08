@@ -20,7 +20,10 @@ import java.util.Map;
 public class BizOrderController {
 
     private final IBizOrderService orderService;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    // 注册 JavaTimeModule:支持 body 里的 LocalDate/LocalDateTime(如 serviceStartDate)按 ISO 字符串转换,
+    // 否则裸 ObjectMapper 遇到日期字段会抛异常 → 下单报"参数无效"
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
     @GetMapping("/list")
     public R<IPage<BizOrder>> list(

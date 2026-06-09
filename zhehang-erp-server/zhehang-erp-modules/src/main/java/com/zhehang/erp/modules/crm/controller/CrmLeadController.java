@@ -3,6 +3,7 @@ package com.zhehang.erp.modules.crm.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
+import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.crm.domain.entity.CrmLead;
 import com.zhehang.erp.modules.crm.service.ICrmLeadService;
 import lombok.RequiredArgsConstructor;
@@ -130,6 +131,16 @@ public class CrmLeadController {
         Object ownerId = body.get("ownerId");
         leadService.distribute(toIdList(body.get("ids")), ownerId == null ? null : Long.valueOf(ownerId.toString()));
         return R.ok();
+    }
+
+    /** 手动触发自动回收(管理员):立即扫描久未跟进线索回收回公海,返回回收条数。定时任务每日02:00也会自动跑 */
+    @PostMapping("/recycle/run")
+    @Log(module = "线索管理", type = Log.OperationType.UPDATE)
+    public R<Integer> runRecycle() {
+        if (!SecurityUtils.isCurrentAdmin()) {
+            return R.fail(403, "仅管理员可手动触发回收");
+        }
+        return R.ok(leadService.autoRecycle());
     }
 
     /** 给线索写跟进:落库跟进记录并回写最后跟进时间/次数(供回收引擎判超时);仅数据范围内可操作 */

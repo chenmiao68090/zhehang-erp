@@ -29,6 +29,13 @@ public interface ICrmLeadService extends IService<CrmLead> {
     /** 退回公海:清空负责人、归属置 pool */
     void returnToPool(List<Long> ids, String reason);
 
+    /**
+     * 自动回收:把"持有(private)且未转化、已过保护期、久未跟进"的线索批量退回公海,
+     * 并给原跟进人加冷却、累加回收次数、记回收时间。由定时任务每日触发,也可管理员手动跑。
+     * 落地 boss 要求的"没跟进自动回收"。返回本次回收条数。
+     */
+    int autoRecycle();
+
     /** 分配:批量指派负责人并置为 private */
     void distribute(List<Long> ids, Long ownerId);
 

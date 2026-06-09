@@ -47,8 +47,10 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
     /** 每日领取上限 */
     private static final String DAILY_KEY = "crm:claim:daily:";
     private static final long DAILY_LIMIT = 50L;
-    /** 客资保护期(天):领取/分配/跟进后顺延;到期仍未跟进则被回收引擎(scanAndRecycle)释放回公海 */
+    /** 客资保护期(天):领取/分配/跟进后顺延;到期仍未跟进则被回收引擎(autoRecycle)释放回公海 */
     private static final long PROTECTION_DAYS = 15L;
+    /** 自动回收阈值(天):持有线索连续 N 天未跟进且已过保护期,则回收回公海 */
+    private static final long RECYCLE_NO_FOLLOW_DAYS = 15L;
 
     private final CrmLeadMapper leadMapper;
     private final CrmCustomerMapper customerMapper;
@@ -313,6 +315,47 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                     .set(StringUtils.hasText(reason), CrmLead::getLastFollowContent, "退回公海:" + reason)
                     .update();
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int autoRecycle() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime staleBefore = LocalDateTime.now().minusDays(RECYCLE_NO_FOLLOW_DAYS);
+        // 候选:持有(private)且有负责人、未转化(status!=3)、保护期已过(或未设)、久未跟进。
+        // COALESCE(最后跟进,领取时间,epoch):从未跟进/无领取时间一律视为极久未动→可回收。
+        LambdaQueryWrapper<CrmLead> q = new LambdaQueryWrapper<>();
+        q.eq(CrmLead::getOwnership, "private")
+         .isNotNull(CrmLead::getOwnerId)
+         .ne(CrmLead::getStatus, 3)
+         .and(w -> w.lt(CrmLead::getProtectionExpireDate, today)
+                    .or().isNull(CrmLead::getProtectionExpireDate))
+         .apply("COALESCE(last_follow_time, claim_time, '1970-01-01 00:00:00') < {0}", staleBefore);
+        List<CrmLead> candidates = leadMapper.selectList(q);
+        if (candidates.isEmpty()) {
+            return 0;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (CrmLead lead : candidates) {
+            // 给原跟进人加 15 天冷却,促使线索重新分配给他人而非立即被同一人再领
+            if (lead.getOwnerId() != null) {
+                stringRedisTemplate.opsForValue().set(
+                        COOLDOWN_KEY + lead.getOwnerId() + ":" + lead.getId(), "1", COOLDOWN_DAYS, TimeUnit.DAYS);
+            }
+            // 显式置 null + 原子累加回收次数(updateById 会跳过 null,故用 lambdaUpdate/setSql)
+            lambdaUpdate()
+                    .eq(CrmLead::getId, lead.getId())
+                    .set(CrmLead::getOwnerId, null)
+                    .set(CrmLead::getDeptId, null)
+                    .set(CrmLead::getOwnership, "pool")
+                    .set(CrmLead::getProtectionExpireDate, null)
+                    .set(CrmLead::getStatus, 1)
+                    .set(CrmLead::getLastRecycleTime, now)
+                    .setSql("recycle_count = IFNULL(recycle_count, 0) + 1")
+                    .update();
+        }
+        log.info("自动回收线索 {} 条(连续≥{}天未跟进且已过保护期)", candidates.size(), RECYCLE_NO_FOLLOW_DAYS);
+        return candidates.size();
     }
 
     @Override

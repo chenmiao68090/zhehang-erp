@@ -8,6 +8,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmLeave;
 import com.zhehang.erp.modules.hrm.mapper.HrmLeaveMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmLeaveService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,9 +17,15 @@ import org.springframework.stereotype.Service;
 public class HrmLeaveServiceImpl extends ServiceImpl<HrmLeaveMapper, HrmLeave> implements IHrmLeaveService {
 
     private final HrmLeaveMapper leaveMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<HrmLeave> selectPage(int pageNum, int pageSize, Long employeeId, Integer leaveType, Integer status) {
+        // 数据权限:非HR/管理员只能看自己的请假记录(无对应员工档案则查不到)
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         LambdaQueryWrapper<HrmLeave> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(employeeId != null, HrmLeave::getEmployeeId, employeeId)
                .eq(leaveType != null, HrmLeave::getLeaveType, leaveType)

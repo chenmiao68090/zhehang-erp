@@ -8,6 +8,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmAttendance;
 import com.zhehang.erp.modules.hrm.mapper.HrmAttendanceMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmAttendanceService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -26,11 +27,17 @@ import java.util.Map;
 public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, HrmAttendance> implements IHrmAttendanceService {
 
     private final HrmAttendanceMapper attendanceMapper;
+    private final DataScopeHelper dataScopeHelper;
     private static final LocalTime WORK_START = LocalTime.of(9, 0);
     private static final LocalTime WORK_END = LocalTime.of(18, 0);
 
     @Override
     public IPage<HrmAttendance> selectPage(int pageNum, int pageSize, Long employeeId, String month) {
+        // 数据权限:非HR/管理员只能看自己的考勤记录
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         LambdaQueryWrapper<HrmAttendance> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(employeeId != null, HrmAttendance::getEmployeeId, employeeId)
                .likeRight(StringUtils.hasText(month), HrmAttendance::getAttendanceDate, month)

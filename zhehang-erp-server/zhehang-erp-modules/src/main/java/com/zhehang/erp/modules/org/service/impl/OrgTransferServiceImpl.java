@@ -11,6 +11,7 @@ import com.zhehang.erp.modules.org.domain.vo.TransferVO;
 import com.zhehang.erp.modules.org.mapper.OrgEmployeeMapper;
 import com.zhehang.erp.modules.org.mapper.OrgTransferMapper;
 import com.zhehang.erp.modules.org.service.IOrgTransferService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -22,9 +23,15 @@ public class OrgTransferServiceImpl extends ServiceImpl<OrgTransferMapper, OrgTr
 
     private final OrgTransferMapper transferMapper;
     private final OrgEmployeeMapper employeeMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<TransferVO> selectTransferPage(int pageNum, int pageSize, Long employeeId, Integer transferType, Integer status) {
+        // 数据权限:非HR/管理员只能看自己的人事异动记录
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         Page<?> page = new Page<>(pageNum, pageSize);
         return transferMapper.selectTransferPage(page, employeeId, transferType, status);
     }

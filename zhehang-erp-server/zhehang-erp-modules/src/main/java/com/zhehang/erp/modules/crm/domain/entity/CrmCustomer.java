@@ -19,6 +19,8 @@ public class CrmCustomer extends BaseEntity {
     private String scale;
     /** 客户来源 */
     private String source;
+    /** 获客营销活动ID(从线索继承,成交ROI归因) */
+    private Long campaignId;
     /** 客户等级（A/B/C/D） */
     private String level;
     /** 纳税人类型（1一般纳税人 2小规模纳税人） */

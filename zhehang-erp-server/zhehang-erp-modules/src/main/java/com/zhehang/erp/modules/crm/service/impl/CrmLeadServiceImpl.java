@@ -172,6 +172,7 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
         customer.setStatus(0);
         customer.setOwnerId(lead.getOwnerId());
         customer.setDeptId(lead.getDeptId());
+        customer.setCampaignId(lead.getCampaignId()); // 营销活动归因从线索带到客户(成交ROI用)
         // 转客户时带工商信息(统一社会信用代码/行业/规模/地址),供客户税务档案按信用代码勾稽
         if (StringUtils.hasText(customer.getName())) {
             try {

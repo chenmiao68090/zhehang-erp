@@ -11,6 +11,7 @@ import com.zhehang.erp.modules.project.mapper.PmProjectMapper;
 import com.zhehang.erp.modules.project.mapper.PmTaskMapper;
 import com.zhehang.erp.modules.project.mapper.PmTimesheetMapper;
 import com.zhehang.erp.modules.project.service.IPmProjectService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -28,10 +29,13 @@ public class PmProjectServiceImpl extends ServiceImpl<PmProjectMapper, PmProject
     private final PmProjectMapper projectMapper;
     private final PmTaskMapper taskMapper;
     private final PmTimesheetMapper timesheetMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<PmProject> selectPage(int pageNum, int pageSize, String name, Integer type, Integer status, Long managerId) {
         LambdaQueryWrapper<PmProject> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:项目按创建人收敛;管理员/data_scope=1看全部(项目经理可见可后续改按manager_id)
+        dataScopeHelper.applyCreatorScope(wrapper, PmProject::getCreateBy);
         wrapper.like(StringUtils.hasText(name), PmProject::getName, name)
                .eq(type != null, PmProject::getType, type)
                .eq(status != null, PmProject::getStatus, status)

@@ -13,6 +13,8 @@ Thumbs.db
 data/
 *.sock
 *.pid
+*.rdb
+dump.rdb
 
 # Java build outputs
 target/

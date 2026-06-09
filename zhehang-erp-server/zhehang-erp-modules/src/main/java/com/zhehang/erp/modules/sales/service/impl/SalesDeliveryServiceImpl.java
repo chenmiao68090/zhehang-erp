@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.modules.sales.domain.entity.SalesDelivery;
 import com.zhehang.erp.modules.sales.mapper.SalesDeliveryMapper;
 import com.zhehang.erp.modules.sales.service.ISalesDeliveryService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +21,13 @@ import java.time.format.DateTimeFormatter;
 public class SalesDeliveryServiceImpl extends ServiceImpl<SalesDeliveryMapper, SalesDelivery> implements ISalesDeliveryService {
 
     private final SalesDeliveryMapper deliveryMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<SalesDelivery> selectPage(int pageNum, int pageSize, String deliveryNo, String orderNo, Long customerId) {
         LambdaQueryWrapper<SalesDelivery> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:发货/交付单按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, SalesDelivery::getCreateBy);
         wrapper.like(StringUtils.hasText(deliveryNo), SalesDelivery::getDeliveryNo, deliveryNo)
                .like(StringUtils.hasText(orderNo), SalesDelivery::getOrderNo, orderNo)
                .eq(customerId != null, SalesDelivery::getCustomerId, customerId)

@@ -9,6 +9,7 @@ import com.zhehang.erp.modules.sales.domain.entity.SalesOrder;
 import com.zhehang.erp.modules.sales.mapper.SalesCommissionMapper;
 import com.zhehang.erp.modules.sales.mapper.SalesOrderMapper;
 import com.zhehang.erp.modules.sales.service.ISalesCommissionService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,10 +28,13 @@ public class SalesCommissionServiceImpl extends ServiceImpl<SalesCommissionMappe
 
     private final SalesCommissionMapper commissionMapper;
     private final SalesOrderMapper orderMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<SalesCommission> selectPage(int pageNum, int pageSize, Long employeeId, String period, Integer status) {
         LambdaQueryWrapper<SalesCommission> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:提成只看本人(电销不能看别人提成);管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyOwnEmployeeScope(wrapper, SalesCommission::getEmployeeId);
         wrapper.eq(employeeId != null, SalesCommission::getEmployeeId, employeeId)
                .eq(StringUtils.hasText(period), SalesCommission::getPeriod, period)
                .eq(status != null, SalesCommission::getStatus, status)

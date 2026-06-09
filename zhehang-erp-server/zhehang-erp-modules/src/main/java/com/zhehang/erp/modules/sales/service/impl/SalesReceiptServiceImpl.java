@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.modules.sales.domain.entity.SalesReceipt;
 import com.zhehang.erp.modules.sales.mapper.SalesReceiptMapper;
 import com.zhehang.erp.modules.sales.service.ISalesReceiptService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,10 +22,13 @@ import java.util.Map;
 public class SalesReceiptServiceImpl extends ServiceImpl<SalesReceiptMapper, SalesReceipt> implements ISalesReceiptService {
 
     private final SalesReceiptMapper receiptMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<SalesReceipt> selectPage(int pageNum, int pageSize, Long customerId, Integer status, String startDate, String endDate) {
         LambdaQueryWrapper<SalesReceipt> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:销售回款按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, SalesReceipt::getCreateBy);
         wrapper.eq(customerId != null, SalesReceipt::getCustomerId, customerId)
                .eq(status != null, SalesReceipt::getStatus, status)
                .ge(startDate != null, SalesReceipt::getReceiptDate, startDate)
@@ -36,6 +40,7 @@ public class SalesReceiptServiceImpl extends ServiceImpl<SalesReceiptMapper, Sal
     @Override
     public List<SalesReceipt> overdueList() {
         LambdaQueryWrapper<SalesReceipt> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, SalesReceipt::getCreateBy); // 逾期回款同样按创建人收敛
         wrapper.lt(true, SalesReceipt::getDueDate, LocalDate.now())
                .ne(SalesReceipt::getStatus, 2)
                .orderByAsc(SalesReceipt::getDueDate);

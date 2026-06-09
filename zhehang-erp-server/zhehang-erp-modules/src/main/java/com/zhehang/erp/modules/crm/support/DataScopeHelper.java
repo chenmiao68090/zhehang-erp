@@ -118,6 +118,23 @@ public class DataScopeHelper {
         wrapper.eq(createByColumn, SecurityUtils.getCurrentUserId());
     }
 
+    /**
+     * 按"本人员工"的数据范围(提成等以 employee_id 归属的敏感数据):
+     * 管理员 或 data_scope=1(财务部/老板) → 看全部;其余 → 只看自己(employee_id=本人档案;无档案则查不到)。
+     * 与 {@link #applyCreatorScope} 同款门控,但按员工归属而非创建人收敛。
+     */
+    public <T> void applyOwnEmployeeScope(LambdaQueryWrapper<T> wrapper, SFunction<T, ?> employeeIdColumn) {
+        if (SecurityUtils.isCurrentAdmin()) {
+            return;
+        }
+        Integer scope = SecurityUtils.getCurrentDataScope();
+        if (scope != null && scope == 1) {
+            return;
+        }
+        Long myEmp = currentEmployeeId();
+        wrapper.eq(employeeIdColumn, myEmp != null ? myEmp : -1L);
+    }
+
     /** 是否人事或管理员(可看全部HR敏感数据:薪资/绩效/员工档案/简历) */
     public boolean isHrOrAdmin() {
         return SecurityUtils.isCurrentAdmin() || SecurityUtils.hasAnyRole("hr");

@@ -8,6 +8,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.sales.domain.entity.SalesQuotation;
 import com.zhehang.erp.modules.sales.mapper.SalesQuotationMapper;
 import com.zhehang.erp.modules.sales.service.ISalesQuotationService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,10 +22,13 @@ import java.time.format.DateTimeFormatter;
 public class SalesQuotationServiceImpl extends ServiceImpl<SalesQuotationMapper, SalesQuotation> implements ISalesQuotationService {
 
     private final SalesQuotationMapper quotationMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<SalesQuotation> selectPage(int pageNum, int pageSize, String quotationNo, Long customerId, Integer status) {
         LambdaQueryWrapper<SalesQuotation> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:报价单按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, SalesQuotation::getCreateBy);
         wrapper.like(StringUtils.hasText(quotationNo), SalesQuotation::getQuotationNo, quotationNo)
                .eq(customerId != null, SalesQuotation::getCustomerId, customerId)
                .eq(status != null, SalesQuotation::getStatus, status)

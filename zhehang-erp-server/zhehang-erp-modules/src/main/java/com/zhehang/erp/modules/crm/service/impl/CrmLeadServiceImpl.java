@@ -51,6 +51,8 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
     private static final long PROTECTION_DAYS = 15L;
     /** 自动回收阈值(天):持有线索连续 N 天未跟进且已过保护期,则回收回公海 */
     private static final long RECYCLE_NO_FOLLOW_DAYS = 15L;
+    /** 回收预警(天):保护期将在 N 天内到期的客资提示电销尽快跟进,避免被自动回收 */
+    private static final long RECYCLE_WARN_DAYS = 3L;
 
     private final CrmLeadMapper leadMapper;
     private final CrmCustomerMapper customerMapper;
@@ -392,6 +394,20 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                           .isNull(CrmLead::getNextFollowTime))
                // 从未跟进(null)排最前,其次按下次跟进时间升序,再按保护期临近
                .orderByAsc(CrmLead::getNextFollowTime)
+               .orderByAsc(CrmLead::getProtectionExpireDate);
+        return leadMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+    }
+
+    @Override
+    public IPage<CrmLead> selectRecycleWarning(int pageNum, int pageSize) {
+        LambdaQueryWrapper<CrmLead> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:电销看自己、主管看本部门
+        dataScopeHelper.apply(wrapper, CrmLead::getOwnerId, CrmLead::getDeptId);
+        wrapper.eq(CrmLead::getOwnership, "private")
+               .ne(CrmLead::getStatus, 3)
+               // 保护期将在 N 天内到期(或已过期但尚未被回收)→ 即将被自动回收,提示尽快跟进
+               .isNotNull(CrmLead::getProtectionExpireDate)
+               .le(CrmLead::getProtectionExpireDate, LocalDate.now().plusDays(RECYCLE_WARN_DAYS))
                .orderByAsc(CrmLead::getProtectionExpireDate);
         return leadMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }

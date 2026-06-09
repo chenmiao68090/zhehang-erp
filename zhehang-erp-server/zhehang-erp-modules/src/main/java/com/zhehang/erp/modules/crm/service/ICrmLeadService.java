@@ -23,6 +23,12 @@ public interface ICrmLeadService extends IService<CrmLead> {
      */
     IPage<CrmLead> selectTodoFollow(int pageNum, int pageSize);
 
+    /**
+     * 回收预警:数据范围内、持有(private)未转化、保护期将在数天内到期的客资,
+     * 提醒电销尽快跟进以免被自动回收。配合 autoRecycle 一起服务"今天该打谁"。
+     */
+    IPage<CrmLead> selectRecycleWarning(int pageNum, int pageSize);
+
     /** 领取:把公海线索领到当前登录人名下(置 private、记领取时间) */
     void claim(List<Long> ids);
 

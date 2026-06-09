@@ -107,6 +107,14 @@ public class CrmLeadController {
         return R.ok(leadService.selectTodoFollow(pageNum, pageSize));
     }
 
+    /** 回收预警:数据范围内、保护期将在数天内到期的客资,提醒尽快跟进以免被自动回收 */
+    @GetMapping("/recycle-warning")
+    public R<IPage<CrmLead>> recycleWarning(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return R.ok(leadService.selectRecycleWarning(pageNum, pageSize));
+    }
+
     /** 领取(从公海领到当前登录人名下) */
     @PostMapping("/claim")
     @Log(module = "线索管理", type = Log.OperationType.UPDATE)

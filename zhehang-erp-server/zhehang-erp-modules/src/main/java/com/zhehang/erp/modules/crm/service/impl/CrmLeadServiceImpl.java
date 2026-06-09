@@ -312,6 +312,8 @@ public class CrmLeadServiceImpl extends ServiceImpl<CrmLeadMapper, CrmLead> impl
                     .set(CrmLead::getDeptId, null)
                     .set(CrmLead::getOwnership, "pool")
                     .set(CrmLead::getProtectionExpireDate, null)
+                    // 退回公海即恢复"未分配"状态(status=1),与自动回收一致,避免公海线索仍显示"跟进中"
+                    .set(lead.getStatus() != null && lead.getStatus() != 3, CrmLead::getStatus, 1)
                     .set(StringUtils.hasText(reason), CrmLead::getLastFollowContent, "退回公海:" + reason)
                     .update();
         }

@@ -9,6 +9,7 @@ import com.zhehang.erp.modules.supply.domain.entity.SupplyPurchaseOrder;
 import com.zhehang.erp.modules.supply.mapper.SupplyVendorMapper;
 import com.zhehang.erp.modules.supply.mapper.SupplyPurchaseOrderMapper;
 import com.zhehang.erp.modules.supply.service.ISupplyVendorService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -22,9 +23,11 @@ import java.util.Map;
 public class SupplyVendorServiceImpl extends ServiceImpl<SupplyVendorMapper, SupplyVendor> implements ISupplyVendorService {
 
     private final SupplyPurchaseOrderMapper orderMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     public IPage<SupplyVendor> selectPage(int pageNum, int pageSize, String name, Integer rating, Integer status) {
         LambdaQueryWrapper<SupplyVendor> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, SupplyVendor::getCreateBy); // 供应商(银行账号)按创建人收敛
         if (StringUtils.hasText(name)) {
             wrapper.like(SupplyVendor::getName, name);
         }

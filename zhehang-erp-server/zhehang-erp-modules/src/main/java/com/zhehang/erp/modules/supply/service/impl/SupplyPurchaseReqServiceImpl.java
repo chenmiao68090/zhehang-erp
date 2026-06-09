@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.modules.supply.domain.entity.SupplyPurchaseReq;
 import com.zhehang.erp.modules.supply.mapper.SupplyPurchaseReqMapper;
 import com.zhehang.erp.modules.supply.service.ISupplyPurchaseReqService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -15,10 +17,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
+@RequiredArgsConstructor
 public class SupplyPurchaseReqServiceImpl extends ServiceImpl<SupplyPurchaseReqMapper, SupplyPurchaseReq> implements ISupplyPurchaseReqService {
+
+    private final DataScopeHelper dataScopeHelper;
 
     public IPage<SupplyPurchaseReq> selectPage(int pageNum, int pageSize, String reqNo, Integer status) {
         LambdaQueryWrapper<SupplyPurchaseReq> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, SupplyPurchaseReq::getCreateBy); // 请购单按创建人收敛
         if (StringUtils.hasText(reqNo)) {
             wrapper.like(SupplyPurchaseReq::getReqNo, reqNo);
         }

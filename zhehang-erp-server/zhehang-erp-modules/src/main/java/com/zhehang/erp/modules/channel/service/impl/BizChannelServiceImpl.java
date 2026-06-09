@@ -13,6 +13,7 @@ import com.zhehang.erp.modules.channel.mapper.BizChannelCostMapper;
 import com.zhehang.erp.modules.channel.mapper.BizProcurementMapper;
 import com.zhehang.erp.modules.channel.mapper.BizSupplierMapper;
 import com.zhehang.erp.modules.channel.service.IBizChannelService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,10 +36,12 @@ public class BizChannelServiceImpl implements IBizChannelService {
     private final BizAddressResourceMapper addressMapper;
     private final BizProcurementMapper procurementMapper;
     private final BizChannelCostMapper channelCostMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<BizSupplier> supplierList(int pageNum, int pageSize, String name, String status) {
         LambdaQueryWrapper<BizSupplier> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, BizSupplier::getCreateBy); // 供应商(银行账号等)按创建人收敛
         wrapper.like(StringUtils.hasText(name), BizSupplier::getName, name)
                 .eq(StringUtils.hasText(status), BizSupplier::getStatus, status)
                 .orderByDesc(BizSupplier::getCreateTime);
@@ -69,6 +72,7 @@ public class BizChannelServiceImpl implements IBizChannelService {
     @Override
     public IPage<BizAddressResource> addressList(int pageNum, int pageSize, String status, String region) {
         LambdaQueryWrapper<BizAddressResource> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, BizAddressResource::getCreateBy); // 地址资源(进价/利润)按创建人收敛(availableAddresses共享不收敛)
         wrapper.eq(StringUtils.hasText(status), BizAddressResource::getStatus, status)
                 .like(StringUtils.hasText(region), BizAddressResource::getRegion, region)
                 .orderByDesc(BizAddressResource::getCreateTime);
@@ -151,6 +155,7 @@ public class BizChannelServiceImpl implements IBizChannelService {
     @Override
     public IPage<BizProcurement> procurementList(int pageNum, int pageSize, Long supplierId, String status) {
         LambdaQueryWrapper<BizProcurement> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, BizProcurement::getCreateBy); // 采购单(单价/实付)按创建人收敛
         wrapper.eq(supplierId != null, BizProcurement::getSupplierId, supplierId)
                 .eq(StringUtils.hasText(status), BizProcurement::getStatus, status)
                 .orderByDesc(BizProcurement::getCreateTime);
@@ -219,6 +224,7 @@ public class BizChannelServiceImpl implements IBizChannelService {
     @Override
     public IPage<BizChannelCost> channelCostList(int pageNum, int pageSize, String channelType, String period) {
         LambdaQueryWrapper<BizChannelCost> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, BizChannelCost::getCreateBy); // 渠道投放成本按创建人收敛
         wrapper.eq(StringUtils.hasText(channelType), BizChannelCost::getChannelType, channelType)
                 .eq(StringUtils.hasText(period), BizChannelCost::getPeriod, period)
                 .orderByDesc(BizChannelCost::getCreateTime);

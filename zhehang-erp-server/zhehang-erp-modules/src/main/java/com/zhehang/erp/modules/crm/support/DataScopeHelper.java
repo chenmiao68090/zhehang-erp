@@ -102,6 +102,22 @@ public class DataScopeHelper {
         return uid != null && uid.equals(ownerId);
     }
 
+    /**
+     * 按"创建人"的数据范围(供应链/渠道等无明确归属人的敏感数据):
+     * 管理员 或 data_scope=1 → 看全部;其余 → 只看自己创建的(create_by=当前用户)。
+     * 用于供应商(银行账号)/采购(单价)/地址资源(利润)/渠道成本 等敏感列表的最小收敛。
+     */
+    public <T> void applyCreatorScope(LambdaQueryWrapper<T> wrapper, SFunction<T, ?> createByColumn) {
+        if (SecurityUtils.isCurrentAdmin()) {
+            return;
+        }
+        Integer scope = SecurityUtils.getCurrentDataScope();
+        if (scope != null && scope == 1) {
+            return;
+        }
+        wrapper.eq(createByColumn, SecurityUtils.getCurrentUserId());
+    }
+
     /** 是否人事或管理员(可看全部HR敏感数据:薪资/绩效/员工档案/简历) */
     public boolean isHrOrAdmin() {
         return SecurityUtils.isCurrentAdmin() || SecurityUtils.hasAnyRole("hr");

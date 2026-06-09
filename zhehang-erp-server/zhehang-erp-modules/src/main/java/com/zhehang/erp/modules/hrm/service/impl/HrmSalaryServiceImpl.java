@@ -8,6 +8,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmSalary;
 import com.zhehang.erp.modules.hrm.mapper.HrmSalaryMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmSalaryService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -22,9 +23,15 @@ import java.util.Map;
 public class HrmSalaryServiceImpl extends ServiceImpl<HrmSalaryMapper, HrmSalary> implements IHrmSalaryService {
 
     private final HrmSalaryMapper salaryMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<HrmSalary> selectPage(int pageNum, int pageSize, Long employeeId, String salaryMonth, Integer status) {
+        // 数据范围:HR/管理员看全部;其余员工只看自己的工资条(经 org_employee 映射当前用户)
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L); // 无员工档案映射→看不到(失败收紧)
+        }
         LambdaQueryWrapper<HrmSalary> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(employeeId != null, HrmSalary::getEmployeeId, employeeId)
                .eq(StringUtils.hasText(salaryMonth), HrmSalary::getSalaryMonth, salaryMonth)

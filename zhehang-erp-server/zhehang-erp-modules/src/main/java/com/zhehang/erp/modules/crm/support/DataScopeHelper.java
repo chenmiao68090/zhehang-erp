@@ -7,6 +7,8 @@ import com.zhehang.erp.modules.system.domain.entity.SysDept;
 import com.zhehang.erp.modules.system.domain.entity.SysUser;
 import com.zhehang.erp.modules.system.mapper.SysDeptMapper;
 import com.zhehang.erp.modules.system.mapper.SysUserMapper;
+import com.zhehang.erp.modules.org.domain.entity.OrgEmployee;
+import com.zhehang.erp.modules.org.mapper.OrgEmployeeMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +31,7 @@ public class DataScopeHelper {
 
     private final SysDeptMapper deptMapper;
     private final SysUserMapper userMapper;
+    private final OrgEmployeeMapper orgEmployeeMapper;
 
     /**
      * 给查询条件追加数据权限过滤。
@@ -97,6 +100,22 @@ public class DataScopeHelper {
         // 默认仅本人
         Long uid = SecurityUtils.getCurrentUserId();
         return uid != null && uid.equals(ownerId);
+    }
+
+    /** 是否人事或管理员(可看全部HR敏感数据:薪资/绩效/员工档案/简历) */
+    public boolean isHrOrAdmin() {
+        return SecurityUtils.isCurrentAdmin() || SecurityUtils.hasAnyRole("hr");
+    }
+
+    /** 当前登录用户对应的员工档案ID(经 org_employee.user_id 映射);无则 null */
+    public Long currentEmployeeId() {
+        Long uid = SecurityUtils.getCurrentUserId();
+        if (uid == null) {
+            return null;
+        }
+        OrgEmployee emp = orgEmployeeMapper.selectOne(new LambdaQueryWrapper<OrgEmployee>()
+                .select(OrgEmployee::getId).eq(OrgEmployee::getUserId, uid).last("LIMIT 1"));
+        return emp == null ? null : emp.getId();
     }
 
     /** 查某用户所属部门ID(分配/转化时给新归属记录写 dept_id 用) */

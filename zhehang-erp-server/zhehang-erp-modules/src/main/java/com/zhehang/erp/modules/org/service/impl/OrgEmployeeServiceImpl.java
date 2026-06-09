@@ -10,6 +10,7 @@ import com.zhehang.erp.modules.org.domain.entity.OrgEmployee;
 import com.zhehang.erp.modules.org.domain.vo.EmployeeVO;
 import com.zhehang.erp.modules.org.mapper.OrgEmployeeMapper;
 import com.zhehang.erp.modules.org.service.IOrgEmployeeService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -20,9 +21,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEmployee> implements IOrgEmployeeService {
 
     private final OrgEmployeeMapper employeeMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<EmployeeVO> selectEmployeePage(int pageNum, int pageSize, String name, Long deptId, Long postId, Integer status) {
+        // 数据范围:员工档案含身份证/手机等PII。HR/管理员看全部;其余员工只能看自己那一条
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Page<EmployeeVO> p = new Page<>(pageNum, pageSize);
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            if (myEmp == null) {
+                return p; // 无员工档案映射→空
+            }
+            EmployeeVO vo = employeeMapper.selectEmployeeById(myEmp);
+            if (vo != null) {
+                p.setRecords(java.util.List.of(vo));
+                p.setTotal(1);
+            }
+            return p;
+        }
         Page<?> page = new Page<>(pageNum, pageSize);
         return employeeMapper.selectEmployeePage(page, name, deptId, postId, status);
     }

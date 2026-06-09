@@ -8,6 +8,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmResume;
 import com.zhehang.erp.modules.hrm.mapper.HrmResumeMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmResumeService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -17,9 +18,14 @@ import org.springframework.util.StringUtils;
 public class HrmResumeServiceImpl extends ServiceImpl<HrmResumeMapper, HrmResume> implements IHrmResumeService {
 
     private final HrmResumeMapper resumeMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<HrmResume> selectPage(int pageNum, int pageSize, Long recruitId, String name, Integer status) {
+        // 候选人简历含PII(电话/期望薪资),仅HR/管理员可见;其余返回空
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            return new Page<>(pageNum, pageSize);
+        }
         LambdaQueryWrapper<HrmResume> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(recruitId != null, HrmResume::getRecruitId, recruitId)
                .like(StringUtils.hasText(name), HrmResume::getName, name)

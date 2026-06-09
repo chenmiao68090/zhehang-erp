@@ -9,6 +9,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.crm.domain.entity.CrmContract;
 import com.zhehang.erp.modules.crm.mapper.CrmContractMapper;
 import com.zhehang.erp.modules.crm.service.ICrmContractService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import com.zhehang.erp.modules.system.domain.entity.SysUser;
 import com.zhehang.erp.modules.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +28,13 @@ public class CrmContractServiceImpl extends ServiceImpl<CrmContractMapper, CrmCo
 
     private final CrmContractMapper contractMapper;
     private final SysUserMapper userMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<CrmContract> selectPage(int pageNum, int pageSize, String contractNo, Long customerId, Integer status) {
         LambdaQueryWrapper<CrmContract> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:合同按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, CrmContract::getCreateBy);
         wrapper.like(StringUtils.hasText(contractNo), CrmContract::getContractNo, contractNo)
                .eq(customerId != null, CrmContract::getCustomerId, customerId)
                .eq(status != null, CrmContract::getStatus, status)

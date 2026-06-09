@@ -8,6 +8,8 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.finance.domain.entity.FinanceReceivable;
 import com.zhehang.erp.modules.finance.mapper.FinanceReceivableMapper;
 import com.zhehang.erp.modules.finance.service.IFinanceReceivableService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -18,10 +20,15 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class FinanceReceivableServiceImpl extends ServiceImpl<FinanceReceivableMapper, FinanceReceivable> implements IFinanceReceivableService {
+
+    private final DataScopeHelper dataScopeHelper;
 
     public IPage<FinanceReceivable> selectPage(Integer pageNum, Integer pageSize, String type, Long customerId, Integer status) {
         LambdaQueryWrapper<FinanceReceivable> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:应收按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, FinanceReceivable::getCreateBy);
         wrapper.eq(StringUtils.hasText(type), FinanceReceivable::getType, type)
                .eq(customerId != null, FinanceReceivable::getCustomerId, customerId)
                .eq(status != null, FinanceReceivable::getStatus, status)

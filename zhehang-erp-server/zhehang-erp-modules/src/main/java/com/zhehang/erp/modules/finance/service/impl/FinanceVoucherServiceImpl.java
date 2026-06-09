@@ -12,6 +12,7 @@ import com.zhehang.erp.modules.finance.mapper.FinanceVoucherMapper;
 import com.zhehang.erp.modules.finance.mapper.FinanceVoucherEntryMapper;
 import com.zhehang.erp.modules.finance.service.IFinanceLedgerService;
 import com.zhehang.erp.modules.finance.service.IFinanceVoucherService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +32,12 @@ public class FinanceVoucherServiceImpl extends ServiceImpl<FinanceVoucherMapper,
 
     private final FinanceVoucherEntryMapper entryMapper;
     private final IFinanceLedgerService ledgerService;
+    private final DataScopeHelper dataScopeHelper;
 
     public IPage<FinanceVoucher> selectPage(Integer pageNum, Integer pageSize, String period, Integer status, String voucherType, String voucherNo) {
         LambdaQueryWrapper<FinanceVoucher> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:记账凭证按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, FinanceVoucher::getCreateBy);
         wrapper.eq(StringUtils.hasText(period), FinanceVoucher::getPeriod, period)
                .eq(status != null, FinanceVoucher::getStatus, status)
                .eq(StringUtils.hasText(voucherType), FinanceVoucher::getVoucherType, voucherType)

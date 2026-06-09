@@ -9,6 +9,7 @@ import com.zhehang.erp.modules.crm.domain.entity.CrmServiceOrder;
 import com.zhehang.erp.modules.crm.mapper.CrmReminderMapper;
 import com.zhehang.erp.modules.crm.mapper.CrmServiceOrderMapper;
 import com.zhehang.erp.modules.crm.service.ICrmServiceOrderService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,10 +26,13 @@ public class CrmServiceOrderServiceImpl extends ServiceImpl<CrmServiceOrderMappe
 
     private final CrmServiceOrderMapper serviceOrderMapper;
     private final CrmReminderMapper reminderMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<CrmServiceOrder> selectPage(int pageNum, int pageSize, Long customerId, String serviceType, Integer status) {
         LambdaQueryWrapper<CrmServiceOrder> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:服务工单按创建人收敛;管理员/data_scope=1看全部
+        dataScopeHelper.applyCreatorScope(wrapper, CrmServiceOrder::getCreateBy);
         wrapper.eq(customerId != null, CrmServiceOrder::getCustomerId, customerId)
                .eq(serviceType != null && !serviceType.isEmpty(), CrmServiceOrder::getServiceType, serviceType)
                .eq(status != null, CrmServiceOrder::getStatus, status)

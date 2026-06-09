@@ -32,6 +32,8 @@ public class BizTask extends BaseEntity {
     private Long executorId;
     /** 执行人姓名 */
     private String executorName;
+    /** 归属交付部门ID(指派时按执行人部门写入,供"主管只看本部门任务") */
+    private Long deptId;
     /** 创建人/指派人ID */
     private Long assignerId;
     /** 计划开始时间 */

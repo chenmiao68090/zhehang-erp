@@ -9,6 +9,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.contract.domain.BizContract;
 import com.zhehang.erp.modules.contract.mapper.BizContractMapper;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import com.zhehang.erp.modules.task.domain.BizTask;
 import com.zhehang.erp.modules.task.domain.BizTaskHandover;
 import com.zhehang.erp.modules.task.domain.BizTaskHandoverItem;
@@ -37,15 +38,28 @@ public class BizTaskServiceImpl extends ServiceImpl<BizTaskMapper, BizTask> impl
     private final BizTaskHandoverItemMapper handoverItemMapper;
     // 注入 mapper 而非 IBizContractService:避免 contract(派单依赖task)↔task 的Spring循环依赖
     private final BizContractMapper contractMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<BizTask> selectPage(int pageNum, int pageSize, String taskType, Integer status, Long executorId) {
         LambdaQueryWrapper<BizTask> wrapper = new LambdaQueryWrapper<>();
-        // 数据范围:管理员/主管看全部(便于派活);执行人看"分配给自己的 + 待指派(executorId为空)"的任务
-        // —— 待指派任务(签约自动派发,executorId=null)对执行人可见,才能被认领/指派,否则无主管的部门(如会计)任务无人可见
-        if (!SecurityUtils.isCurrentAdmin() && !SecurityUtils.hasAnyRole("dept_manager")) {
-            Long uid = SecurityUtils.getCurrentUserId();
-            wrapper.and(w -> w.eq(BizTask::getExecutorId, uid).or().isNull(BizTask::getExecutorId));
+        // 数据范围:老板/管理员/财务部(data_scope=1)看全部;主管看本部门(及以下)交付任务;执行人看分配给自己的。
+        // 待指派任务(executorId/dept_id为空)对主管和执行人都可见,以便认领/指派。
+        Integer scope = SecurityUtils.getCurrentDataScope();
+        boolean seeAll = SecurityUtils.isCurrentAdmin() || (scope != null && scope == 1);
+        if (!seeAll) {
+            if (SecurityUtils.hasAnyRole("dept_manager")) {
+                Long myDept = SecurityUtils.getCurrentDeptId();
+                if (myDept != null) {
+                    java.util.List<Long> deptIds = dataScopeHelper.deptSelfAndChildren(myDept);
+                    wrapper.and(w -> w.in(BizTask::getDeptId, deptIds).or().isNull(BizTask::getDeptId));
+                } else {
+                    wrapper.isNull(BizTask::getDeptId); // 主管无部门:只看待指派,兜底从严
+                }
+            } else {
+                Long uid = SecurityUtils.getCurrentUserId();
+                wrapper.and(w -> w.eq(BizTask::getExecutorId, uid).or().isNull(BizTask::getExecutorId));
+            }
         }
         wrapper.eq(StringUtils.hasText(taskType), BizTask::getTaskType, taskType)
                 .eq(status != null, BizTask::getStatus, status)
@@ -77,6 +91,7 @@ public class BizTaskServiceImpl extends ServiceImpl<BizTaskMapper, BizTask> impl
         }
         task.setExecutorId(executorId);
         task.setExecutorName(executorName);
+        task.setDeptId(dataScopeHelper.deptIdOfUser(executorId)); // 归属交付部门=执行人部门(主管按部门看任务)
         if (task.getStatus() != null && task.getStatus() == 1) {
             task.setStatus(2);
         }

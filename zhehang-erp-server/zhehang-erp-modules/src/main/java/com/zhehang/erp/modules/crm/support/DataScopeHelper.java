@@ -64,27 +64,15 @@ public class DataScopeHelper {
 
     /**
      * 财务类业务表(订单/合同/收款/提成)的数据范围过滤。
-     * 与 apply 的区别:财务(finance)角色视为"看全部"——财务对账/确认收款/核发提成需跨人查看,
-     * 否则财务按本人过滤会查不到要处理的单据。规则:
-     * 管理员 或 finance角色 或 scope=1 → 全部;部门主管(3/4) → 本部门(及以下);其余(销售/员工) → 仅本人。
+     * 规则与通用 apply 一致:管理员 或 data_scope=1(财务部 finance_hq 角色 / 老板) → 看全部;
+     * 部门主管(3/4) → 本部门(及以下);其余(销售/会计/管家/员工,data_scope=5) → 仅本人。
+     * 注:只有「财务部」成员(finance_hq角色,data_scope=1)能看全部财务,用于对账/确认/核发;
+     * 做账会计、地址/财务管家虽是finance角色但data_scope=5,只看本人(符合老板要求)。
      */
     public <T> void applyFinancial(LambdaQueryWrapper<T> wrapper,
                                    SFunction<T, ?> ownerColumn,
                                    SFunction<T, ?> deptColumn) {
-        if (SecurityUtils.isCurrentAdmin() || SecurityUtils.hasAnyRole("finance")) {
-            return; // 全部(管理员/财务)
-        }
-        Integer scope = SecurityUtils.getCurrentDataScope();
-        if (scope != null && scope == 1) {
-            return;
-        }
-        Long deptId = SecurityUtils.getCurrentDeptId();
-        if (deptId != null && scope != null && (scope == 3 || scope == 4)) {
-            List<Long> deptIds = (scope == 4) ? listSelfAndChildren(deptId) : List.of(deptId);
-            wrapper.in(deptColumn, deptIds);
-            return;
-        }
-        wrapper.eq(ownerColumn, SecurityUtils.getCurrentUserId());
+        apply(wrapper, ownerColumn, deptColumn);
     }
 
     /**
@@ -118,6 +106,11 @@ public class DataScopeHelper {
         }
         SysUser user = userMapper.selectById(userId);
         return user == null ? null : user.getDeptId();
+    }
+
+    /** 本部门及其所有子部门的ID集合(公开版,供其它模块按部门过滤,如交付任务) */
+    public List<Long> deptSelfAndChildren(Long deptId) {
+        return listSelfAndChildren(deptId);
     }
 
     /** 本部门及其所有子部门的ID集合(基于 sys_dept.ancestors);至少含自身 */

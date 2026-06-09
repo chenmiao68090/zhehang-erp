@@ -209,6 +209,8 @@ public class BizContractServiceImpl extends ServiceImpl<BizContractMapper, BizCo
         LocalDate today = LocalDate.now();
         LocalDate threshold = today.plusDays(days <= 0 ? 30 : days);
         LambdaQueryWrapper<BizContract> wrapper = new LambdaQueryWrapper<>();
+        // 数据范围:续费提醒按角色——电销看自己客户的待续费、主管看本部门、财务部/老板看全部
+        dataScopeHelper.applyFinancial(wrapper, BizContract::getSalesmanId, BizContract::getDeptId);
         wrapper.between(BizContract::getEndDate, today, threshold)
                 .in(BizContract::getStatus, 4, 5)
                 .orderByAsc(BizContract::getEndDate);

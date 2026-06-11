@@ -70,17 +70,22 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const userStore = useUserStore()
 const searchText = ref('')
-const useMockRoles = import.meta.env.VITE_USE_MOCK === 'true'
+// 角色视角预览:开发环境或显式开启时可切换(仅预览菜单/按钮的角色差异,真实数据仍以登录账号为准)
+const useMockRoles = import.meta.env.VITE_USE_MOCK === 'true' || import.meta.env.DEV
 
 const ROLE_LABELS: Record<string, string> = {
   admin: '超级管理员',
   super_admin: '超级管理员',
   sys_admin: '系统管理员',
   dept_manager: '部门主管',
-  manager: '主管',
+  manager: '部门主管',
   boss: '老板',
-  finance: '财务人员',
-  sales: '销售人员',
+  finance: '财务/会计',
+  finance_hq: '财务部',
+  sales: '电销',
+  online_sales: '网销',
+  hr: '人事',
+  staff: '普通员工',
   user: '普通用户'
 }
 

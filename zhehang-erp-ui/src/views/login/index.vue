@@ -106,8 +106,8 @@ import { setToken } from '@/utils/auth'
 
 // Mock 模式下使用的固定 Token（与 router/guard.ts 保持一致）
 const MOCK_TOKEN = 'mock_admin_token'
-// 开发环境允许后端不可用时回退 Mock 登录，生产环境仍只在显式开启时启用
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || import.meta.env.DEV
+// 仅在显式开启 VITE_USE_MOCK=true 时启用 Mock 登录回退（开发环境默认走真实后端）
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 const isDev = import.meta.env.DEV
 const captchaEnabled = import.meta.env.VITE_CAPTCHA_ENABLED === 'true'
 
@@ -198,7 +198,8 @@ async function handleLogin() {
       ElMessage.success('登录成功')
     } catch (error: any) {
       if (USE_MOCK) {
-        console.warn('[Login] 后端不可用，开发环境回退 Mock 登录', error)
+        // 仅当显式配置 VITE_USE_MOCK=true 时才走 Mock 回退（无后端的纯前端调试）
+        console.warn('[Login] 后端登录失败，已按显式 Mock 开关回退 Mock 登录', error)
         setToken(MOCK_TOKEN)
         userStore.token = MOCK_TOKEN
         router.push((route.query.redirect as string) || '/')

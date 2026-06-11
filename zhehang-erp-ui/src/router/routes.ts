@@ -24,7 +24,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   },
   { path: '/crm/customer', redirect: '/leads/workbench', meta: { hidden: true } },
   { path: '/crm/follow', redirect: '/leads/workbench', meta: { hidden: true } },
-  { path: '/crm/lead', redirect: '/customer/company-pool', meta: { hidden: true } },
+  { path: '/crm/lead', redirect: '/customer/lead', meta: { hidden: true } },
   { path: '/crm/contract', redirect: '/order/contract', meta: { hidden: true } },
   { path: '/sales/order', redirect: '/order/bill', meta: { hidden: true } },
   { path: '/finance/voucher', redirect: '/finance/journal', meta: { hidden: true } },
@@ -62,7 +62,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: '/dashboard',
     component: Layout,
     redirect: '/dashboard/cockpit',
-    meta: { title: '驾驶舱', icon: 'DataAnalysis' },
+    meta: { title: '驾驶舱', icon: 'DataAnalysis', roles: ['admin', 'boss', 'manager'] },
     children: [
       {
         path: 'cockpit',
@@ -82,7 +82,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: '/leads',
     component: Layout,
     redirect: '/leads/workbench',
-    meta: { title: '营销获客', icon: 'Notebook' },
+    meta: { title: '营销获客', icon: 'Notebook', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
       {
         path: 'workbench',
@@ -132,7 +132,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: '/tax',
     component: Layout,
     redirect: '/tax/calendar',
-    meta: { title: '财税交付', icon: 'Calendar' },
+    meta: { title: '财税交付', icon: 'Calendar', roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq'] },
     children: [
       {
         path: 'calendar',
@@ -146,13 +146,27 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: '/customer',
     component: Layout,
     redirect: '/customer/enterprise-master',
-    meta: { title: '客户中心', icon: 'User' },
+    meta: { title: '客户中心', icon: 'User', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
       {
         path: 'enterprise-master',
         name: 'EnterpriseMaster',
         component: () => import('@/views/leads/enterprise-master.vue'),
         meta: { title: '企业主体库', icon: 'OfficeBuilding' }
+      },
+      {
+        // 真实接线的线索管理(调后端 /crm/lead/*):公海/我的/今天该打谁/回收预警/工商入池
+        path: 'lead',
+        name: 'CrmLead',
+        component: () => import('@/views/crm/lead.vue'),
+        meta: { title: '线索管理', icon: 'Aim' }
+      },
+      {
+        // 企业号码查询:输入公司名→工商库带出公示联系电话→一键建线索/丢公海
+        path: 'company-lookup',
+        name: 'CompanyLookup',
+        component: () => import('@/views/customer/company-lookup.vue'),
+        meta: { title: '企业号码查询', icon: 'Phone' }
       },
       {
         path: 'company-pool',
@@ -194,18 +208,18 @@ export const asyncRoutes: RouteRecordRaw[] = [
     path: '/order',
     component: Layout,
     redirect: '/order/bill',
-    meta: { title: '订单合同', icon: 'Document', roles: ['admin', 'boss', 'manager', 'finance', 'sales'] },
+    meta: { title: '订单合同', icon: 'Document', roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq', 'sales', 'online_sales'] },
     children: [
       { path: 'bill', name: 'OrderBill', component: () => import('@/views/order/bill.vue'), meta: { title: '提单系统', icon: 'Tickets', roles: ['admin', 'boss', 'manager', 'finance', 'sales'] } },
-      { path: 'finance-check', name: 'OrderFinanceCheck', component: () => import('@/views/order/finance-check.vue'), meta: { title: '财务核对', icon: 'Checked', roles: ['admin', 'boss', 'finance'] } },
-      { path: 'contract', name: 'OrderContract', component: () => import('@/views/order/contract.vue'), meta: { title: '合同管理', icon: 'Document', roles: ['admin', 'boss', 'manager', 'finance'] } }
+      { path: 'finance-check', name: 'OrderFinanceCheck', component: () => import('@/views/order/finance-check.vue'), meta: { title: '财务核对', icon: 'Checked', roles: ['admin', 'boss', 'finance', 'finance_hq'] } },
+      { path: 'contract', name: 'OrderContract', component: () => import('@/views/order/contract.vue'), meta: { title: '合同管理', icon: 'Document', roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq'] } }
     ]
   },
   {
     path: '/task-center',
     component: Layout,
     redirect: '/task-center/once',
-    meta: { title: '服务交付', icon: 'List', roles: ['admin', 'boss', 'manager', 'sales'] },
+    meta: { title: '服务交付', icon: 'List', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
       { path: 'once', name: 'TaskOnce', component: () => import('@/views/task-center/once.vue'), meta: { title: '一次性任务', icon: 'DocumentChecked' } },
       { path: 'periodic', name: 'TaskPeriodic', component: () => import('@/views/task-center/periodic.vue'), meta: { title: '周期性任务', icon: 'Timer' } },
@@ -242,7 +256,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
     path: '/finance',
     component: Layout,
     redirect: '/finance/journal',
-    meta: { title: '财务结算', icon: 'Wallet', roles: ['admin', 'boss', 'finance'] },
+    meta: { title: '财务结算', icon: 'Wallet', roles: ['admin', 'boss', 'finance', 'finance_hq'] },
     children: [
       { path: 'journal', name: 'FinJournal', component: () => import('@/views/finance/journal.vue'), meta: { title: '日记账', icon: 'Notebook' } },
       { path: 'petty-cash', name: 'FinPettyCash', component: () => import('@/views/finance/petty-cash.vue'), meta: { title: '备用金管理', icon: 'Money' } },
@@ -256,7 +270,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/hrm',
     component: Layout,
-    meta: { title: '人力组织', icon: 'Avatar', roles: ['admin', 'boss', 'manager'] },
+    meta: { title: '人力组织', icon: 'Avatar', roles: ['admin', 'boss', 'manager', 'dept_manager', 'hr'] },
     children: [
       { path: 'structure', name: 'OrgStructure', component: () => import('@/views/org/structure.vue'), meta: { title: '组织架构图' } },
       { path: 'dept', name: 'OrgDept', component: () => import('@/views/org/dept.vue'), meta: { title: '部门管理' } },
@@ -272,7 +286,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/file',
     component: Layout,
-    meta: { title: '培训中心', icon: 'FolderOpened', roles: ['admin', 'boss', 'manager', 'sales'] },
+    meta: { title: '培训中心', icon: 'FolderOpened', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales', 'finance', 'finance_hq', 'hr', 'staff'] },
     children: [
       { path: 'manager', name: 'FileManager', component: () => import('@/views/file/manager.vue'), meta: { title: '文件管理' } },
       { path: 'kb', name: 'FileKb', component: () => import('@/views/file/kb.vue'), meta: { title: '知识库' } },
@@ -283,7 +297,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
     path: '/call-center',
     component: Layout,
     redirect: '/call-center/monitor',
-    meta: { title: '呼叫中心', icon: 'Phone', roles: ['admin', 'boss', 'manager', 'sales'] },
+    meta: { title: '呼叫中心', icon: 'Phone', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
       { path: 'monitor', name: 'CallCenterMonitor', component: () => import('@/views/call-center/monitor.vue'), meta: { title: '实时监控', icon: 'Monitor' } },
       { path: 'call-record', name: 'CallCenterRecord', component: () => import('@/views/call-center/call-record.vue'), meta: { title: '通话记录', icon: 'Document' } },
@@ -299,7 +313,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
     path: '/collaboration',
     component: Layout,
     redirect: '/collaboration/chat',
-    meta: { title: '协作中心', icon: 'ChatLineSquare', roles: ['admin', 'boss', 'manager', 'sales'] },
+    meta: { title: '协作中心', icon: 'ChatLineSquare', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales', 'finance', 'finance_hq', 'hr', 'staff'] },
     children: [
       { path: 'chat', name: 'CollabChat', component: () => import('@/views/collaboration/chat.vue'), meta: { title: '即时消息', icon: 'ChatDotRound' } },
       { path: 'contacts', name: 'CollabContacts', component: () => import('@/views/collaboration/contacts.vue'), meta: { title: '通讯录', icon: 'Notebook' } },

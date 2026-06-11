@@ -91,8 +91,14 @@ export const usePermissionStore = defineStore('permission', () => {
       // Fallback to frontend routes filtering
     }
 
+    // 常量路由里也混有业务菜单(驾驶舱/营销获客/财税交付/客户中心),同样要按角色显隐;
+    // 无 meta.roles 的(登录/404/首页等)在 filterAsyncRoutes 中默认保留。
+    const visibleConstant = roles.includes('admin')
+      ? constantRoutes
+      : filterAsyncRoutes(constantRoutes, roles)
+
     addRoutes.value = accessedRoutes
-    routes.value = constantRoutes.concat(accessedRoutes)
+    routes.value = visibleConstant.concat(accessedRoutes)
     menuList.value = routes.value.filter((r) => !r.meta?.hidden)
 
     return accessedRoutes

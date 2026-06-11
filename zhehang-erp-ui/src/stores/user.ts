@@ -5,13 +5,17 @@ import { loginApi, getUserInfoApi, logoutApi } from '@/api/auth'
 import router from '@/router'
 import { usePermissionStore } from './permission'
 
-// 预定义系统角色（供 Header 角色切换组件等使用）
+// 预定义角色(供 Header 角色视角预览)。value 对齐后端真实 role_key;manager=部门主管(dept_manager)别名。
 export const SYSTEM_ROLES = [
   { value: 'admin', label: '超级管理员' },
   { value: 'boss', label: '老板' },
-  { value: 'manager', label: '主管' },
-  { value: 'finance', label: '财务' },
-  { value: 'sales', label: '销售' }
+  { value: 'manager', label: '部门主管' },
+  { value: 'sales', label: '电销' },
+  { value: 'online_sales', label: '网销' },
+  { value: 'finance', label: '财务/会计' },
+  { value: 'finance_hq', label: '财务部' },
+  { value: 'hr', label: '人事' },
+  { value: 'staff', label: '普通员工' }
 ] as const
 
 export const useUserStore = defineStore('user', () => {

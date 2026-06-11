@@ -5,7 +5,16 @@
       <el-tabs v-model="activeTab" class="lead-tabs" @tab-change="handleTabChange">
         <el-tab-pane label="公司公海" name="pool" />
         <el-tab-pane label="我的线索" name="my" />
+        <el-tab-pane label="今天该打谁" name="todo" />
+        <el-tab-pane name="warning">
+          <template #label>
+            回收预警<el-badge v-if="warningCount > 0" :value="warningCount" class="warning-badge" />
+          </template>
+        </el-tab-pane>
       </el-tabs>
+      <div v-if="convStats" class="conv-stats">
+        线索 <b>{{ convStats.total }}</b> · 转化中 <b>{{ convStats.converting }}</b> · 已转化 <b>{{ convStats.converted }}</b> · 转化率 <b>{{ convStats.conversionRate }}%</b>
+      </div>
     </div>
 
     <!-- 筛选搜索区 -->
@@ -39,6 +48,9 @@
         <el-button plain @click="handleReset">重置</el-button>
       </div>
       <div class="filter-right">
+        <el-button plain @click="companyImportDialog.visible = true">
+          <el-icon><OfficeBuilding /></el-icon>工商入池
+        </el-button>
         <el-button type="primary" @click="openCreate">
           <el-icon><Plus /></el-icon>新建
         </el-button>
@@ -52,6 +64,7 @@
               <el-dropdown-item command="export"><el-icon><Download /></el-icon>导出线索</el-dropdown-item>
               <el-dropdown-item divided command="rules"><el-icon><Setting /></el-icon>设置公海规则</el-dropdown-item>
               <el-dropdown-item command="duplicate"><el-icon><Search /></el-icon>查重工具</el-dropdown-item>
+              <el-dropdown-item divided command="recycle"><el-icon><RefreshLeft /></el-icon>立即执行回收(管理员)</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -96,7 +109,7 @@
           <template #default="{ row }">
             <span>{{ row.phone }}</span>
             <el-button
-              v-if="row.phone && activeTab === 'my'"
+              v-if="row.phone && isMineTab"
               type="success"
               link
               size="small"
@@ -138,7 +151,7 @@
                   class="tip-soon"
                 >⏰ 还有 {{ rowFreqState(row).daysToDue }} 天截止</span>
                 <span
-                  v-else-if="rowFreqState(row).status === 'never' && activeTab === 'my'"
+                  v-else-if="rowFreqState(row).status === 'never' && isMineTab"
                   class="tip-overdue"
                 >⚠️ 尚未跟进（{{ rowFreqState(row).level }}级）</span>
               </div>
@@ -149,9 +162,9 @@
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button v-if="activeTab === 'pool'" size="small" type="primary" link @click="handleClaimSingle(row)">领取</el-button>
-            <el-button size="small" link @click="activeTab === 'my' ? openFollowUp(row) : openEdit(row)">{{ activeTab === 'my' ? '跟进' : '编辑' }}</el-button>
-            <el-button v-if="activeTab === 'my'" size="small" type="success" link :disabled="row.status === 6" @click="handleDeal(row)">成交</el-button>
-            <el-button v-if="activeTab === 'my'" size="small" type="warning" link @click="handleReturnToPool(row)">放回公海</el-button>
+            <el-button size="small" link @click="isMineTab ? openFollowUp(row) : openEdit(row)">{{ isMineTab ? '跟进' : '编辑' }}</el-button>
+            <el-button v-if="isMineTab" size="small" type="success" link :disabled="row.status === 6" @click="handleDeal(row)">成交</el-button>
+            <el-button v-if="isMineTab" size="small" type="warning" link @click="handleReturnToPool(row)">放回公海</el-button>
             <el-button v-if="activeTab === 'pool'" size="small" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -247,6 +260,28 @@
       <template #footer>
         <el-button @click="returnDialog.visible = false">取消</el-button>
         <el-button type="primary" @click="submitReturn">确认退回</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 工商入池弹窗:从工商库按关键词批量导入企业为公海线索 -->
+    <el-dialog v-model="companyImportDialog.visible" title="工商入池(新公司导入公海)" width="460px">
+      <el-form label-width="100px">
+        <el-form-item label="公司关键词">
+          <el-input
+            v-model="companyImportDialog.keyword"
+            placeholder="如:科技、财税、生物…"
+            clearable
+            @keyup.enter="submitCompanyImport"
+          />
+        </el-form-item>
+        <el-form-item label="最多导入">
+          <el-input-number v-model="companyImportDialog.limit" :min="1" :max="100" :step="10" />
+          <span class="import-hint">家(自动去重,已存在的线索不会重复建)</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="companyImportDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="companyImportDialog.loading" @click="submitCompanyImport">导入公海</el-button>
       </template>
     </el-dialog>
 
@@ -709,7 +744,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Search, Plus, ArrowDown, Upload, Download, Setting, InfoFilled, UploadFilled, Phone } from '@element-plus/icons-vue'
+import { Search, Plus, ArrowDown, Upload, Download, Setting, InfoFilled, UploadFilled, Phone, OfficeBuilding, RefreshLeft } from '@element-plus/icons-vue'
 import { leadApi } from '@/api/crm'
 
 type FollowMethod = 'phone' | 'wechat' | 'meeting' | 'email' | 'other'
@@ -778,7 +813,9 @@ const mockUsers = [
   { id: 4, name: '赵六' }
 ]
 
-const activeTab = ref<'pool' | 'my'>('pool')
+const activeTab = ref<'pool' | 'my' | 'todo' | 'warning'>('pool')
+/** todo/warning 两个 Tab 展示的也是"我名下"的线索,跟进/成交等动作可用 */
+const isMineTab = computed(() => ['my', 'todo', 'warning'].includes(activeTab.value))
 const router = useRouter()
 const loading = ref(false)
 const tableRef = ref()
@@ -1366,6 +1403,8 @@ const fetchLeads = async () => {
       name: queryParams.keyword || undefined
     }
     if (activeTab.value === 'pool') resp = await leadApi.poolList(params)
+    else if (activeTab.value === 'todo') resp = await leadApi.todoFollow(params)
+    else if (activeTab.value === 'warning') resp = await leadApi.recycleWarning(params)
     else resp = await leadApi.myList({ ...params, status: queryParams.status ?? undefined })
     // 兼容分页适配:优先 records(IPage),其次 list
     const records = resp && (resp.records || resp.list)
@@ -1622,6 +1661,7 @@ const handleMore = (cmd: string) => {
   if (cmd === 'import') importDialog.visible = true
   else if (cmd === 'export') doExport()
   else if (cmd === 'rules') openRules()
+  else if (cmd === 'recycle') handleRunRecycle()
   else if (cmd === 'duplicate') {
     dupDialog.field = 'phone'
     dupDialog.value = ''
@@ -1819,8 +1859,64 @@ const runDuplicate = async () => {
 // 表格行上的频率状态（供告警使用）
 const rowFreqState = (row: Lead) => computeFollowFrequencyState(row)
 
+// ============ 营销闭环:转化率/回收预警角标/工商入池/立即回收 ============
+const convStats = ref<{ total: number; newLeads: number; converting: number; converted: number; invalid: number; conversionRate: number } | null>(null)
+const warningCount = ref(0)
+
+const loadClosedLoopStats = async () => {
+  try {
+    convStats.value = await leadApi.conversionStats() as any
+  } catch { /* 统计失败不阻塞页面 */ }
+  try {
+    const resp: any = await leadApi.recycleWarning({ pageNum: 1, pageSize: 1 })
+    warningCount.value = Number(resp?.total ?? 0)
+  } catch { /* 同上 */ }
+}
+
+const companyImportDialog = reactive({
+  visible: false,
+  keyword: '',
+  limit: 20,
+  loading: false
+})
+
+const submitCompanyImport = async () => {
+  const kw = companyImportDialog.keyword.trim()
+  if (!kw) {
+    ElMessage.warning('请输入公司名称关键词')
+    return
+  }
+  companyImportDialog.loading = true
+  try {
+    const created: any = await leadApi.importCompanies({ keyword: kw, limit: companyImportDialog.limit })
+    ElMessage.success(`已从工商库导入 ${created ?? 0} 家公司进公海(自动去重+补工商信息)`)
+    companyImportDialog.visible = false
+    companyImportDialog.keyword = ''
+    activeTab.value = 'pool'
+    queryParams.page = 1
+    fetchLeads()
+    loadClosedLoopStats()
+  } catch { /* 拦截器已弹错误 */ } finally {
+    companyImportDialog.loading = false
+  }
+}
+
+const handleRunRecycle = async () => {
+  await ElMessageBox.confirm(
+    '立即扫描"超15天未跟进且已过保护期"的客资并退回公海(定时任务每日02:00也会自动执行)。确认现在执行？',
+    '立即执行回收', { type: 'warning' }
+  )
+  try {
+    const n: any = await leadApi.runRecycle()
+    ElMessage.success(`本次回收 ${n ?? 0} 条线索回公海`)
+    fetchLeads()
+    loadClosedLoopStats()
+  } catch { /* 非管理员等错误由拦截器提示 */ }
+}
+
 onMounted(() => {
   fetchLeads()
+  loadClosedLoopStats()
   // 启动全局 tick（1 秒，仅用于倒计时实时刷新）
   nowTimer = window.setInterval(() => {
     nowTick.value = Date.now()
@@ -1860,6 +1956,23 @@ const handleCall = (phone: string) => {
   border: 1px solid var(--border-gold);
   border-radius: 8px 8px 0 0;
   padding: 4px 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+/* 营销闭环转化率摘要(今天该打谁/回收预警 Tab 同排展示) */
+.conv-stats {
+  font-size: 13px;
+  color: var(--text-body);
+  white-space: nowrap;
+}
+.conv-stats b { color: var(--gold-primary); }
+.warning-badge { margin-left: 4px; }
+.import-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-body);
 }
 .lead-tabs :deep(.el-tabs__item) {
   color: var(--text-body);

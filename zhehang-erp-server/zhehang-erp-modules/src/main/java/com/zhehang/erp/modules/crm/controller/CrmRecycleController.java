@@ -50,6 +50,13 @@ public class CrmRecycleController {
         return R.ok(recycleService.saveRule(rule));
     }
 
+    /** 删除规则(逻辑删除)。补齐前端 recycleApi.deleteRule 调用的端点 */
+    @DeleteMapping("/rules/{id}")
+    @Log(module = "线索回收", type = Log.OperationType.DELETE)
+    public R<Boolean> deleteRule(@PathVariable Long id) {
+        return R.ok(recycleService.removeById(id));
+    }
+
     @GetMapping("/log")
     public R<List<CrmRecycleRule>> log() {
         // 复用规则列表作为操作记录入口

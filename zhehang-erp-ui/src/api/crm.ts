@@ -158,7 +158,17 @@ export const leadApi = {
   /** 线索来源分布(营销统计) */
   sourceStats: () => get('/crm/lead/stats/source'),
   /** 线索阶段漏斗(营销统计) */
-  stageStats: () => get('/crm/lead/stats/stage')
+  stageStats: () => get('/crm/lead/stats/stage'),
+  /** 今天该打谁:数据范围内待跟进(逾期/今天到期/从未跟进)线索,按紧迫度排序 */
+  todoFollow: (params?: { pageNum?: number; pageSize?: number }) => get('/crm/lead/todo-follow', params),
+  /** 回收预警:保护期3天内到期的客资(再不跟进将被自动回收) */
+  recycleWarning: (params?: { pageNum?: number; pageSize?: number }) => get('/crm/lead/recycle-warning', params),
+  /** 手动触发自动回收(仅管理员),返回本次回收条数 */
+  runRecycle: () => post<number>('/crm/lead/recycle/run'),
+  /** 从工商库按关键词批量导入企业为公海线索(新公司入池),返回新建数量 */
+  importCompanies: (data: { keyword: string; limit?: number }) => post<number>('/crm/lead/import-companies', data),
+  /** 转化率汇总(数据范围内):total/newLeads/converting/converted/invalid/conversionRate */
+  conversionStats: () => get<{ total: number; newLeads: number; converting: number; converted: number; invalid: number; conversionRate: number }>('/crm/lead/stats/conversion')
 }
 
 // 客户管理
@@ -281,7 +291,8 @@ export const distributeApi = {
 export const recycleApi = {
   getRules: () => get<RecycleRule[]>('/crm/recycle/rules'),
   saveRule: (data: Partial<RecycleRule>) => post('/crm/recycle/rules', data),
-  updateRule: (data: Partial<RecycleRule>) => put('/crm/recycle/rules', data),
+  // 后端 saveRule 为 upsert(带id即更新),原 PUT /crm/recycle/rules 端点不存在
+  updateRule: (data: Partial<RecycleRule>) => post('/crm/recycle/rules', data),
   deleteRule: (id: number) => del(`/crm/recycle/rules/${id}`),
   manualRecycle: (data: { leadIds: number[]; reason: string }) => post('/crm/recycle/manual', data),
   getWarningList: (params: { level?: string; page?: number; size?: number }) => get<{ list: WarningItem[]; total: number }>('/crm/recycle/warning', params),

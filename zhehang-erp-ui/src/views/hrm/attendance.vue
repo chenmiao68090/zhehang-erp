@@ -1,86 +1,123 @@
 <template>
   <div class="hrm-attendance">
-    <!-- Stats Cards -->
-    <el-row :gutter="16" class="stats-row">
-      <el-col :span="4" v-for="(item, key) in statsCards" :key="key">
-        <el-card shadow="never" class="stat-card" :class="item.class">
-          <div class="stat-value">{{ stats[key] || 0 }}</div>
-          <div class="stat-label">{{ item.label }}</div>
-        </el-card>
-      </el-col>
-      <el-col :span="4">
-        <el-card shadow="never" class="stat-card clock-card">
-          <el-button type="primary" size="large" @click="handleClockIn" :disabled="clockedIn" class="clock-btn">
-            {{ $t('hrm.attendance.clockIn') }}
-          </el-button>
-          <el-button type="success" size="large" @click="handleClockOut" :disabled="!clockedIn || clockedOut" class="clock-btn">
-            {{ $t('hrm.attendance.clockOut') }}
-          </el-button>
+    <!-- 工作时间规则说明（静态文案，对应后端固定的 09:00-18:00 规则） -->
+    <el-alert
+      class="rule-alert"
+      :title="$t('hrm.attendance.workRuleTitle')"
+      type="info"
+      :description="$t('hrm.attendance.workRuleDesc')"
+      show-icon
+      :closable="false"
+    />
+
+    <!-- 工具栏：月份筛选 / 显示已离职 / 个人打卡 / 请假 -->
+    <el-card shadow="never" class="toolbar-card">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <el-date-picker
+            v-model="selectedMonth"
+            type="month"
+            value-format="YYYY-MM"
+            :clearable="false"
+            :placeholder="$t('hrm.attendance.month')"
+            style="width:150px"
+            @change="loadAll"
+          />
+          <el-checkbox v-model="showResigned" @change="loadAll" style="margin-left:16px">
+            {{ $t('hrm.attendance.showResigned') }}
+          </el-checkbox>
+        </div>
+        <div class="toolbar-right">
+          <el-button type="primary" :disabled="clockedIn" @click="handleClockIn">{{ $t('hrm.attendance.clockIn') }}</el-button>
+          <el-button type="success" :disabled="!clockedIn || clockedOut" @click="handleClockOut">{{ $t('hrm.attendance.clockOut') }}</el-button>
+          <el-button type="warning" @click="leaveDialogVisible = true">{{ $t('hrm.attendance.leave') }}</el-button>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 统计卡片（8 个） -->
+    <el-row :gutter="12" class="stats-row" v-loading="statsLoading">
+      <el-col :span="3" v-for="card in statCards" :key="card.key">
+        <el-card shadow="never" class="stat-card" :class="card.class">
+          <div class="stat-value">
+            <span v-if="card.gap" class="gap-text">—</span>
+            <template v-else>{{ card.value }}<span v-if="card.suffix" class="stat-suffix">{{ card.suffix }}</span></template>
+          </div>
+          <div class="stat-label">
+            {{ card.label }}
+            <el-tooltip v-if="card.gap" :content="$t('hrm.attendance.noBackendTip')" placement="top">
+              <el-icon class="gap-icon"><InfoFilled /></el-icon>
+            </el-tooltip>
+          </div>
         </el-card>
       </el-col>
     </el-row>
 
-    <!-- Filter & Table -->
+    <!-- 整体出勤率 -->
+    <el-card shadow="never" class="rate-card" v-loading="statsLoading">
+      <div class="rate-header">
+        <span class="rate-title">{{ $t('hrm.attendance.overallRate') }}</span>
+        <span class="rate-value">{{ overallRate }}%</span>
+      </div>
+      <el-progress :percentage="overallRate" :stroke-width="16" :color="rateColor" :show-text="false" />
+    </el-card>
+
+    <!-- 考勤明细（按员工汇总） -->
     <el-card shadow="never" class="table-card">
       <template #header>
         <div class="card-header">
-          <div class="header-left">
-            <span>{{ $t('hrm.attendance.title') }}</span>
-            <el-date-picker v-model="selectedMonth" type="month" value-format="YYYY-MM" :placeholder="$t('hrm.attendance.month')" @change="handleMonthChange" style="margin-left:16px;width:160px" />
-          </div>
-          <div>
-            <el-button :type="viewMode === 'list' ? 'primary' : 'default'" @click="viewMode = 'list'">{{ $t('hrm.attendance.listView') }}</el-button>
-            <el-button :type="viewMode === 'calendar' ? 'primary' : 'default'" @click="viewMode = 'calendar'">{{ $t('hrm.attendance.calendarView') }}</el-button>
-            <el-button type="warning" @click="leaveDialogVisible = true">{{ $t('hrm.attendance.leave') }}</el-button>
-          </div>
+          <span>{{ $t('hrm.attendance.detailTitle') }}</span>
         </div>
       </template>
 
-      <!-- List View -->
-      <el-table v-if="viewMode === 'list'" :data="tableData" v-loading="loading" border stripe>
-        <el-table-column prop="attendanceDate" :label="$t('hrm.attendance.date')" width="120" />
-        <el-table-column prop="clockIn" :label="$t('hrm.attendance.clockIn')" width="100" />
-        <el-table-column prop="clockOut" :label="$t('hrm.attendance.clockOut')" width="100" />
-        <el-table-column prop="workHours" :label="$t('hrm.attendance.workHours')" width="100" align="center">
-          <template #default="{ row }">{{ row.workHours ? row.workHours + 'h' : '-' }}</template>
+      <el-table :data="tableData" v-loading="loading" border stripe>
+        <el-table-column type="index" label="#" width="50" align="center" />
+        <el-table-column prop="name" :label="$t('hrm.attendance.colName')" width="110" fixed="left" />
+        <el-table-column prop="deptName" :label="$t('hrm.attendance.colDept')" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.deptName || '—' }}</template>
         </el-table-column>
-        <el-table-column :label="$t('hrm.attendance.status')" width="100">
-          <template #default="{ row }">
-            <el-tag :type="attendanceStatusType(row.status)">{{ attendanceStatusLabel(row.status) }}</el-tag>
-          </template>
+        <!-- 应出勤：后端无“应出勤天数”口径 -->
+        <el-table-column :label="colExpectedLabel" width="90" align="center">
+          <template #default>—</template>
         </el-table-column>
-        <el-table-column prop="remark" :label="$t('hrm.attendance.remark')" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="actual" :label="$t('hrm.attendance.colActual')" width="90" align="center" />
+        <el-table-column prop="normal" :label="$t('hrm.attendance.colNormal')" width="80" align="center">
+          <template #default="{ row }"><span class="num-normal">{{ row.normal }}</span></template>
+        </el-table-column>
+        <el-table-column :label="$t('hrm.attendance.colAbnormal')" width="80" align="center">
+          <template #default="{ row }"><span class="num-bad">{{ row.abnormal }}</span></template>
+        </el-table-column>
+        <el-table-column prop="late" :label="$t('hrm.attendance.colLate')" width="70" align="center">
+          <template #default="{ row }"><span :class="{ 'num-warn': row.late }">{{ row.late }}</span></template>
+        </el-table-column>
+        <el-table-column prop="early" :label="$t('hrm.attendance.colEarly')" width="70" align="center">
+          <template #default="{ row }"><span :class="{ 'num-warn': row.early }">{{ row.early }}</span></template>
+        </el-table-column>
+        <el-table-column prop="absent" :label="$t('hrm.attendance.colAbsent')" width="70" align="center">
+          <template #default="{ row }"><span :class="{ 'num-bad': row.absent }">{{ row.absent }}</span></template>
+        </el-table-column>
+        <!-- 以下列后端无对应字段，标注 gapsNoBackend，统一显示 — -->
+        <el-table-column :label="colMissingLabel" width="70" align="center"><template #default>—</template></el-table-column>
+        <el-table-column :label="colMakeupLabel" width="70" align="center"><template #default>—</template></el-table-column>
+        <el-table-column :label="colPersonalLabel" width="70" align="center"><template #default>—</template></el-table-column>
+        <el-table-column :label="colSickLabel" width="70" align="center"><template #default>—</template></el-table-column>
+        <el-table-column :label="colMaternityLabel" width="70" align="center"><template #default>—</template></el-table-column>
+        <el-table-column :label="colMakeupFeeLabel" width="90" align="center"><template #default>—</template></el-table-column>
       </el-table>
 
-      <!-- Calendar View -->
-      <div v-else class="calendar-grid">
-        <div class="calendar-header">
-          <div v-for="d in weekDays" :key="d" class="calendar-header-cell">{{ d }}</div>
-        </div>
-        <div class="calendar-body">
-          <div v-for="(day, idx) in calendarDays" :key="idx" class="calendar-cell" :class="{ 'other-month': !day.current, 'today': day.isToday }">
-            <div class="day-num">{{ day.day }}</div>
-            <div v-if="day.record" class="day-status">
-              <el-tag size="small" :type="attendanceStatusType(day.record.status)">{{ attendanceStatusLabel(day.record.status) }}</el-tag>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <el-pagination
-        v-if="viewMode === 'list'"
-        v-model:current-page="queryParams.pageNum"
-        v-model:page-size="queryParams.pageSize"
+        v-model:current-page="pageNum"
+        v-model:page-size="pageSize"
         :total="total"
         :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next, jumper"
-        @size-change="getList"
-        @current-change="getList"
+        @size-change="loadAll"
+        @current-change="loadAll"
         class="pagination"
       />
     </el-card>
 
-    <!-- Leave Dialog -->
+    <!-- 请假申请弹窗（真实后端 leaveApi.create） -->
     <el-dialog v-model="leaveDialogVisible" :title="$t('hrm.attendance.leave')" width="500px" destroy-on-close>
       <el-form :model="leaveForm" ref="leaveFormRef" label-width="90px">
         <el-form-item :label="$t('hrm.attendance.leaveType')" prop="leaveType">
@@ -94,10 +131,10 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="$t('hrm.attendance.leaveStart')" prop="startTime">
-          <el-date-picker v-model="leaveForm.startTime" type="datetime" style="width:100%" />
+          <el-date-picker v-model="leaveForm.startTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
         </el-form-item>
         <el-form-item :label="$t('hrm.attendance.leaveEnd')" prop="endTime">
-          <el-date-picker v-model="leaveForm.endTime" type="datetime" style="width:100%" />
+          <el-date-picker v-model="leaveForm.endTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
         </el-form-item>
         <el-form-item :label="$t('hrm.attendance.leaveDuration')">
           <el-input :model-value="computedDuration" disabled>
@@ -120,67 +157,90 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { InfoFilled } from '@element-plus/icons-vue'
 import { attendanceApi, leaveApi } from '@/api/hrm'
+import { employeeApi } from '@/api/org'
+import { useUserStore } from '@/stores/user'
 
 const { t } = useI18n()
+const userStore = useUserStore()
+
 const loading = ref(false)
-const tableData = ref<any[]>([])
-const total = ref(0)
-const viewMode = ref<'list' | 'calendar'>('list')
-const clockedIn = ref(false)
-const clockedOut = ref(false)
+const statsLoading = ref(false)
 const leaveDialogVisible = ref(false)
 const leaveFormRef = ref()
+const clockedIn = ref(false)
+const clockedOut = ref(false)
 
 const now = new Date()
 const selectedMonth = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
-const currentEmployeeId = 1 // mock current user
+const showResigned = ref(false)
 
-const queryParams = reactive({ pageNum: 1, pageSize: 20, employeeId: currentEmployeeId, month: selectedMonth.value })
+const pageNum = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 
-const stats = ref<Record<string, number>>({ normal: 0, late: 0, early: 0, absent: 0, total: 0 })
+// 按员工汇总后的明细行
+interface AttendRow {
+  employeeId: number
+  name: string
+  deptName: string
+  actual: number   // 实际出勤(=当月考勤记录数)
+  normal: number
+  late: number
+  early: number
+  absent: number   // 旷工(缺勤)
+  abnormal: number // 异常 = 迟到+早退+旷工
+}
+const tableData = ref<AttendRow[]>([])
 
-const statsCards = computed(() => ({
-  normal: { label: t('hrm.attendance.statsNormal'), class: 'stat-normal' },
-  late: { label: t('hrm.attendance.statsLate'), class: 'stat-late' },
-  early: { label: t('hrm.attendance.statsEarly'), class: 'stat-early' },
-  absent: { label: t('hrm.attendance.statsAbsent'), class: 'stat-absent' },
-  total: { label: t('hrm.attendance.statsTotal'), class: 'stat-total' }
-}))
-
-const weekDays = ['一', '二', '三', '四', '五', '六', '日']
-
-const calendarDays = computed(() => {
-  const [year, month] = selectedMonth.value.split('-').map(Number)
-  const firstDay = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0)
-  const startWeekDay = firstDay.getDay() || 7
-  const days: any[] = []
-  const today = new Date()
-
-  // Previous month padding
-  for (let i = startWeekDay - 1; i > 0; i--) {
-    const d = new Date(year, month - 1, 1 - i)
-    days.push({ day: d.getDate(), current: false, record: null, isToday: false })
-  }
-  // Current month
-  for (let i = 1; i <= lastDay.getDate(); i++) {
-    const isToday = year === today.getFullYear() && month === today.getMonth() + 1 && i === today.getDate()
-    const record = tableData.value.find((r: any) => {
-      const d = new Date(r.attendanceDate)
-      return d.getDate() === i
-    })
-    days.push({ day: i, current: true, record, isToday })
-  }
-  // Next month padding
-  const remaining = 42 - days.length
-  for (let i = 1; i <= remaining; i++) {
-    days.push({ day: i, current: false, record: null, isToday: false })
-  }
-  return days
+// 8 个统计卡的聚合值
+const summary = reactive({
+  headcount: 0,   // 考勤人数(本页员工数)
+  actual: 0,      // 实际打卡(人次)
+  normal: 0,
+  late: 0,
+  early: 0,
+  absent: 0       // 旷工
 })
 
-const leaveForm = reactive({ leaveType: 1, startTime: '', endTime: '', reason: '', employeeId: currentEmployeeId })
+// 列标签（用于后端缺字段列；与可用列区分开，方便维护）
+const colExpectedLabel = computed(() => t('hrm.attendance.colExpected'))
+const colMissingLabel = computed(() => t('hrm.attendance.colMissingCard'))
+const colMakeupLabel = computed(() => t('hrm.attendance.colMakeup'))
+const colPersonalLabel = computed(() => t('hrm.attendance.colPersonalLeave'))
+const colSickLabel = computed(() => t('hrm.attendance.colSickLeave'))
+const colMaternityLabel = computed(() => t('hrm.attendance.colMaternity'))
+const colMakeupFeeLabel = computed(() => t('hrm.attendance.colMakeupFee'))
+
+const statCards = computed(() => [
+  { key: 'headcount', label: t('hrm.attendance.statHeadcount'), value: summary.headcount, class: 'c-blue', gap: false },
+  // 应出勤(人次):后端无“应出勤天数”口径 → gapsNoBackend
+  { key: 'expected', label: t('hrm.attendance.statExpected'), value: 0, class: 'c-cyan', gap: true },
+  { key: 'actual', label: t('hrm.attendance.statActualClock'), value: summary.actual, class: 'c-teal', gap: false },
+  { key: 'normal', label: t('hrm.attendance.statNormal'), value: summary.normal, class: 'c-green', gap: false },
+  { key: 'late', label: t('hrm.attendance.statLate'), value: summary.late, class: 'c-orange', gap: false },
+  { key: 'absent', label: t('hrm.attendance.statAbsent'), value: summary.absent, class: 'c-red', gap: false },
+  // 缺卡:后端 status 无“缺卡”枚举 → gapsNoBackend
+  { key: 'missing', label: t('hrm.attendance.statMissingCard'), value: 0, class: 'c-purple', gap: true },
+  // 事假病假(h):请假为独立模块且不计入考勤小时 → gapsNoBackend
+  { key: 'leaveHours', label: t('hrm.attendance.statLeaveHours'), value: 0, suffix: 'h', class: 'c-gray', gap: true }
+])
+
+// 整体出勤率 = 正常 / (正常+迟到+早退+旷工)
+const overallRate = computed(() => {
+  const denom = summary.normal + summary.late + summary.early + summary.absent
+  if (!denom) return 0
+  return Math.round((summary.normal / denom) * 1000) / 10
+})
+
+const rateColor = computed(() => {
+  if (overallRate.value >= 95) return '#67c23a'
+  if (overallRate.value >= 85) return '#e6a23c'
+  return '#f56c6c'
+})
+
+const leaveForm = reactive({ leaveType: 1, startTime: '', endTime: '', reason: '', employeeId: 0 })
 
 const computedDuration = computed(() => {
   if (!leaveForm.startTime || !leaveForm.endTime) return '0'
@@ -188,48 +248,90 @@ const computedDuration = computed(() => {
   return (diff / (1000 * 60 * 60 * 24)).toFixed(1)
 })
 
-function attendanceStatusLabel(status: number) {
-  const map: Record<number, string> = {
-    0: t('hrm.attendance.statusNormal'), 1: t('hrm.attendance.statusLate'),
-    2: t('hrm.attendance.statusEarly'), 3: t('hrm.attendance.statusAbsent')
-  }
-  return map[status] || ''
-}
-
-function attendanceStatusType(status: number) {
-  const map: Record<number, string> = { 0: 'success', 1: 'warning', 2: 'warning', 3: 'danger' }
-  return map[status] || 'info'
-}
-
-async function getList() {
+/**
+ * 加载考勤统计:
+ * 1) 拉员工列表(后端已按数据范围收敛:HR/管理员看全部,普通员工只看自己一条)。
+ *    showResigned 关闭时只看在职/试用(status 1、2),开启则不传 status(含离职 3)。
+ * 2) 对每个员工调 /hrm/attendance/stats?employeeId&month 取月度统计,拼成明细行并汇总卡片。
+ *    stats 返回 {normal,late,early,absent,total};total=当月考勤记录数=实际出勤/打卡人次。
+ */
+async function loadAll() {
   loading.value = true
+  statsLoading.value = true
   try {
-    queryParams.month = selectedMonth.value
-    const res = await attendanceApi.list(queryParams)
-    tableData.value = res.data?.records || []
-    total.value = res.data?.total || 0
-  } finally { loading.value = false }
-}
+    const empRes: any = await employeeApi.list({
+      pageNum: pageNum.value,
+      pageSize: pageSize.value,
+      status: showResigned.value ? undefined : 1 // 后端 status 单值;不显示离职时只取在职(1)
+    })
+    const employees: any[] = empRes.data?.records || []
+    total.value = empRes.data?.total || employees.length
 
-async function getStats() {
-  const res = await attendanceApi.stats({ employeeId: currentEmployeeId, month: selectedMonth.value })
-  stats.value = res.data || {}
-}
+    // 当前登录用户对应的员工(用于请假表单 employeeId 兜底)
+    const myUserId = userStore.userInfo?.userId || userStore.userInfo?.id
+    const mine = employees.find(e => Number(e.userId) === Number(myUserId))
+    if (mine) leaveForm.employeeId = mine.id
 
-function handleMonthChange() { getList(); getStats() }
+    // 并发取每位员工的月度统计
+    const statsList = await Promise.all(
+      employees.map(e =>
+        attendanceApi.stats({ employeeId: e.id, month: selectedMonth.value })
+          .then((r: any) => ({ emp: e, s: r.data || {} }))
+          .catch(() => ({ emp: e, s: {} as any }))
+      )
+    )
+
+    let sNormal = 0, sLate = 0, sEarly = 0, sAbsent = 0, sActual = 0
+    tableData.value = statsList.map(({ emp, s }) => {
+      const normal = Number(s.normal || 0)
+      const late = Number(s.late || 0)
+      const early = Number(s.early || 0)
+      const absent = Number(s.absent || 0)
+      const actual = Number(s.total || 0)
+      sNormal += normal; sLate += late; sEarly += early; sAbsent += absent; sActual += actual
+      return {
+        employeeId: emp.id,
+        name: emp.name || '',
+        deptName: emp.deptName || '',
+        actual,
+        normal,
+        late,
+        early,
+        absent,
+        abnormal: late + early + absent
+      }
+    })
+
+    summary.headcount = total.value
+    summary.actual = sActual
+    summary.normal = sNormal
+    summary.late = sLate
+    summary.early = sEarly
+    summary.absent = sAbsent
+  } catch {
+    tableData.value = []
+    total.value = 0
+    summary.headcount = 0; summary.actual = 0; summary.normal = 0; summary.late = 0; summary.early = 0; summary.absent = 0
+  } finally {
+    loading.value = false
+    statsLoading.value = false
+  }
+}
 
 async function handleClockIn() {
-  await attendanceApi.clockIn(currentEmployeeId)
+  if (!leaveForm.employeeId) { ElMessage.warning(t('hrm.attendance.needEmployeeProfile')); return }
+  await attendanceApi.clockIn(leaveForm.employeeId)
   ElMessage.success(t('hrm.attendance.clockInSuccess'))
   clockedIn.value = true
-  getList(); getStats()
+  loadAll()
 }
 
 async function handleClockOut() {
-  await attendanceApi.clockOut(currentEmployeeId)
+  if (!leaveForm.employeeId) return
+  await attendanceApi.clockOut(leaveForm.employeeId)
   ElMessage.success(t('hrm.attendance.clockOutSuccess'))
   clockedOut.value = true
-  getList(); getStats()
+  loadAll()
 }
 
 async function handleLeaveSubmit() {
@@ -239,32 +341,37 @@ async function handleLeaveSubmit() {
   leaveDialogVisible.value = false
 }
 
-onMounted(() => { getList(); getStats() })
+onMounted(loadAll)
 </script>
 
 <style scoped>
 .hrm-attendance { padding: 16px; }
-.stats-row { margin-bottom: 16px; }
-.stat-card { text-align: center; padding: 12px 0; }
-.stat-value { font-size: 28px; font-weight: bold; }
-.stat-normal .stat-value { color: #67c23a; }
-.stat-late .stat-value { color: #e6a23c; }
-.stat-early .stat-value { color: #e6a23c; }
-.stat-absent .stat-value { color: #f56c6c; }
-.stat-total .stat-value { color: #F26522; }
-.stat-label { font-size: 13px; color: #909399; margin-top: 4px; }
-.clock-card { display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; }
-.clock-btn { width: 100%; }
+.rule-alert { margin-bottom: 12px; }
+.toolbar-card { margin-bottom: 12px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; }
+.toolbar-left { display: flex; align-items: center; }
+.stats-row { margin-bottom: 12px; }
+.stat-card { text-align: center; padding: 10px 0; border-radius: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; line-height: 1.2; }
+.stat-suffix { font-size: 14px; margin-left: 2px; font-weight: 500; }
+.gap-text { color: #c0c4cc; font-weight: 500; }
+.stat-label { font-size: 12px; color: #909399; margin-top: 6px; }
+.gap-icon { font-size: 12px; color: #c0c4cc; vertical-align: middle; margin-left: 2px; cursor: help; }
+.c-blue .stat-value { color: #409eff; }
+.c-cyan .stat-value { color: #17c0c0; }
+.c-teal .stat-value { color: #13a8a8; }
+.c-green .stat-value { color: #67c23a; }
+.c-orange .stat-value { color: #e6a23c; }
+.c-red .stat-value { color: #f56c6c; }
+.c-purple .stat-value { color: #909bf5; }
+.c-gray .stat-value { color: #909399; }
+.rate-card { margin-bottom: 12px; }
+.rate-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.rate-title { font-size: 14px; font-weight: 600; color: #303133; }
+.rate-value { font-size: 22px; font-weight: 700; color: #F26522; }
 .table-card .card-header { display: flex; justify-content: space-between; align-items: center; }
-.header-left { display: flex; align-items: center; }
+.num-normal { color: #67c23a; }
+.num-warn { color: #e6a23c; font-weight: 600; }
+.num-bad { color: #f56c6c; font-weight: 600; }
 .pagination { margin-top: 16px; justify-content: flex-end; }
-.calendar-grid { border: 1px solid #ebeef5; border-radius: 4px; }
-.calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); background: #f5f7fa; }
-.calendar-header-cell { padding: 8px; text-align: center; font-weight: bold; font-size: 13px; }
-.calendar-body { display: grid; grid-template-columns: repeat(7, 1fr); }
-.calendar-cell { min-height: 70px; padding: 6px; border: 1px solid #ebeef5; }
-.calendar-cell.other-month { background: #fafafa; color: #c0c4cc; }
-.calendar-cell.today { background: #ecf5ff; }
-.day-num { font-size: 14px; font-weight: 500; }
-.day-status { margin-top: 4px; }
 </style>

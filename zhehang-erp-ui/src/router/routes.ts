@@ -199,6 +199,24 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '撞单管理', icon: 'Warning' }
       }
     ]
+  },
+  {
+    path: '/approval',
+    component: Layout,
+    redirect: '/approval/index',
+    meta: { title: '审批中心', icon: 'Stamp' },
+    children: [
+      { path: 'index', name: 'ApprovalCenter', component: () => import('@/views/approval/index.vue'), meta: { title: '审批中心', icon: 'Stamp' } }
+    ]
+  },
+  {
+    path: '/culture',
+    component: Layout,
+    redirect: '/culture/index',
+    meta: { title: '人文中心', icon: 'Star' },
+    children: [
+      { path: 'index', name: 'CultureCenter', component: () => import('@/views/culture/index.vue'), meta: { title: '人文中心', icon: 'Star' } }
+    ]
   }
 ]
 
@@ -328,6 +346,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
     children: [
       { path: 'user', name: 'SystemUser', component: () => import('@/views/system/user.vue'), meta: { title: '用户管理' } },
       { path: 'role', name: 'SystemRole', component: () => import('@/views/system/role.vue'), meta: { title: '角色管理' } },
+      { path: 'permission', name: 'SystemPermission', component: () => import('@/views/system/permission-setting.vue'), meta: { title: '权限设置', icon: 'Lock' } },
       { path: 'menu', name: 'SystemMenu', component: () => import('@/views/system/menu.vue'), meta: { title: '菜单管理' } },
       { path: 'login-log', name: 'LoginLog', component: () => import('@/views/system/login-log.vue'), meta: { title: '登录日志' } },
       { path: 'oper-log', name: 'OperLog', component: () => import('@/views/system/oper-log.vue'), meta: { title: '操作日志' } },

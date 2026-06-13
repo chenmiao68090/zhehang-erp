@@ -1,6 +1,15 @@
-// ===== 渠道管理 API（localStorage Mock 模式） =====
+// ===== 渠道管理 API（真实后端：modules/channel 下 /supplier /address /procurement /channel-cost） =====
+// 说明：
+// 1. request.ts 的响应拦截器 resolve 的是 R 信封 {code,message,data}，这里统一用 unwrap() 取 data 载荷。
+// 2. 分页接口返回 MyBatis-Plus IPage {records,total,...}，api 层适配成视图期望的 {list,total}。
+// 3. 后端 Jackson 开启了 FAIL_ON_UNKNOWN_PROPERTIES（JacksonConfig 用 new ObjectMapper()），
+//    所以所有写入请求体都按后端 Entity 字段白名单构造，不能把视图表单整包发出去。
+// 4. 导出的函数名与返回形状保持与原 mock 版一致，字段在本文件内做双向映射。
 
+import { get, post, put, del } from './request'
 import { syncPrivateAddressInventoryFromStockIn } from './private-domain'
+
+// ---------- 视图层类型（保持原 mock 形状，视图零改动） ----------
 
 export interface BizSupplier {
   id: number
@@ -35,7 +44,7 @@ export interface BizSupplier {
   totalProcurement: number
   totalCommission: number
   rating: number
-  status: 'active' | 'paused' | 'blacklist'
+  status: 'active' | 'paused' | 'blacklist' | 'terminated' | 'potential'
   remark: string
   createTime: string
 }
@@ -53,7 +62,7 @@ export interface BizAddressResource {
   area: number
   monthlyCost: number
   yearlyCost: number
-  status: 'available' | 'reserved' | 'sold' | 'expired'
+  status: 'available' | 'reserved' | 'sold' | 'expired' | 'abnormal'
   reservedBy: number
   reservedByName?: string
   reservedTime: string
@@ -98,7 +107,7 @@ export interface BizProcurement {
   needBossApproval?: boolean
   payerId: number
   paymentTime: string
-  status: 'draft' | 'pending_approval' | 'pending_boss' | 'approved' | 'paid' | 'stocked' | 'rejected'
+  status: 'draft' | 'pending_approval' | 'pending_boss' | 'approved' | 'paid' | 'stocked' | 'rejected' | 'cancelled'
   stockInTime: string
   stockedAddressIds?: number[]
   remark: string
@@ -108,7 +117,7 @@ export interface BizProcurement {
 export interface BizChannelCost {
   id: number
   costNo: string
-  channelType: 'baidu' | 'tencent' | 'douyin' | 'kuaishou' | 'zhihu' | 'xiaohongshu' | 'offline' | 'other'
+  channelType: string
   channelName: string
   campaignName: string
   startDate: string
@@ -138,746 +147,510 @@ export interface ChannelROI {
   roi: number
 }
 
-const SP_KEY = 'biz_suppliers'
-const AD_KEY = 'biz_address_resources'
-const PR_KEY = 'biz_procurements'
-const CC_KEY = 'biz_channel_costs'
-const SEED_VERSION = '2026-06-07-supply-operational-v1'
+// ---------- 通用小工具 ----------
 
-const delay = <T>(d: T, ms = 100): Promise<T> => new Promise(r => setTimeout(() => r(d), ms))
-const ts = (off = 0) => {
-  const d = new Date()
-  d.setDate(d.getDate() + off)
-  return d.toISOString().slice(0, 19).replace('T', ' ')
-}
-const dateOnly = (off = 0) => {
-  const d = new Date()
-  d.setDate(d.getDate() + off)
-  return d.toISOString().slice(0, 10)
-}
-function load<T>(key: string, builder: () => T[]): T[] {
-  const raw = localStorage.getItem(key)
-  const versionKey = `${key}_seed_version`
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as T[]
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    } catch { /* ignore */ }
-  }
-  const seed = builder()
-  localStorage.setItem(key, JSON.stringify(seed))
-  if (seed.length > 0) localStorage.setItem(versionKey, SEED_VERSION)
-  return seed
-}
-function save<T>(key: string, list: T[]) { localStorage.setItem(key, JSON.stringify(list)) }
-function paginate<T>(list: T[], page = 1, pageSize = 10) {
-  return { list: list.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize), total: list.length }
-}
-function genNo(prefix: string, id: number) {
-  const d = new Date()
-  return `${prefix}${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(id).padStart(4, '0')}`
+/** 拦截器 resolve 的是 R 信封，这里取 data 载荷（兼容未来拦截器直接返回载荷的情况） */
+function unwrap<T = any>(res: any): T {
+  if (res && typeof res === 'object' && 'code' in res && 'data' in res) return res.data as T
+  return res as T
 }
 
-function inferCityFromAddress(detail: string, district: string) {
-  if (detail.includes('义乌') || district.includes('义乌')) return '金华市'
-  if (detail.includes('宁波') || district.includes('宁波')) return '宁波市'
-  if (detail.includes('温州') || district.includes('温州')) return '温州市'
+/** IPage -> {list,total} */
+function toPage<T>(data: any): { list: T[]; total: number } {
+  const list = Array.isArray(data?.records) ? data.records : (Array.isArray(data?.list) ? data.list : [])
+  return { list, total: Number(data?.total || list.length || 0) }
+}
+
+const num = (v: any): number => (v === null || v === undefined || v === '' ? 0 : Number(v) || 0)
+const isDateStr = (v: any): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)
+const today = () => new Date().toISOString().slice(0, 10)
+const currentYm = () => new Date().toISOString().slice(0, 7)
+
+function inferCityFromRegion (region: string) {
+  if (region.includes('义乌')) return '金华市'
+  if (region.includes('宁波')) return '宁波市'
+  if (region.includes('温州')) return '温州市'
   return '杭州市'
 }
 
-function inferDistrictFromAddressParts(parts: string[]) {
+function inferDistrictFromAddressParts (parts: string[]) {
   const first = parts[0] || ''
   const second = parts[1] || ''
   if (first.endsWith('市') && second) return second
-  return first.length <= 4 ? first : '萧山区'
+  return first && first.length <= 4 ? first : '萧山区'
 }
 
-function seedSuppliers(): BizSupplier[] {
-  return [
-    {
-      id: 1,
-      supplierNo: 'SUP20260001',
-      supplierName: '杭州运河企服园区管理有限公司',
-      shortName: '运河企服',
-      supplierType: 'address',
-      contactName: '沈经理',
-      contactPhone: '13857120011',
-      contactWechat: 'yhqifu001',
-      contactEmail: 'address@yhqifu.cn',
-      companyAddress: '浙江省杭州市拱墅区祥园路 108 号智慧信息产业园',
-      regions: ['杭州市拱墅区', '杭州市上城区'],
-      detailAddresses: '拱墅区祥园路园区地址\n上城区湖滨商务秘书地址',
-      yearlyPrice: 1800,
-      halfYearPrice: 1080,
-      quarterPrice: 620,
-      minYears: 1,
-      hasRebate: true,
-      rebateRate: 6,
-      settleCycle: 'quarterly',
-      payMethod: 'prepay',
-      creditDays: 0,
-      contractNo: 'ZH-ADDR-2026-001',
-      cooperateLevel: 'A',
-      cooperateStartDate: dateOnly(-220),
-      cooperateEndDate: dateOnly(145),
-      renewCondition: '提前 30 天确认续签,低于 20 个库存需补货',
-      bankAccount: '6222022600001001',
-      bankName: '招商银行杭州分行',
-      taxNo: '91330105MA2YH001X1',
-      totalProcurement: 46800,
-      totalCommission: 2800,
-      rating: 4.8,
-      status: 'active',
-      remark: '主力挂靠地址供应商,适合同行批量拿货',
-      createTime: ts(-180)
-    },
-    {
-      id: 2,
-      supplierNo: 'SUP20260002',
-      supplierName: '杭州钱塘商务秘书有限公司',
-      shortName: '钱塘秘书',
-      supplierType: 'address',
-      contactName: '周总',
-      contactPhone: '13777880022',
-      contactWechat: 'qtms002',
-      contactEmail: 'service@qtms.cn',
-      companyAddress: '浙江省杭州市钱塘区白杨街道科技园 9 幢',
-      regions: ['杭州市钱塘区', '杭州市滨江区'],
-      detailAddresses: '钱塘区白杨街道园区地址\n滨江区长河街道数创中心',
-      yearlyPrice: 2200,
-      halfYearPrice: 1280,
-      quarterPrice: 760,
-      minYears: 1,
-      hasRebate: true,
-      rebateRate: 8,
-      settleCycle: 'monthly',
-      payMethod: 'monthly',
-      creditDays: 15,
-      contractNo: 'ZH-ADDR-2026-002',
-      cooperateLevel: 'A',
-      cooperateStartDate: dateOnly(-168),
-      cooperateEndDate: dateOnly(196),
-      renewCondition: '月结对账,异常地址 2 小时内响应',
-      bankAccount: '6217002600002002',
-      bankName: '建设银行钱塘支行',
-      taxNo: '91330114MA2QT002X2',
-      totalProcurement: 52800,
-      totalCommission: 4100,
-      rating: 4.7,
-      status: 'active',
-      remark: '钱塘/滨江可售量稳定,适合网销高意向客户',
-      createTime: ts(-150)
-    },
-    {
-      id: 3,
-      supplierNo: 'SUP20260003',
-      supplierName: '义乌云商园企业管理有限公司',
-      shortName: '义乌云商',
-      supplierType: 'address',
-      contactName: '何经理',
-      contactPhone: '13957930033',
-      contactWechat: 'ywcloud003',
-      contactEmail: 'addr@ywcloud.cn',
-      companyAddress: '浙江省金华市义乌市稠城街道电商产业园 3 幢',
-      regions: ['义乌市稠城街道', '义乌市北苑街道'],
-      detailAddresses: '稠城街道电商园区地址\n北苑街道跨境电商园',
-      yearlyPrice: 1600,
-      halfYearPrice: 980,
-      quarterPrice: 580,
-      minYears: 1,
-      hasRebate: true,
-      rebateRate: 5,
-      settleCycle: 'quarterly',
-      payMethod: 'per_order',
-      creditDays: 7,
-      contractNo: 'ZH-ADDR-2026-003',
-      cooperateLevel: 'B',
-      cooperateStartDate: dateOnly(-90),
-      cooperateEndDate: dateOnly(275),
-      renewCondition: '库存低于 5 个时补充,同行客户优先锁定',
-      bankAccount: '6228482600003003',
-      bankName: '农业银行义乌支行',
-      taxNo: '91330782MA2YW003X3',
-      totalProcurement: 25600,
-      totalCommission: 1260,
-      rating: 4.3,
-      status: 'active',
-      remark: '义乌地址价格优势明显,当前需关注低库存',
-      createTime: ts(-82)
-    },
-    {
-      id: 4,
-      supplierNo: 'SUP20260004',
-      supplierName: '浙江企服数智平台有限公司',
-      shortName: '企服数智',
-      supplierType: 'platform',
-      contactName: '刘运营',
-      contactPhone: '13606510044',
-      contactWechat: 'qfsz004',
-      contactEmail: 'ops@qfsz.cn',
-      companyAddress: '浙江省杭州市西湖区文三路 90 号',
-      regions: ['杭州市', '金华市', '宁波市'],
-      detailAddresses: '工商信息核验 API\n智能外呼线索包\n企微社群运营工具',
-      yearlyPrice: 36000,
-      halfYearPrice: 19800,
-      quarterPrice: 10800,
-      minYears: 1,
-      hasRebate: false,
-      rebateRate: 0,
-      settleCycle: 'yearly',
-      payMethod: 'prepay',
-      creditDays: 0,
-      contractNo: 'ZH-TOOL-2026-001',
-      cooperateLevel: 'B',
-      cooperateStartDate: dateOnly(-120),
-      cooperateEndDate: dateOnly(245),
-      renewCondition: '按调用量和坐席数续费',
-      bankAccount: '6212262600004004',
-      bankName: '工商银行文三路支行',
-      taxNo: '91330106MA2QF004X4',
-      totalProcurement: 36000,
-      totalCommission: 0,
-      rating: 4.2,
-      status: 'active',
-      remark: '支撑工商信息自动补全、线索清洗和外呼触达',
-      createTime: ts(-120)
-    }
-  ]
+function parseRegions (raw?: string): string[] {
+  if (!raw) return []
+  try {
+    const v = JSON.parse(raw)
+    if (Array.isArray(v)) return v.map(String)
+  } catch { /* 非 JSON 时按分隔符拆 */ }
+  return String(raw).split(/[\n,，、;；]+/).map(s => s.trim()).filter(Boolean)
 }
 
-function seedAddresses(): BizAddressResource[] {
-  const rows: Array<Partial<BizAddressResource> & Pick<BizAddressResource, 'id' | 'supplierId' | 'supplierName' | 'district' | 'detailAddress' | 'addressType' | 'yearlyCost' | 'status'>> = [
-    { id: 1, supplierId: 1, supplierName: '杭州运河企服园区管理有限公司', district: '拱墅区', detailAddress: '祥园路智慧信息产业园 A 座 108 室', addressType: 'park', yearlyCost: 1800, status: 'available' },
-    { id: 2, supplierId: 1, supplierName: '杭州运河企服园区管理有限公司', district: '拱墅区', detailAddress: '祥园路智慧信息产业园 B 座 216 室', addressType: 'park', yearlyCost: 1800, status: 'available' },
-    { id: 3, supplierId: 1, supplierName: '杭州运河企服园区管理有限公司', district: '上城区', detailAddress: '湖滨商务秘书中心 12 楼 1206 室', addressType: 'commercial', yearlyCost: 2100, status: 'reserved', reservedBy: 1008, reservedByName: '陈女士', reservedTime: ts(-1) },
-    { id: 4, supplierId: 1, supplierName: '杭州运河企服园区管理有限公司', district: '拱墅区', detailAddress: '祥园路智慧信息产业园 C 座 305 室', addressType: 'park', yearlyCost: 1800, status: 'sold', reservedByName: '浙江朗和装饰工程有限公司', soldOrderId: 2026060701, soldOrderNo: 'TD202606079835', soldTime: ts(-3) },
-    { id: 5, supplierId: 2, supplierName: '杭州钱塘商务秘书有限公司', district: '钱塘区', detailAddress: '白杨街道科技园 9 幢 501 室', addressType: 'co_working', yearlyCost: 2200, status: 'available' },
-    { id: 6, supplierId: 2, supplierName: '杭州钱塘商务秘书有限公司', district: '钱塘区', detailAddress: '白杨街道科技园 9 幢 502 室', addressType: 'co_working', yearlyCost: 2200, status: 'available' },
-    { id: 7, supplierId: 2, supplierName: '杭州钱塘商务秘书有限公司', district: '滨江区', detailAddress: '长河街道数创中心 3 幢 810 室', addressType: 'commercial', yearlyCost: 2400, status: 'available' },
-    { id: 8, supplierId: 2, supplierName: '杭州钱塘商务秘书有限公司', district: '滨江区', detailAddress: '长河街道数创中心 3 幢 811 室', addressType: 'commercial', yearlyCost: 2400, status: 'reserved', reservedBy: 1012, reservedByName: '王经理', reservedTime: ts() },
-    { id: 9, supplierId: 2, supplierName: '杭州钱塘商务秘书有限公司', district: '钱塘区', detailAddress: '下沙跨境电商园 2 幢 608 室', addressType: 'park', yearlyCost: 2000, status: 'sold', reservedByName: '杭州启辰企业管理有限公司', soldOrderId: 2026060702, soldOrderNo: 'TD202606071542', soldTime: ts(-8) },
-    { id: 10, supplierId: 3, supplierName: '义乌云商园企业管理有限公司', district: '义乌市', detailAddress: '稠城街道电商产业园 3 幢 211 室', addressType: 'park', yearlyCost: 1600, status: 'available' },
-    { id: 11, supplierId: 3, supplierName: '义乌云商园企业管理有限公司', district: '义乌市', detailAddress: '北苑街道跨境电商园 5 幢 409 室', addressType: 'park', yearlyCost: 1650, status: 'available' },
-    { id: 12, supplierId: 3, supplierName: '义乌云商园企业管理有限公司', district: '义乌市', detailAddress: '稠城街道电商产业园 3 幢 212 室', addressType: 'park', yearlyCost: 1600, status: 'sold', reservedByName: '义乌市诚达财税服务部', soldOrderId: 2026060703, soldOrderNo: 'TD202606071554', soldTime: ts(-2) },
-    { id: 13, supplierId: 1, supplierName: '杭州运河企服园区管理有限公司', district: '拱墅区', detailAddress: '祥园路智慧信息产业园 D 座 901 室', addressType: 'park', yearlyCost: 1700, status: 'expired', soldOrderId: 2025121201, soldOrderNo: 'TD202512120018', soldTime: ts(-178) },
-    { id: 14, supplierId: 2, supplierName: '杭州钱塘商务秘书有限公司', district: '滨江区', detailAddress: '长河街道数创中心 5 幢 1201 室', addressType: 'commercial', yearlyCost: 2600, status: 'available' }
-  ]
-  return rows.map(item => ({
-    province: '浙江省',
-    city: item.district === '义乌市' ? '金华市' : '杭州市',
-    area: item.addressType === 'commercial' ? 45 : 30,
-    monthlyCost: Math.round((item.yearlyCost || 0) / 12),
-    reservedBy: 0,
-    reservedByName: '',
-    reservedTime: '',
-    soldOrderId: 0,
-    soldOrderNo: '',
-    soldTime: '',
-    remark: item.status === 'expired' ? '到期待续签或重新上架' : '首批业务样例资源',
-    createTime: ts(-30 + item.id),
-    ...item,
-    resourceNo: `ADR${String(item.id).padStart(5, '0')}`
-  } as BizAddressResource))
+function parseDetailAddresses (raw?: string): string {
+  if (!raw) return ''
+  try {
+    const v = JSON.parse(raw)
+    if (Array.isArray(v)) return v.map(String).join('\n')
+  } catch { /* 原样返回 */ }
+  return String(raw)
 }
 
-function seedProcurements(): BizProcurement[] {
-  return [
-    {
-      id: 1,
-      procurementNo: 'PO2026060001',
-      supplierId: 1,
-      supplierName: '杭州运河企服园区管理有限公司',
-      procurementType: 'address',
-      procurementContent: '年付 · 拱墅园区地址补货 4 个',
-      quantity: 4,
-      unitPrice: 1800,
-      totalAmount: 7200,
-      payCycle: 'yearly',
-      rebateRate: 6,
-      payAmount: 6768,
-      addressLines: '拱墅区 祥园路智慧信息产业园 A 座 108 室\n拱墅区 祥园路智慧信息产业园 B 座 216 室\n拱墅区 祥园路智慧信息产业园 C 座 305 室\n拱墅区 祥园路智慧信息产业园 D 座 901 室',
-      applicantId: 1006,
-      applicantName: '渠道经理',
-      applyTime: ts(-18),
-      approverId: 9001,
-      approverName: '老板',
-      approvalTime: ts(-17),
-      approvalOpinion: '低库存补货,同意上架',
-      approvals: [
-        { level: 'manager', approverId: 1002, approverName: '渠道主管', approvalTime: ts(-17), pass: true, opinion: '供应商价格稳定,同意' },
-        { level: 'boss', approverId: 9001, approverName: '老板', approvalTime: ts(-17), pass: true, opinion: '金额超 3000,同意补货' }
-      ],
-      needBossApproval: true,
-      payerId: 1003,
-      paymentTime: ts(-16),
-      status: 'stocked',
-      stockInTime: ts(-15),
-      stockedAddressIds: [1, 2, 4, 13],
-      remark: '补足拱墅主力地址,支持私域和同行渠道销售',
-      createTime: ts(-18)
-    },
-    {
-      id: 2,
-      procurementNo: 'PO2026060002',
-      supplierId: 2,
-      supplierName: '杭州钱塘商务秘书有限公司',
-      procurementType: 'address',
-      procurementContent: '年付 · 钱塘/滨江地址补货 5 个',
-      quantity: 5,
-      unitPrice: 2200,
-      totalAmount: 11000,
-      payCycle: 'yearly',
-      rebateRate: 8,
-      payAmount: 10120,
-      addressLines: '钱塘区 白杨街道科技园 9 幢 501 室\n钱塘区 白杨街道科技园 9 幢 502 室\n滨江区 长河街道数创中心 3 幢 810 室\n滨江区 长河街道数创中心 3 幢 811 室\n钱塘区 下沙跨境电商园 2 幢 608 室',
-      applicantId: 1006,
-      applicantName: '渠道经理',
-      applyTime: ts(-9),
-      approverId: 1002,
-      approverName: '渠道主管',
-      approvalTime: ts(-8),
-      approvalOpinion: '通过,等待财务付款',
-      approvals: [
-        { level: 'manager', approverId: 1002, approverName: '渠道主管', approvalTime: ts(-8), pass: true, opinion: '网销成交需求较多,建议补货' }
-      ],
-      needBossApproval: true,
-      payerId: 0,
-      paymentTime: '',
-      status: 'pending_boss',
-      stockInTime: '',
-      stockedAddressIds: [],
-      remark: '钱塘/滨江需求增长,需老板二级审批',
-      createTime: ts(-9)
-    },
-    {
-      id: 3,
-      procurementNo: 'PO2026060003',
-      supplierId: 3,
-      supplierName: '义乌云商园企业管理有限公司',
-      procurementType: 'address',
-      procurementContent: '年付 · 义乌同行地址补货 3 个',
-      quantity: 3,
-      unitPrice: 1600,
-      totalAmount: 4800,
-      payCycle: 'yearly',
-      rebateRate: 5,
-      payAmount: 4560,
-      addressLines: '义乌市 稠城街道电商产业园 3 幢 211 室\n义乌市 北苑街道跨境电商园 5 幢 409 室\n义乌市 稠城街道电商产业园 3 幢 212 室',
-      applicantId: 1006,
-      applicantName: '渠道经理',
-      applyTime: ts(-1),
-      approverId: 1002,
-      approverName: '渠道主管',
-      approvalTime: ts(),
-      approvalOpinion: '已通过,待财务付款',
-      approvals: [
-        { level: 'manager', approverId: 1002, approverName: '渠道主管', approvalTime: ts(), pass: true, opinion: '义乌库存偏低,先补 3 个' }
-      ],
-      needBossApproval: true,
-      payerId: 0,
-      paymentTime: '',
-      status: 'approved',
-      stockInTime: '',
-      stockedAddressIds: [],
-      remark: '私域地址预警生成的补货需求',
-      createTime: ts(-1)
-    },
-    {
-      id: 4,
-      procurementNo: 'PO2026060004',
-      supplierId: 4,
-      supplierName: '浙江企服数智平台有限公司',
-      procurementType: 'tool',
-      procurementContent: '季付 · 工商信息核验 API 与线索清洗',
-      quantity: 1,
-      unitPrice: 10800,
-      totalAmount: 10800,
-      payCycle: 'quarter',
-      rebateRate: 0,
-      payAmount: 10800,
-      addressLines: '',
-      applicantId: 1007,
-      applicantName: '网销运营',
-      applyTime: ts(-5),
-      approverId: 9001,
-      approverName: '老板',
-      approvalTime: ts(-4),
-      approvalOpinion: '通过,需跟踪调用量和转化',
-      approvals: [
-        { level: 'manager', approverId: 1002, approverName: '运营主管', approvalTime: ts(-4), pass: true, opinion: '用于公司名称自动补工商信息' },
-        { level: 'boss', approverId: 9001, approverName: '老板', approvalTime: ts(-4), pass: true, opinion: '同意,月度复盘 ROI' }
-      ],
-      needBossApproval: true,
-      payerId: 1003,
-      paymentTime: ts(-3),
-      status: 'paid',
-      stockInTime: '',
-      stockedAddressIds: [],
-      remark: '支撑探迹/销帮帮类工商信息能力',
-      createTime: ts(-5)
-    }
-  ]
+// ---------- 供应商缓存（地址/采购单需要 join 出 supplierName，后端列表不带名称） ----------
+
+type RawSupplier = Record<string, any>
+let supplierCache: Map<number, RawSupplier> | null = null
+
+function fillSupplierCache (records: RawSupplier[]) {
+  supplierCache = new Map(records.map(s => [Number(s.id), s]))
 }
 
-function seedChannelCosts(): BizChannelCost[] {
-  const rows = [
-    { id: 1, channelType: 'douyin', channelName: '抖音信息流', campaignName: '6月代理记账线索', startDate: dateOnly(-18), endDate: dateOnly(12), budgetAmount: 30000, actualCost: 18600, leadCount: 214, conversionCount: 18, conversionAmount: 96800, status: 'running', remark: '短视频素材 3 套,重点投杭州小微企业' },
-    { id: 2, channelType: 'baidu', channelName: '百度搜索', campaignName: '工商注册关键词', startDate: dateOnly(-20), endDate: dateOnly(10), budgetAmount: 26000, actualCost: 17200, leadCount: 126, conversionCount: 14, conversionAmount: 74200, status: 'running', remark: '工商注册、公司变更、代理记账词包' },
-    { id: 3, channelType: 'tencent', channelName: '腾讯广告', campaignName: '企微私域加粉', startDate: dateOnly(-16), endDate: dateOnly(14), budgetAmount: 18000, actualCost: 9600, leadCount: 168, conversionCount: 9, conversionAmount: 41800, status: 'running', remark: '企微承接,需跟踪首响和二次触达' },
-    { id: 4, channelType: 'xiaohongshu', channelName: '小红书种草', campaignName: '异常解除内容投放', startDate: dateOnly(-30), endDate: dateOnly(), budgetAmount: 9000, actualCost: 6200, leadCount: 52, conversionCount: 4, conversionAmount: 14800, status: 'completed', remark: '适合税务异常、地址异常咨询' },
-    { id: 5, channelType: 'offline', channelName: '同行渠道转介绍', campaignName: '地址挂靠同行批发', startDate: dateOnly(-12), endDate: dateOnly(18), budgetAmount: 6000, actualCost: 3200, leadCount: 31, conversionCount: 11, conversionAmount: 68600, status: 'running', remark: '挂靠地址批量成交,需管控账期' },
-    { id: 6, channelType: 'kuaishou', channelName: '快手信息流', campaignName: '低价注册测试', startDate: dateOnly(-70), endDate: dateOnly(-40), budgetAmount: 12000, actualCost: 8800, leadCount: 96, conversionCount: 3, conversionAmount: 7600, status: 'completed', remark: '连续低 ROI,建议暂停或重做落地页' },
-    { id: 7, channelType: 'kuaishou', channelName: '快手信息流', campaignName: '5月代账获客复盘', startDate: dateOnly(-38), endDate: dateOnly(-8), budgetAmount: 10000, actualCost: 7200, leadCount: 82, conversionCount: 2, conversionAmount: 5600, status: 'completed', remark: '连续两月亏损,系统应提示停投' },
-    { id: 8, channelType: 'zhihu', channelName: '知乎问答', campaignName: '老板财税风险问答', startDate: dateOnly(-24), endDate: dateOnly(6), budgetAmount: 6000, actualCost: 2800, leadCount: 24, conversionCount: 3, conversionAmount: 12600, status: 'running', remark: '长尾内容带来高客单咨询' }
-  ] as Array<Omit<BizChannelCost, 'costNo' | 'costPerLead' | 'costPerConversion' | 'roi' | 'createTime'>>
-  return rows.map(row => ({
-    ...row,
-    costNo: `CC2026${String(row.id).padStart(4, '0')}`,
-    costPerLead: row.leadCount ? +(row.actualCost / row.leadCount).toFixed(2) : 0,
-    costPerConversion: row.conversionCount ? +(row.actualCost / row.conversionCount).toFixed(2) : 0,
-    roi: row.actualCost ? +((row.conversionAmount - row.actualCost) / row.actualCost * 100).toFixed(2) : 0,
-    createTime: ts(-20 + row.id)
-  }))
+async function supplierMap (): Promise<Map<number, RawSupplier>> {
+  if (supplierCache) return supplierCache
+  try {
+    const res = await get('/supplier/list', { pageNum: 1, pageSize: 500 }, { silentError: true })
+    fillSupplierCache(toPage<RawSupplier>(unwrap(res)).list)
+  } catch {
+    supplierCache = supplierCache || new Map()
+  }
+  return supplierCache!
+}
+
+// ---------- 供应商：后端实体 BizSupplier(channel/domain) <-> 视图形状 ----------
+
+function adaptSupplier (s: RawSupplier): BizSupplier {
+  return {
+    id: Number(s.id),
+    supplierNo: s.supplierNo || '',
+    supplierName: s.name || '',
+    shortName: s.shortName || '',
+    supplierType: 'address', // 后端无 supplierType 字段，渠道模块语义即地址供应商
+    contactName: s.contactName || '',
+    contactPhone: s.contactPhone || '',
+    contactWechat: s.contactWechat || '',
+    contactEmail: '', // 后端无该字段
+    companyAddress: s.address || '',
+    regions: parseRegions(s.supplyRegions),
+    detailAddresses: parseDetailAddresses(s.detailAddresses),
+    yearlyPrice: num(s.priceAnnual),
+    halfYearPrice: num(s.priceSemiAnnual),
+    quarterPrice: num(s.priceQuarterly),
+    minYears: s.minContractYears ?? 1,
+    hasRebate: Number(s.hasRebate) === 1,
+    rebateRate: num(s.rebateRate),
+    settleCycle: (s.rebateCycle || 'quarterly') as BizSupplier['settleCycle'],
+    payMethod: (s.paymentMethod || 'prepay') as BizSupplier['payMethod'],
+    creditDays: s.creditDays ?? 0,
+    contractNo: s.cooperationContractNo || '',
+    cooperateLevel: (s.supplierLevel || 'C') as BizSupplier['cooperateLevel'],
+    cooperateStartDate: s.cooperationStart || '',
+    cooperateEndDate: s.cooperationEnd || '',
+    renewCondition: s.renewalTerms || '',
+    bankAccount: '', // 后端无字段（见 gapsNoBackend）
+    bankName: '',
+    taxNo: '',
+    totalProcurement: 0, // 后端无累计口径，视图回退展示 yearlyPrice
+    totalCommission: 0,
+    rating: 0,
+    status: (s.status || 'active') as BizSupplier['status'],
+    remark: s.remark || '',
+    createTime: s.createTime || ''
+  }
+}
+
+/** 视图表单 -> 后端实体白名单（只发后端存在的字段，避免 FAIL_ON_UNKNOWN_PROPERTIES 400） */
+function toBackendSupplier (data: Partial<BizSupplier> & { id?: number }) {
+  const body: Record<string, any> = {}
+  if (data.id) body.id = data.id
+  if (data.supplierNo !== undefined) body.supplierNo = data.supplierNo || undefined
+  if (data.supplierName !== undefined) body.name = data.supplierName
+  if (data.shortName !== undefined) body.shortName = data.shortName
+  if (data.status !== undefined) body.status = data.status
+  if (data.contactName !== undefined) body.contactName = data.contactName
+  if (data.contactPhone !== undefined) body.contactPhone = data.contactPhone
+  if (data.contactWechat !== undefined) body.contactWechat = data.contactWechat
+  if (data.companyAddress !== undefined) body.address = data.companyAddress
+  if (data.regions !== undefined) body.supplyRegions = JSON.stringify(data.regions || [])
+  if (data.detailAddresses !== undefined) body.detailAddresses = data.detailAddresses
+  if (data.yearlyPrice !== undefined) body.priceAnnual = data.yearlyPrice
+  if (data.halfYearPrice !== undefined) body.priceSemiAnnual = data.halfYearPrice
+  if (data.quarterPrice !== undefined) body.priceQuarterly = data.quarterPrice
+  if (data.minYears !== undefined) body.minContractYears = data.minYears
+  if (data.hasRebate !== undefined) body.hasRebate = data.hasRebate ? 1 : 0
+  if (data.rebateRate !== undefined) body.rebateRate = data.rebateRate
+  if (data.settleCycle !== undefined) body.rebateCycle = data.settleCycle
+  if (data.payMethod !== undefined) body.paymentMethod = data.payMethod
+  if (data.creditDays !== undefined) body.creditDays = data.creditDays
+  if (data.contractNo !== undefined) body.cooperationContractNo = data.contractNo
+  if (isDateStr(data.cooperateStartDate)) body.cooperationStart = data.cooperateStartDate.slice(0, 10)
+  if (isDateStr(data.cooperateEndDate)) body.cooperationEnd = data.cooperateEndDate.slice(0, 10)
+  if (data.renewCondition !== undefined) body.renewalTerms = data.renewCondition
+  if (data.cooperateLevel !== undefined) body.supplierLevel = data.cooperateLevel
+  if (data.remark !== undefined) body.remark = data.remark
+  return body
 }
 
 export const supplierApi = {
-  list(params: { page?: number; pageSize?: number; supplierType?: string; status?: string; supplierName?: string; cooperateLevel?: string } = {}) {
-    let list = load<BizSupplier>(SP_KEY, seedSuppliers)
-    if (params.supplierType) list = list.filter(s => s.supplierType === params.supplierType)
-    if (params.status) list = list.filter(s => s.status === params.status)
-    if (params.cooperateLevel) list = list.filter(s => s.cooperateLevel === params.cooperateLevel)
-    if (params.supplierName) list = list.filter(s => s.supplierName.includes(params.supplierName!))
-    return delay(paginate(list, params.page, params.pageSize))
-  },
-  detail(id: number) {
-    const list = load<BizSupplier>(SP_KEY, seedSuppliers)
-    return delay(list.find(s => s.id === id) || null)
-  },
-  create(data: Partial<BizSupplier>): Promise<BizSupplier> {
-    const list = load<BizSupplier>(SP_KEY, seedSuppliers)
-    const id = (list.reduce((m, s) => Math.max(m, s.id), 0) || 0) + 1
-    const next: BizSupplier = {
-      id,
-      supplierNo: data.supplierNo || `SUP${String(id).padStart(6, '0')}`,
-      supplierName: data.supplierName || `供应商${id}`,
-      supplierType: data.supplierType || 'service',
-      contactName: data.contactName || '',
-      contactPhone: data.contactPhone || '',
-      contactEmail: data.contactEmail || '',
-      cooperateLevel: data.cooperateLevel || 'C',
-      cooperateStartDate: data.cooperateStartDate || dateOnly(),
-      bankAccount: data.bankAccount || '',
-      bankName: data.bankName || '',
-      taxNo: data.taxNo || '',
-      totalProcurement: 0, totalCommission: 0,
-      rating: data.rating || 4,
-      status: data.status || 'active',
-      remark: data.remark || '',
-      createTime: ts()
+  /** GET /supplier/list（后端仅支持 name/status 过滤；cooperateLevel 前端过滤；supplierType 后端无此维度，忽略） */
+  async list (params: { page?: number; pageSize?: number; supplierType?: string; status?: string; supplierName?: string; cooperateLevel?: string } = {}): Promise<{ list: BizSupplier[]; total: number }> {
+    const res = await get('/supplier/list', {
+      pageNum: params.page || 1,
+      pageSize: params.pageSize || 10,
+      name: params.supplierName || undefined,
+      status: params.status || undefined
+    })
+    const page = toPage<RawSupplier>(unwrap(res))
+    fillSupplierCache(page.list)
+    let list = page.list.map(adaptSupplier)
+    let total = page.total
+    if (params.cooperateLevel) {
+      list = list.filter(s => s.cooperateLevel === params.cooperateLevel)
+      total = list.length
     }
-    list.push(next)
-    save(SP_KEY, list)
-    return delay(next)
+    return { list, total }
   },
-  update(data: Partial<BizSupplier> & { id: number }) {
-    const list = load<BizSupplier>(SP_KEY, seedSuppliers)
-    const idx = list.findIndex(s => s.id === data.id)
-    if (idx < 0) return Promise.reject(new Error('供应商不存在'))
-    list[idx] = { ...list[idx], ...data } as BizSupplier
-    save(SP_KEY, list)
-    return delay(list[idx])
+  async detail (id: number): Promise<BizSupplier | null> {
+    const raw = unwrap<RawSupplier | null>(await get(`/supplier/${id}`))
+    return raw ? adaptSupplier(raw) : null
   },
-  delete(id: number) {
-    const list = load<BizSupplier>(SP_KEY, seedSuppliers)
-    const idx = list.findIndex(s => s.id === id)
-    if (idx < 0) return Promise.reject(new Error('供应商不存在'))
-    list.splice(idx, 1)
-    save(SP_KEY, list)
-    return delay({ success: true })
+  async create (data: Partial<BizSupplier>): Promise<BizSupplier> {
+    const id = unwrap<number>(await post('/supplier', toBackendSupplier(data)))
+    supplierCache = null
+    const created = await this.detail(Number(id))
+    return created || ({ ...adaptSupplier({}), ...data, id: Number(id) } as BizSupplier)
+  },
+  async update (data: Partial<BizSupplier> & { id: number }): Promise<BizSupplier> {
+    await put('/supplier', toBackendSupplier(data))
+    supplierCache = null
+    const updated = await this.detail(data.id)
+    return updated || ({ ...adaptSupplier({}), ...data } as BizSupplier)
+  },
+  async delete (id: number): Promise<{ success: boolean }> {
+    await del(`/supplier/${id}`)
+    supplierCache = null
+    return { success: true }
+  }
+}
+
+// ---------- 地址资源：后端实体 BizAddressResource(channel/domain) <-> 视图形状 ----------
+
+function adaptAddress (a: RawSupplier, suppliers: Map<number, RawSupplier>): BizAddressResource {
+  const region = a.region || ''
+  const sup = suppliers.get(Number(a.supplierId))
+  return {
+    id: Number(a.id),
+    resourceNo: a.resourceNo || '',
+    supplierId: Number(a.supplierId || 0),
+    supplierName: sup?.name || '',
+    province: '浙江省',
+    city: inferCityFromRegion(region),
+    district: region,
+    detailAddress: a.address || '',
+    addressType: 'commercial', // 后端无地址类型字段
+    area: 0,
+    monthlyCost: Math.round(num(a.purchasePrice) / 12),
+    yearlyCost: num(a.purchasePrice),
+    status: (a.status || 'available') as BizAddressResource['status'],
+    reservedBy: Number(a.customerId || 0),
+    reservedByName: '', // 后端只存 customerId，无名称
+    reservedTime: '',
+    soldOrderId: Number(a.contractId || 0),
+    soldOrderNo: a.contractId ? String(a.contractId) : '',
+    soldTime: a.soldDate || '',
+    remark: '',
+    createTime: a.createTime || ''
   }
 }
 
 export const addressApi = {
-  list(params: { page?: number; pageSize?: number; status?: string; city?: string; district?: string; supplierId?: number } = {}) {
-    let list = load<BizAddressResource>(AD_KEY, seedAddresses)
-    if (params.status) list = list.filter(a => a.status === params.status)
-    if (params.city) list = list.filter(a => a.city.includes(params.city!))
-    if (params.district) list = list.filter(a => a.district.includes(params.district!))
-    if (params.supplierId) list = list.filter(a => a.supplierId === params.supplierId)
-    return delay(paginate(list, params.page, params.pageSize))
-  },
-  available(params: { city?: string; district?: string; addressType?: string } = {}) {
-    let list = load<BizAddressResource>(AD_KEY, seedAddresses).filter(a => a.status === 'available')
-    if (params.city) list = list.filter(a => a.city.includes(params.city!))
-    if (params.district) list = list.filter(a => a.district.includes(params.district!))
-    if (params.addressType) list = list.filter(a => a.addressType === params.addressType)
-    return delay(list)
-  },
-  reserve(payload: { id: number; reservedBy: number; reservedByName?: string }) {
-    const list = load<BizAddressResource>(AD_KEY, seedAddresses)
-    const idx = list.findIndex(a => a.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('地址资源不存在'))
-    if (list[idx].status !== 'available') return Promise.reject(new Error('该地址已不可预占'))
-    list[idx] = {
-      ...list[idx],
-      status: 'reserved',
-      reservedBy: payload.reservedBy,
-      reservedByName: payload.reservedByName || '',
-      reservedTime: ts()
+  /** GET /address/list（后端支持 status/region；supplierId/city 在前端过滤） */
+  async list (params: { page?: number; pageSize?: number; status?: string; city?: string; district?: string; supplierId?: number } = {}): Promise<{ list: BizAddressResource[]; total: number }> {
+    const [res, suppliers] = await Promise.all([
+      get('/address/list', {
+        pageNum: params.page || 1,
+        pageSize: params.pageSize || 10,
+        status: params.status || undefined,
+        region: params.district || params.city || undefined
+      }),
+      supplierMap()
+    ])
+    const page = toPage<RawSupplier>(unwrap(res))
+    let list = page.list.map(a => adaptAddress(a, suppliers))
+    let total = page.total
+    if (params.supplierId) {
+      list = list.filter(a => a.supplierId === params.supplierId)
+      total = list.length
     }
-    save(AD_KEY, list)
-    return delay(list[idx])
+    return { list, total }
   },
-  sell(payload: { id: number; orderId: number; orderNo?: string }) {
-    const list = load<BizAddressResource>(AD_KEY, seedAddresses)
-    const idx = list.findIndex(a => a.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('地址资源不存在'))
-    if (list[idx].status !== 'reserved' && list[idx].status !== 'available') {
-      return Promise.reject(new Error('该地址不可销售'))
-    }
-    list[idx] = {
-      ...list[idx],
-      status: 'sold',
-      soldOrderId: payload.orderId,
-      soldOrderNo: payload.orderNo || '',
-      soldTime: ts()
-    }
-    save(AD_KEY, list)
-    return delay(list[idx])
+  /** GET /address/available（仅 region 过滤；addressType 后端无该字段，忽略） */
+  async available (params: { city?: string; district?: string; addressType?: string } = {}): Promise<BizAddressResource[]> {
+    const [res, suppliers] = await Promise.all([
+      get('/address/available', { region: params.district || params.city || undefined }),
+      supplierMap()
+    ])
+    const rows = unwrap<RawSupplier[]>(res) || []
+    return rows.map(a => adaptAddress(a, suppliers))
   },
-  release(id: number) {
-    const list = load<BizAddressResource>(AD_KEY, seedAddresses)
-    const idx = list.findIndex(a => a.id === id)
-    if (idx < 0) return Promise.reject(new Error('地址资源不存在'))
-    if (list[idx].status !== 'reserved') return Promise.reject(new Error('仅预占状态可释放'))
-    list[idx] = {
-      ...list[idx],
-      status: 'available',
-      reservedBy: 0, reservedByName: '', reservedTime: ''
-    }
-    save(AD_KEY, list)
-    return delay(list[idx])
+  /** POST /address/{id}/reserve（后端只接收 customerId/orderId；reservedByName 无处持久化） */
+  async reserve (payload: { id: number; reservedBy: number; reservedByName?: string }): Promise<{ success: boolean }> {
+    await post(`/address/${payload.id}/reserve`, { customerId: payload.reservedBy })
+    return { success: true }
+  },
+  /** POST /address/{id}/sell */
+  async sell (payload: { id: number; orderId: number; orderNo?: string }): Promise<{ success: boolean }> {
+    await post(`/address/${payload.id}/sell`, { orderId: payload.orderId })
+    return { success: true }
+  },
+  /** POST /address/{id}/release */
+  async release (id: number): Promise<{ success: boolean }> {
+    await post(`/address/${id}/release`)
+    return { success: true }
+  }
+}
+
+// ---------- 资源补充单：后端实体 BizProcurement(channel/domain) <-> 视图形状 ----------
+// 注意：后端为单级审批（pending_approval -> approved/rejected），不存在 pending_boss 二级审批。
+
+function adaptProcurement (p: RawSupplier, suppliers: Map<number, RawSupplier>): BizProcurement {
+  const totalAmount = num(p.totalAmount)
+  const actualPaid = p.actualPaid === null || p.actualPaid === undefined ? undefined : num(p.actualPaid)
+  const rebateRate = totalAmount > 0 && actualPaid !== undefined && actualPaid < totalAmount
+    ? +((1 - actualPaid / totalAmount) * 100).toFixed(2)
+    : 0
+  const sup = suppliers.get(Number(p.supplierId))
+  const approvals: BizApprovalRecord[] = p.approvalTime
+    ? [{
+        level: 'manager',
+        approverId: Number(p.approverId || 0),
+        approverName: '',
+        approvalTime: p.approvalTime || '',
+        pass: p.status !== 'rejected',
+        opinion: p.approvalOpinion || ''
+      }]
+    : []
+  return {
+    id: Number(p.id),
+    procurementNo: p.procurementNo || '',
+    supplierId: Number(p.supplierId || 0),
+    supplierName: sup?.name || '',
+    procurementType: 'address', // 后端无类型字段，渠道采购语义默认地址
+    procurementContent: p.purchaseNote || '',
+    quantity: Number(p.quantity || 0),
+    unitPrice: num(p.unitPrice),
+    totalAmount,
+    payCycle: (p.paymentCycle || 'yearly') as BizProcurement['payCycle'],
+    rebateRate,
+    payAmount: actualPaid ?? totalAmount,
+    addressLines: p.addressDetail || '',
+    applicantId: Number(p.buyerId || p.createBy || 0),
+    applicantName: '', // 后端只存 buyerId/createBy(用户ID)，无姓名
+    applyTime: p.purchaseDate || p.createTime || '',
+    approverId: Number(p.approverId || 0),
+    approverName: '',
+    approvalTime: p.approvalTime || '',
+    approvalOpinion: p.approvalOpinion || '',
+    approvals,
+    needBossApproval: false, // 后端单级审批
+    payerId: 0,
+    paymentTime: p.paymentDate || '',
+    status: (p.status || 'draft') as BizProcurement['status'],
+    stockInTime: p.status === 'stocked' ? (p.updateTime || '') : '',
+    stockedAddressIds: [],
+    remark: '',
+    createTime: p.createTime || ''
   }
 }
 
 export const procurementApi = {
-  list(params: { page?: number; pageSize?: number; status?: string; supplierId?: number; procurementType?: string } = {}) {
-    let list = load<BizProcurement>(PR_KEY, seedProcurements)
-    if (params.status) list = list.filter(p => p.status === params.status)
-    if (params.supplierId) list = list.filter(p => p.supplierId === params.supplierId)
-    if (params.procurementType) list = list.filter(p => p.procurementType === params.procurementType)
-    return delay(paginate(list, params.page, params.pageSize))
+  /** GET /procurement/list（后端支持 supplierId/status；procurementType 后端无此维度，忽略） */
+  async list (params: { page?: number; pageSize?: number; status?: string; supplierId?: number; procurementType?: string } = {}): Promise<{ list: BizProcurement[]; total: number }> {
+    const [res, suppliers] = await Promise.all([
+      get('/procurement/list', {
+        pageNum: params.page || 1,
+        pageSize: params.pageSize || 10,
+        supplierId: params.supplierId || undefined,
+        status: params.status || undefined
+      }),
+      supplierMap()
+    ])
+    const page = toPage<RawSupplier>(unwrap(res))
+    return { list: page.list.map(p => adaptProcurement(p, suppliers)), total: page.total }
   },
-  detail(id: number) {
-    const list = load<BizProcurement>(PR_KEY, seedProcurements)
-    return delay(list.find(p => p.id === id) || null)
+  async detail (id: number): Promise<BizProcurement | null> {
+    const [raw, suppliers] = await Promise.all([get(`/procurement/${id}`), supplierMap()])
+    const p = unwrap<RawSupplier | null>(raw)
+    return p ? adaptProcurement(p, suppliers) : null
   },
-  create(data: Partial<BizProcurement>): Promise<BizProcurement> {
-    const list = load<BizProcurement>(PR_KEY, seedProcurements)
-    const id = (list.reduce((m, p) => Math.max(m, p.id), 0) || 0) + 1
-    const quantity = data.quantity || 1
-    const unitPrice = data.unitPrice || 0
-    const totalAmount = data.totalAmount || quantity * unitPrice
-    const next: BizProcurement = {
-      id,
-      procurementNo: data.procurementNo || genNo('PO', id),
-      supplierId: data.supplierId || 0,
-      supplierName: data.supplierName || '',
-      procurementType: data.procurementType || 'service',
-      procurementContent: data.procurementContent || '',
-      quantity, unitPrice, totalAmount,
-      payCycle: data.payCycle,
-      rebateRate: data.rebateRate || 0,
-      payAmount: data.payAmount ?? totalAmount,
-      addressLines: data.addressLines || '',
-      applicantId: data.applicantId || 1001,
-      applicantName: data.applicantName || '当前用户',
-      applyTime: ts(),
-      approverId: 0, approverName: '', approvalTime: '', approvalOpinion: '',
-      approvals: [],
-      needBossApproval: totalAmount > 3000,
-      payerId: 0, paymentTime: '',
-      status: 'pending_approval',
-      stockInTime: '', remark: data.remark || '',
-      createTime: ts()
+  /** POST /procurement（白名单映射到后端实体字段） */
+  async create (data: Partial<BizProcurement>): Promise<BizProcurement> {
+    const body: Record<string, any> = {
+      supplierId: data.supplierId,
+      quantity: data.quantity || 1,
+      unitPrice: data.unitPrice || 0,
+      totalAmount: data.totalAmount ?? (data.quantity || 1) * (data.unitPrice || 0),
+      actualPaid: data.payAmount ?? data.totalAmount,
+      paymentCycle: data.payCycle || 'yearly',
+      addressDetail: data.addressLines || '',
+      purchaseNote: [data.procurementContent, data.remark].filter(Boolean).join('；'),
+      purchaseDate: today(),
+      status: 'pending_approval'
     }
-    list.push(next)
-    save(PR_KEY, list)
-    return delay(next)
+    const id = unwrap<number>(await post('/procurement', body))
+    return { ...adaptProcurement({ ...body, id, purchaseNote: body.purchaseNote, status: 'pending_approval' }, await supplierMap()), supplierName: data.supplierName || '' }
   },
-  approve(payload: { id: number; pass: boolean; opinion?: string; level?: 'manager' | 'boss'; approverId?: number; approverName?: string }) {
-    const list = load<BizProcurement>(PR_KEY, seedProcurements)
-    const idx = list.findIndex(p => p.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('资源补充单不存在'))
-    const current = list[idx]
-    const level = payload.level || (current.status === 'pending_boss' ? 'boss' : 'manager')
-    if (level === 'manager' && current.status !== 'pending_approval') {
-      return Promise.reject(new Error('当前状态不可主管审批'))
-    }
-    if (level === 'boss' && current.status !== 'pending_boss') {
-      return Promise.reject(new Error('当前状态不可老板审批'))
-    }
-    const approvals = (current.approvals || []).slice()
-    approvals.push({
-      level,
-      approverId: payload.approverId || (level === 'boss' ? 9001 : 1002),
-      approverName: payload.approverName || (level === 'boss' ? '老板' : '主管'),
-      approvalTime: ts(),
+  /**
+   * POST /procurement/approve
+   * 后端为单级审批，只读取 {id,pass,approverId}；opinion/level 后端不持久化。
+   */
+  async approve (payload: { id: number; pass: boolean; opinion?: string; level?: 'manager' | 'boss'; approverId?: number; approverName?: string }): Promise<{ success: boolean }> {
+    await post('/procurement/approve', {
+      id: payload.id,
       pass: payload.pass,
-      opinion: payload.opinion || (payload.pass ? '审批通过' : '审批驳回')
+      approverId: payload.approverId || undefined
     })
-    let nextStatus: BizProcurement['status']
-    if (!payload.pass) {
-      nextStatus = 'rejected'
-    } else if (level === 'manager' && (current.needBossApproval || current.totalAmount > 3000)) {
-      nextStatus = 'pending_boss'
-    } else {
-      nextStatus = 'approved'
-    }
-    list[idx] = {
-      ...current,
-      status: nextStatus,
-      approvals,
-      approverId: payload.approverId || (level === 'boss' ? 9001 : 1002),
-      approverName: payload.approverName || (level === 'boss' ? '老板' : '主管'),
-      approvalTime: ts(),
-      approvalOpinion: payload.opinion || (payload.pass ? '审批通过' : '审批驳回'),
-      needBossApproval: current.needBossApproval ?? current.totalAmount > 3000
-    }
-    save(PR_KEY, list)
-    return delay(list[idx])
+    return { success: true }
   },
-  pay(payload: { id: number; payerId?: number }) {
-    const list = load<BizProcurement>(PR_KEY, seedProcurements)
-    const idx = list.findIndex(p => p.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('资源补充单不存在'))
-    if (list[idx].status !== 'approved') return Promise.reject(new Error('未审批通过'))
-    list[idx] = { ...list[idx], status: 'paid', payerId: payload.payerId || 1003, paymentTime: ts() }
-    save(PR_KEY, list)
-    return delay(list[idx])
+  /** POST /procurement/{id}/pay */
+  async pay (payload: { id: number; payerId?: number }): Promise<{ success: boolean }> {
+    await post(`/procurement/${payload.id}/pay`)
+    return { success: true }
   },
-  stockIn(id: number) {
-    const list = load<BizProcurement>(PR_KEY, seedProcurements)
-    const idx = list.findIndex(p => p.id === id)
-    if (idx < 0) return Promise.reject(new Error('资源补充单不存在'))
-    if (list[idx].status !== 'paid') return Promise.reject(new Error('未付款不可上架'))
-    const cur = list[idx]
-    // 联动：地址类资源上架时批量新增地址资源
+  /**
+   * POST /procurement/{id}/stock-in
+   * 后端 stockIn 只把单据置为 stocked，不会自动生成地址资源；
+   * 这里在 api 层补齐原 mock 的联动：按 addressDetail 行明细批量 POST /address 入池，
+   * 并同步私域地址库存口径（私域模块当前仍为本地实现）。
+   */
+  async stockIn (id: number): Promise<BizProcurement & { stockedAddressIds: number[] }> {
+    const raw = unwrap<RawSupplier | null>(await get(`/procurement/${id}`))
+    await post(`/procurement/${id}/stock-in`)
+    const suppliers = await supplierMap()
+    const sup = raw ? suppliers.get(Number(raw.supplierId)) : undefined
     const stockedIds: number[] = []
-    if (cur.procurementType === 'address') {
-      const addrList = load<BizAddressResource>(AD_KEY, seedAddresses)
-      const baseId = (addrList.reduce((m, a) => Math.max(m, a.id), 0) || 0)
-      const lines = (cur.addressLines || '')
-        .split('\n').map(s => s.trim()).filter(Boolean)
-      const total = Math.max(cur.quantity || 0, lines.length)
-      for (let i = 0; i < total; i++) {
-        const newId = baseId + i + 1
-        const detail = lines[i] || `${cur.supplierName || '供应商'} 批量地址 #${i + 1}`
-        // 从供应商地址尝试解析区域，否则默认杭州
-        const parts = detail.split(/[\s·,，]+/).filter(Boolean)
-        const district = inferDistrictFromAddressParts(parts)
-        const addr: BizAddressResource = {
-          id: newId,
-          resourceNo: `ADR${String(newId).padStart(5, '0')}`,
-          supplierId: cur.supplierId,
-          supplierName: cur.supplierName || '',
-          province: '浙江省',
-          city: inferCityFromAddress(detail, district),
-          district,
-          detailAddress: detail,
-          addressType: 'commercial',
-          area: 30,
-          monthlyCost: Math.round((cur.unitPrice || 0) / 12),
-          yearlyCost: cur.unitPrice || 0,
+    const lines = String(raw?.addressDetail || '').split('\n').map(s => s.trim()).filter(Boolean)
+    for (const line of lines) {
+      const parts = line.split(/[\s·,，]+/).filter(Boolean)
+      const district = inferDistrictFromAddressParts(parts)
+      try {
+        const newId = unwrap<number>(await post('/address', {
+          supplierId: raw?.supplierId,
+          procurementId: id,
+          address: line,
+          region: district,
+          purchasePrice: num(raw?.unitPrice),
+          suggestedPrice: Math.round(num(raw?.unitPrice) * 1.6),
           status: 'available',
-          reservedBy: 0, reservedByName: '', reservedTime: '',
-          soldOrderId: 0, soldOrderNo: '', soldTime: '',
-          remark: `来自资源补充单 ${cur.procurementNo}`,
-          createTime: ts()
-        }
-        addrList.push(addr)
-        stockedIds.push(newId)
+          stockInDate: today()
+        }, { silentError: true }))
+        if (newId) stockedIds.push(Number(newId))
         syncPrivateAddressInventoryFromStockIn({
-          city: addr.city,
-          district: addr.district,
-          addressType: addr.addressType,
-          supplierName: addr.supplierName || cur.supplierName || '',
+          city: inferCityFromRegion(district),
+          district,
+          addressType: 'commercial',
+          supplierName: sup?.name || '',
           quantity: 1,
-          yearlyCost: addr.yearlyCost,
-          remark: `资源补充单 ${cur.procurementNo} 上架同步`
+          yearlyCost: num(raw?.unitPrice),
+          remark: `资源补充单 ${raw?.procurementNo || id} 上架同步`
         })
-      }
-      save(AD_KEY, addrList)
+      } catch { /* 单条入池失败不阻断整体上架 */ }
     }
-    list[idx] = { ...cur, status: 'stocked', stockInTime: ts(), stockedAddressIds: stockedIds }
-    save(PR_KEY, list)
-    return delay(list[idx])
+    const base = raw ? adaptProcurement({ ...raw, status: 'stocked' }, suppliers) : ({ id } as unknown as BizProcurement)
+    return { ...base, status: 'stocked', stockedAddressIds: stockedIds }
   },
-  stockedAddresses(id: number) {
-    const list = load<BizProcurement>(PR_KEY, seedProcurements)
-    const cur = list.find(p => p.id === id)
-    if (!cur || !cur.stockedAddressIds?.length) return delay([] as BizAddressResource[])
-    const addrList = load<BizAddressResource>(AD_KEY, seedAddresses)
-    return delay(addrList.filter(a => cur.stockedAddressIds!.includes(a.id)))
+  /** 已生成地址资源：按 procurementId 反查地址池（后端地址实体带 procurementId 字段） */
+  async stockedAddresses (id: number): Promise<BizAddressResource[]> {
+    const [res, suppliers] = await Promise.all([
+      get('/address/list', { pageNum: 1, pageSize: 500 }),
+      supplierMap()
+    ])
+    const page = toPage<RawSupplier>(unwrap(res))
+    return page.list.filter(a => Number(a.procurementId) === Number(id)).map(a => adaptAddress(a, suppliers))
   }
 }
 
+// ---------- 渠道投放成本：后端实体 BizChannelCost(channel/domain) <-> 视图形状 ----------
+// 后端按 period(yyyy-MM) 存月度汇总：costAmount/leadCount/convertedCount/orderCount/revenue。
+// 注意：后端 roi = revenue/cost*100（毛口径），前端展示口径为 (revenue-cost)/cost*100（净口径），
+// 视图自己用原始数字重算，这里 roi 字段按前端净口径补齐，保持原 mock 语义。
+
+function adaptCost (c: RawSupplier): BizChannelCost {
+  const cost = num(c.costAmount)
+  const revenue = num(c.revenue)
+  const leads = Number(c.leadCount || 0)
+  const conv = Number(c.convertedCount || 0)
+  const period = c.period || (c.createTime || '').slice(0, 7)
+  return {
+    id: Number(c.id),
+    costNo: `CC${String(c.id || '')}`,
+    channelType: c.channelType || 'other',
+    channelName: c.channelName || '',
+    campaignName: c.remark || c.channelName || '',
+    startDate: period ? `${period}-01` : '',
+    endDate: period ? `${period}-28` : '',
+    budgetAmount: cost, // 后端无预算字段，用实际投放占位
+    actualCost: cost,
+    leadCount: leads,
+    conversionCount: conv,
+    conversionAmount: revenue,
+    costPerLead: leads ? +(cost / leads).toFixed(2) : 0,
+    costPerConversion: conv ? +(cost / conv).toFixed(2) : 0,
+    roi: cost ? +(((revenue - cost) / cost) * 100).toFixed(2) : 0,
+    status: 'completed', // 后端无投放状态字段
+    remark: c.remark || '',
+    createTime: c.createTime || ''
+  }
+}
+
+function toBackendCost (data: Partial<BizChannelCost> & { id?: number }) {
+  const body: Record<string, any> = {
+    channelName: data.channelName || '',
+    channelType: data.channelType || 'other',
+    period: (isDateStr(data.startDate) ? data.startDate.slice(0, 7) : '') || currentYm(),
+    costAmount: data.actualCost || 0,
+    leadCount: data.leadCount || 0,
+    convertedCount: data.conversionCount || 0,
+    orderCount: data.conversionCount || 0,
+    revenue: data.conversionAmount || 0,
+    remark: data.remark || data.campaignName || ''
+  }
+  if (data.id) body.id = data.id
+  return body
+}
+
+async function fetchAllCosts (channelType?: string): Promise<BizChannelCost[]> {
+  const res = await get('/channel-cost/list', { pageNum: 1, pageSize: 500, channelType: channelType || undefined })
+  return toPage<RawSupplier>(unwrap(res)).list.map(adaptCost)
+}
+
 export const channelCostApi = {
-  list(params: { page?: number; pageSize?: number; channelType?: string; status?: string } = {}) {
-    let list = load<BizChannelCost>(CC_KEY, seedChannelCosts)
-    if (params.channelType) list = list.filter(c => c.channelType === params.channelType)
-    if (params.status) list = list.filter(c => c.status === params.status)
-    return delay(paginate(list, params.page, params.pageSize))
+  /** GET /channel-cost/list（后端支持 channelType/period；status 后端无该字段，忽略） */
+  async list (params: { page?: number; pageSize?: number; channelType?: string; status?: string } = {}): Promise<{ list: BizChannelCost[]; total: number }> {
+    const res = await get('/channel-cost/list', {
+      pageNum: params.page || 1,
+      pageSize: params.pageSize || 10,
+      channelType: params.channelType || undefined
+    })
+    const page = toPage<RawSupplier>(unwrap(res))
+    return { list: page.list.map(adaptCost), total: page.total }
   },
-  create(data: Partial<BizChannelCost>): Promise<BizChannelCost> {
-    const list = load<BizChannelCost>(CC_KEY, seedChannelCosts)
-    const id = (list.reduce((m, c) => Math.max(m, c.id), 0) || 0) + 1
-    const actual = data.actualCost || 0
-    const leads = data.leadCount || 0
-    const conv = data.conversionCount || 0
-    const revenue = data.conversionAmount || 0
-    const next: BizChannelCost = {
-      id,
-      costNo: data.costNo || `CC${new Date().getFullYear()}${String(id).padStart(4, '0')}`,
-      channelType: data.channelType || 'other',
-      channelName: data.channelName || '',
-      campaignName: data.campaignName || '',
-      startDate: data.startDate || dateOnly(),
-      endDate: data.endDate || dateOnly(30),
-      budgetAmount: data.budgetAmount || 0,
-      actualCost: actual,
-      leadCount: leads,
-      conversionCount: conv,
-      conversionAmount: revenue,
-      costPerLead: leads ? +(actual / leads).toFixed(2) : 0,
-      costPerConversion: conv ? +(actual / conv).toFixed(2) : 0,
-      roi: actual ? +((revenue - actual) / actual * 100).toFixed(2) : 0,
-      status: data.status || 'planning',
-      remark: data.remark || '',
-      createTime: ts()
-    }
-    list.push(next)
-    save(CC_KEY, list)
-    return delay(next)
+  /** POST /channel-cost（saveChannelCost 同时承担新增/更新，roi 由后端按 revenue/cost 重算） */
+  async create (data: Partial<BizChannelCost>): Promise<BizChannelCost> {
+    const id = unwrap<number>(await post('/channel-cost', toBackendCost(data)))
+    return adaptCost({ ...toBackendCost(data), id })
   },
-  update(data: Partial<BizChannelCost> & { id: number }) {
-    const list = load<BizChannelCost>(CC_KEY, seedChannelCosts)
-    const idx = list.findIndex(c => c.id === data.id)
-    if (idx < 0) return Promise.reject(new Error('渠道投放不存在'))
-    const merged = { ...list[idx], ...data } as BizChannelCost
-    merged.costPerLead = merged.leadCount ? +(merged.actualCost / merged.leadCount).toFixed(2) : 0
-    merged.costPerConversion = merged.conversionCount ? +(merged.actualCost / merged.conversionCount).toFixed(2) : 0
-    merged.roi = merged.actualCost ? +((merged.conversionAmount - merged.actualCost) / merged.actualCost * 100).toFixed(2) : 0
-    list[idx] = merged
-    save(CC_KEY, list)
-    return delay(merged)
+  async update (data: Partial<BizChannelCost> & { id: number }): Promise<BizChannelCost> {
+    await post('/channel-cost', toBackendCost(data))
+    return adaptCost(toBackendCost(data))
   },
-  getRoi(): Promise<ChannelROI[]> {
-    const list = load<BizChannelCost>(CC_KEY, seedChannelCosts)
+  /** 渠道 ROI 汇总：基于列表数据按渠道聚合（保持原 mock 的净 ROI 口径与返回形状） */
+  async getRoi (): Promise<ChannelROI[]> {
+    const list = await fetchAllCosts()
     const groups = new Map<string, ChannelROI>()
     for (const c of list) {
-      const key = c.channelType
-      const acc = groups.get(key) || {
+      const acc = groups.get(c.channelType) || {
         channelType: c.channelType,
         channelName: c.channelName,
         totalCost: 0, totalLeads: 0, totalConversions: 0, totalRevenue: 0,
@@ -887,19 +660,18 @@ export const channelCostApi = {
       acc.totalLeads += c.leadCount
       acc.totalConversions += c.conversionCount
       acc.totalRevenue += c.conversionAmount
-      groups.set(key, acc)
+      groups.set(c.channelType, acc)
     }
-    const result: ChannelROI[] = Array.from(groups.values()).map(g => ({
+    return Array.from(groups.values()).map(g => ({
       ...g,
       costPerLead: g.totalLeads ? +(g.totalCost / g.totalLeads).toFixed(2) : 0,
       costPerConversion: g.totalConversions ? +(g.totalCost / g.totalConversions).toFixed(2) : 0,
       roi: g.totalCost ? +((g.totalRevenue - g.totalCost) / g.totalCost * 100).toFixed(2) : 0
     }))
-    return delay(result)
   },
-  // 检测连续 >=2 个月 ROI<0 的渠道
-  detectNegativeStreaks(streak = 2): Promise<{ channelType: string; channelName: string; months: string[] }[]> {
-    const list = load<BizChannelCost>(CC_KEY, seedChannelCosts)
+  /** 检测连续 >= streak 个月净 ROI < 0 的渠道（后端无此接口，按 period 月度数据在前端聚合） */
+  async detectNegativeStreaks (streak = 2): Promise<{ channelType: string; channelName: string; months: string[] }[]> {
+    const list = await fetchAllCosts()
     const byChannel = new Map<string, Map<string, { cost: number; revenue: number; name: string }>>()
     for (const c of list) {
       const ym = (c.startDate || c.createTime || '').slice(0, 7)
@@ -931,11 +703,11 @@ export const channelCostApi = {
         result.push({ channelType, channelName: chName, months: bestRun })
       }
     })
-    return delay(result)
+    return result
   },
-  // 获取单个渠道详情
-  detail(id: number) {
-    const list = load<BizChannelCost>(CC_KEY, seedChannelCosts)
-    return delay(list.find(c => c.id === id) || null)
+  /** 单条详情：后端无 /channel-cost/{id}，从列表中取 */
+  async detail (id: number): Promise<BizChannelCost | null> {
+    const list = await fetchAllCosts()
+    return list.find(c => c.id === id) || null
   }
 }

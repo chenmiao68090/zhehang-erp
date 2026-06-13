@@ -7,8 +7,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmAttendance;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmLeave;
+import com.zhehang.erp.modules.hrm.domain.entity.SysHoliday;
 import com.zhehang.erp.modules.hrm.mapper.HrmAttendanceMapper;
 import com.zhehang.erp.modules.hrm.mapper.HrmLeaveMapper;
+import com.zhehang.erp.modules.hrm.mapper.SysHolidayMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmAttendanceService;
 import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
@@ -33,9 +35,13 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
 
     private final HrmAttendanceMapper attendanceMapper;
     private final HrmLeaveMapper leaveMapper;
+    private final SysHolidayMapper holidayMapper;
     private final DataScopeHelper dataScopeHelper;
     private static final LocalTime WORK_START = LocalTime.of(9, 0);
     private static final LocalTime WORK_END = LocalTime.of(18, 0);
+    // 节假日日历 day_type:1=放假(应出勤减一天),2=补班(落在周末时应出勤加一天)
+    private static final int HOLIDAY_TYPE_OFF = 1;
+    private static final int HOLIDAY_TYPE_MAKEUP = 2;
     // 请假类型枚举(与前端 attendance.vue 选项保持一致):2=病假,3=事假
     private static final int LEAVE_TYPE_SICK = 2;
     private static final int LEAVE_TYPE_PERSONAL = 3;
@@ -135,8 +141,14 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
     }
 
     /**
-     * 计算指定月份的工作日数(周一~周五)。
+     * 计算指定月份的应出勤天数。
+     * <p>口径:基础为当月周一~周五;再依据 sys_holiday 节假日日历调整:</p>
+     * <ul>
+     *   <li>减去 day_type=1(放假)且落在工作日(周一~周五)的法定节假日;</li>
+     *   <li>加上 day_type=2(补班)且落在周六/周日的调休补班日。</li>
+     * </ul>
      * month 形如 "2026-06";解析失败时返回 0,保证接口不抛异常。
+     * 节假日数据缺失时,等价于退化为纯周一~周五计数,不影响接口可用性。
      */
     private int workdaysOfMonth(String month) {
         YearMonth ym;
@@ -145,6 +157,7 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
         } catch (Exception e) {
             return 0;
         }
+        // 1) 基础:当月周一~周五计数
         int count = 0;
         LocalDate cursor = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
@@ -155,7 +168,28 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
             }
             cursor = cursor.plusDays(1);
         }
-        return count;
+        // 2) 按 sys_holiday 调整:查当月([月初, 月末])节假日列表
+        LambdaQueryWrapper<SysHoliday> wrapper = new LambdaQueryWrapper<>();
+        wrapper.ge(SysHoliday::getHolidayDate, ym.atDay(1))
+               .le(SysHoliday::getHolidayDate, ym.atEndOfMonth());
+        List<SysHoliday> holidays = holidayMapper.selectList(wrapper);
+        for (SysHoliday h : holidays) {
+            LocalDate d = h.getHolidayDate();
+            Integer type = h.getDayType();
+            if (d == null || type == null) {
+                continue;
+            }
+            DayOfWeek dow = d.getDayOfWeek();
+            boolean isWeekend = dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
+            if (type == HOLIDAY_TYPE_OFF && !isWeekend) {
+                // 放假且原本是工作日 -> 应出勤减一天
+                count--;
+            } else if (type == HOLIDAY_TYPE_MAKEUP && isWeekend) {
+                // 补班且落在周末 -> 应出勤加一天
+                count++;
+            }
+        }
+        return count < 0 ? 0 : count;
     }
 
     /**

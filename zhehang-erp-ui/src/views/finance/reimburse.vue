@@ -42,41 +42,40 @@
         :alerts="alerts"
         :actions="actions"
       />
+      <el-empty v-if="!loading && records.length === 0" description="暂无数据" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { reimburseApi } from '@/api/finance'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '待报销', value: '21' },
-  { label: '审批中', value: '9' },
-  { label: '已报销', value: '74' },
-  { label: '本月总额', value: '¥92,360' }
-]
+// 真实接口:FinanceReimburseController /finance/reimburse/list（数据范围按申请人/财务）
+const loading = ref(false)
+const metrics = ref<{ label: string; value: string }[]>([
+  { label: '待审批', value: '0' },
+  { label: '已通过', value: '0' },
+  { label: '已付款', value: '0' },
+  { label: '报销总额', value: '¥0' }
+])
 
 const columns = [
-  { prop: 'code', label: '报销号', width: 124 },
-  { prop: 'employee', label: '员工', width: 100 },
-  { prop: 'dept', label: '部门', width: 120 },
-  { prop: 'type', label: '费用类型', width: 120 },
-  { prop: 'amount', label: '金额', type: 'amount' as const, width: 120 },
-  { prop: 'status', label: '状态', type: 'tag' as const, width: 110 },
-  { prop: 'submitAt', label: '提交时间', width: 110 }
+  { prop: 'reimburseNo', label: '报销号', width: 160 },
+  { prop: 'title', label: '报销事由' },
+  { prop: 'applicantId', label: '申请人ID', width: 110 },
+  { prop: 'amount', label: '金额', type: 'amount' as const, width: 130 },
+  { prop: 'statusText', label: '状态', type: 'tag' as const, width: 110 },
+  { prop: 'createTime', label: '提交时间', width: 170 }
 ]
 
-const records = [
-  { code: 'RB-240702', employee: '林珂', dept: '销售二部', type: '差旅费', amount: '¥6,840', status: '主管审批', submitAt: '06-01' },
-  { code: 'RB-240699', employee: '方敏', dept: '实施部', type: '住宿费', amount: '¥3,260', status: '财务复核', submitAt: '05-31' },
-  { code: 'RB-240688', employee: '赵岩', dept: '渠道部', type: '招待费', amount: '¥2,480', status: '待补票', submitAt: '05-30' },
-  { code: 'RB-240670', employee: '何晴', dept: '客服部', type: '交通费', amount: '¥680', status: '已报销', submitAt: '05-29' }
-]
+const records = ref<Record<string, string | number>[]>([])
 
 const steps = [
   { title: '票据提交', desc: '员工上传发票、行程和费用说明', status: 'done' as const },
@@ -96,6 +95,47 @@ const actions = [
   { label: '批量审核', type: 'success' as const, icon: 'approve' as const },
   { label: '导出报表', type: 'info' as const, icon: 'export' as const }
 ]
+
+function money(val: any): string {
+  const n = Number(val ?? 0)
+  return '¥' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+// 0草稿 1待审 2通过 3驳回 4已付
+const STATUS_MAP: Record<number, string> = { 0: '草稿', 1: '待审批', 2: '已通过', 3: '已驳回', 4: '已付款' }
+
+async function loadData() {
+  loading.value = true
+  try {
+    const res: any = await reimburseApi.list({ pageNum: 1, pageSize: 100 })
+    const list: any[] = res?.records || []
+    records.value = list.map((it) => ({
+      reimburseNo: it.reimburseNo ?? '-',
+      title: it.title ?? '-',
+      applicantId: it.applicantId ?? '-',
+      amount: money(it.totalAmount),
+      statusText: STATUS_MAP[it.status] ?? '未知',
+      createTime: it.createTime ?? '-'
+    }))
+
+    const total = list.reduce((s, it) => s + Number(it.totalAmount ?? 0), 0)
+    const pending = list.filter((it) => it.status === 1).length
+    const approved = list.filter((it) => it.status === 2).length
+    const paid = list.filter((it) => it.status === 4).length
+    metrics.value = [
+      { label: '待审批', value: String(pending) },
+      { label: '已通过', value: String(approved) },
+      { label: '已付款', value: String(paid) },
+      { label: '报销总额', value: money(total) }
+    ]
+  } catch (e) {
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>

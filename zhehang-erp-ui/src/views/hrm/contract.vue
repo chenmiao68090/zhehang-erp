@@ -20,6 +20,15 @@
       </div>
     </header>
 
+    <el-alert
+      class="contract-notice"
+      type="info"
+      :closable="false"
+      show-icon
+      title="合同台账基于员工档案中的合同起止日期实时生成"
+      description="合同类型、电子签署、模板与续签审批等独立劳动合同模块尚在规划中,以下「合同类型」为按期限推断的示例标签,待专属接口开放后接入。"
+    />
+
     <section class="metric-strip">
       <div class="metric-item" v-for="(m, idx) in metrics" :key="idx">
         <div class="metric-index">0{{ idx + 1 }}</div>
@@ -34,6 +43,7 @@
         <span class="section-sub">CONTRACT / LIST</span>
       </div>
       <ModuleWorkbench
+        v-loading="loading"
         title="劳动合同台账"
         eyebrow="SIGN / RENEW / TERMINATE"
         :columns="columns"
@@ -48,35 +58,32 @@
 
 <script setup lang="ts">
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { employeeApi } from '@/api/org'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '生效中', value: '132' },
-  { label: '即将到期', value: '11' },
-  { label: '待续签', value: '7' },
-  { label: '已终止', value: '4' }
-]
+const loading = ref(false)
 
 const columns = [
   { prop: 'employee', label: '员工', width: 100 },
   { prop: 'dept', label: '部门', width: 120 },
-  { prop: 'type', label: '合同类型', width: 120 },
-  { prop: 'startDate', label: '开始日期', width: 110 },
-  { prop: 'endDate', label: '到期日期', width: 110 },
-  { prop: 'status', label: '状态', type: 'tag' as const, width: 110 },
-  { prop: 'owner', label: '负责人', width: 100 }
+  { prop: 'type', label: '合同类型', width: 110 },
+  { prop: 'startDate', label: '开始日期', width: 120 },
+  { prop: 'endDate', label: '到期日期', width: 120 },
+  { prop: 'status', label: '状态', type: 'tag' as const, width: 100 }
 ]
 
-const records = [
-  { employee: '王若溪', dept: '销售中心', type: '固定期限', startDate: '2022-07-01', endDate: '2024-06-30', status: '待续签', owner: 'HRBP' },
-  { employee: '丁凯', dept: '技术部', type: '无固定期限', startDate: '2021-04-15', endDate: '长期', status: '生效中', owner: '人事专员' },
-  { employee: '刘佳', dept: '客服部', type: '固定期限', startDate: '2023-07-10', endDate: '2024-07-09', status: '即将到期', owner: 'HRBP' },
-  { employee: '钱越', dept: '渠道部', type: '实习协议', startDate: '2024-04-01', endDate: '2024-09-30', status: '生效中', owner: '人事专员' }
-]
+const records = ref<Record<string, string | number>[]>([])
+
+const metrics = ref([
+  { label: '生效中', value: '-' },
+  { label: '即将到期', value: '-' },
+  { label: '已过期', value: '-' },
+  { label: '未登记', value: '-' }
+])
 
 const steps = [
   { title: '合同生成', desc: '根据岗位、薪酬和合同模板生成文本', status: 'done' as const },
@@ -93,11 +100,77 @@ const alerts = [
 
 const actions = [
   { label: '新建合同', icon: 'add' as const },
-  { label: '批量续签', type: 'success' as const, icon: 'approve' as const },
+  { label: '刷新台账', type: 'info' as const, icon: 'refresh' as const },
   { label: '导出台账', type: 'info' as const, icon: 'export' as const }
 ]
+
+function fmtDate(v: any): string {
+  if (!v) return '-'
+  return String(v).slice(0, 10)
+}
+
+// 依据合同起止日期推断状态:未登记 / 已过期 / 即将到期(90天内) / 生效中
+function contractStatus(end: any): { label: string; bucket: string } {
+  if (!end) return { label: '未登记', bucket: 'none' }
+  const endTime = new Date(String(end).slice(0, 10)).getTime()
+  if (Number.isNaN(endTime)) return { label: '未登记', bucket: 'none' }
+  const now = Date.now()
+  const days = Math.floor((endTime - now) / 86400000)
+  if (days < 0) return { label: '已过期', bucket: 'expired' }
+  if (days <= 90) return { label: '即将到期', bucket: 'expiring' }
+  return { label: '生效中', bucket: 'active' }
+}
+
+// 按合同期限粗略推断类型(示例标签,非后端真实字段)
+function contractType(start: any, end: any): string {
+  if (!start || !end) return '—'
+  const s = new Date(String(start).slice(0, 10)).getTime()
+  const e = new Date(String(end).slice(0, 10)).getTime()
+  if (Number.isNaN(s) || Number.isNaN(e)) return '—'
+  const years = (e - s) / (86400000 * 365)
+  if (years <= 1) return '固定期限(1年)'
+  if (years <= 3) return '固定期限(3年)'
+  return '固定期限'
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    // 无独立劳动合同接口;复用 /org/employee/list 中的 contractStart/contractEnd 生成台账
+    // 注:request 拦截器返回完整 R 包体,分页数据在 res.data.records
+    const res: any = await employeeApi.list({ pageNum: 1, pageSize: 200 })
+    const rows: any[] = res?.data?.records || []
+    const counts = { active: 0, expiring: 0, expired: 0, none: 0 }
+    records.value = rows.map((e) => {
+      const st = contractStatus(e.contractEnd)
+      counts[st.bucket as keyof typeof counts]++
+      return {
+        employee: e.name || '-',
+        dept: e.deptName || '-',
+        type: contractType(e.contractStart, e.contractEnd),
+        startDate: fmtDate(e.contractStart),
+        endDate: fmtDate(e.contractEnd),
+        status: st.label
+      }
+    })
+    metrics.value = [
+      { label: '生效中', value: String(counts.active) },
+      { label: '即将到期', value: String(counts.expiring) },
+      { label: '已过期', value: String(counts.expired) },
+      { label: '未登记', value: String(counts.none) }
+    ]
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>
 @use './hrm-common.scss';
+
+.contract-notice {
+  margin-bottom: 16px;
+}
 </style>

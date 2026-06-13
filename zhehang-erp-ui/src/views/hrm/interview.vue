@@ -11,7 +11,7 @@
           <span class="title-cn">面试管理</span>
           <span class="title-en">Interview</span>
         </h1>
-        <p class="page-desc">面试流程安排、评估记录与结果跟踪</p>
+        <p class="page-desc">候选人面试进度、评估记录与录用跟踪</p>
       </div>
       <div class="header-decor">
         <div class="decor-line"></div>
@@ -34,7 +34,8 @@
         <span class="section-sub">INTERVIEW / SCHEDULE</span>
       </div>
       <ModuleWorkbench
-        title="候选人面试排期"
+        v-loading="loading"
+        title="候选人面试进度"
         eyebrow="CANDIDATE / INTERVIEW / OFFER"
         :columns="columns"
         :records="records"
@@ -48,54 +49,92 @@
 
 <script setup lang="ts">
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { resumeApi } from '@/api/hrm'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '待面试', value: '24' },
-  { label: '今日安排', value: '7' },
-  { label: '已通过', value: '12' },
-  { label: '待定', value: '5' }
-]
+const loading = ref(false)
+
+// 简历/面试状态:0待筛选 1面试中 2已录用 3已淘汰(与后端 HrmResume.status 一致)
+const STATUS_MAP: Record<number, string> = { 0: '待筛选', 1: '面试中', 2: '已录用', 3: '已淘汰' }
 
 const columns = [
   { prop: 'candidate', label: '候选人', width: 110 },
-  { prop: 'position', label: '应聘岗位', width: 140 },
-  { prop: 'round', label: '轮次', width: 90 },
-  { prop: 'time', label: '面试时间', width: 130 },
-  { prop: 'interviewer', label: '面试官', width: 110 },
-  { prop: 'status', label: '状态', type: 'tag' as const, width: 110 },
-  { prop: 'source', label: '来源', width: 110 }
+  { prop: 'education', label: '学历', width: 90 },
+  { prop: 'experience', label: '工作年限', width: 100 },
+  { prop: 'company', label: '现任公司', width: 150 },
+  { prop: 'expectedSalary', label: '期望薪资', type: 'amount' as const, width: 110 },
+  { prop: 'status', label: '面试状态', type: 'tag' as const, width: 100 },
+  { prop: 'evaluation', label: '面试评价', width: 160 }
 ]
 
-const records = [
-  { candidate: '陈一诺', position: '客户成功经理', round: '二面', time: '06-01 14:00', interviewer: '林总', status: '待面试', source: 'Boss直聘' },
-  { candidate: '许泽', position: 'Java工程师', round: '技术面', time: '06-01 16:30', interviewer: '技术负责人', status: '进行中', source: '内推' },
-  { candidate: '叶青', position: '实施顾问', round: '终面', time: '06-02 10:00', interviewer: '交付总监', status: '已通过', source: '猎头' },
-  { candidate: '罗鸣', position: '销售代表', round: '初面', time: '06-02 15:00', interviewer: '销售经理', status: '待定', source: '招聘会' }
-]
+const records = ref<Record<string, string | number>[]>([])
+
+const metrics = ref([
+  { label: '候选人总数', value: '-' },
+  { label: '待筛选', value: '-' },
+  { label: '面试中', value: '-' },
+  { label: '已录用', value: '-' }
+])
 
 const steps = [
   { title: '简历筛选', desc: '按岗位条件和来源质量完成初筛', status: 'done' as const },
-  { title: '面试排期', desc: '协调候选人、面试官和会议资源', status: 'active' as const },
-  { title: '评价汇总', desc: '沉淀面试评分和录用建议', status: 'pending' as const },
-  { title: 'Offer 跟进', desc: '通过后进入录用审批和入职准备', status: 'pending' as const }
+  { title: '面试评估', desc: '记录面试评分和录用建议', status: 'active' as const },
+  { title: '录用决策', desc: '汇总评价确定录用或淘汰', status: 'pending' as const },
+  { title: 'Offer 跟进', desc: '录用后进入入职准备和建档', status: 'pending' as const }
 ]
 
 const alerts = [
-  '终面通过候选人应自动生成 Offer 审批。',
-  '超过 48 小时未填写评价的面试需要提醒面试官。',
-  '候选人来源应同步到招聘渠道效果分析。'
+  '候选人简历含联系方式、期望薪资等敏感信息,仅 HR / 管理员可见。',
+  '录用候选人应自动联动入职建档与人员档案。',
+  '长期停留在面试中的候选人需要提醒面试官及时反馈。'
 ]
 
 const actions = [
-  { label: '安排面试', icon: 'add' as const },
-  { label: '同步日程', type: 'info' as const, icon: 'refresh' as const },
-  { label: '导出排期', type: 'info' as const, icon: 'export' as const }
+  { label: '登记候选人', icon: 'add' as const },
+  { label: '刷新列表', type: 'info' as const, icon: 'refresh' as const },
+  { label: '导出名单', type: 'info' as const, icon: 'export' as const }
 ]
+
+function fmtSalary(v: any): string {
+  if (v === null || v === undefined || v === '') return '-'
+  const n = Number(v)
+  if (Number.isNaN(n)) return String(v)
+  return `${(n / 1000).toFixed(0)}K`
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    // /hrm/resume/list:候选人(简历)即面试管道;后端按 HR/管理员做数据范围,非授权返回空
+    // 注:request 拦截器返回完整 R 包体,分页数据在 res.data.records / res.data.total
+    const res: any = await resumeApi.list({ pageNum: 1, pageSize: 200 })
+    const rows: any[] = res?.data?.records || []
+    records.value = rows.map((r) => ({
+      candidate: r.name || '-',
+      education: r.education || '-',
+      experience: r.experienceYears != null ? `${r.experienceYears} 年` : '-',
+      company: r.currentCompany || '-',
+      expectedSalary: fmtSalary(r.expectedSalary),
+      status: STATUS_MAP[r.status] ?? '未知',
+      evaluation: r.evaluation || '—'
+    }))
+    const total = res?.data?.total ?? rows.length
+    metrics.value = [
+      { label: '候选人总数', value: String(total) },
+      { label: '待筛选', value: String(rows.filter((r) => r.status === 0).length) },
+      { label: '面试中', value: String(rows.filter((r) => r.status === 1).length) },
+      { label: '已录用', value: String(rows.filter((r) => r.status === 2).length) }
+    ]
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>

@@ -34,7 +34,7 @@
         <span class="section-sub">PERFORMANCE / EVALUATION</span>
       </div>
       <ModuleWorkbench
-        title="绩效考核周期"
+        title="提成核算明细"
         eyebrow="TARGET / REVIEW / BONUS"
         :columns="columns"
         :records="records"
@@ -42,41 +42,42 @@
         :alerts="alerts"
         :actions="actions"
       />
+      <el-empty v-if="!loading && records.length === 0" description="暂无数据" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { commissionApi } from '@/api/sales'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '考核周期', value: '2024 Q2' },
-  { label: '待评估', value: '18' },
-  { label: '已完成', value: '96' },
-  { label: '平均得分', value: '86.5' }
-]
+// 真实接口:绩效提成数据 = SalesCommissionController /sales/commission/list + /statistics
+// （数据范围:提成只看本人,管理员/财务看全部）
+const loading = ref(false)
+const metrics = ref<{ label: string; value: string }[]>([
+  { label: '提成总额', value: '¥0' },
+  { label: '关联订单额', value: '¥0' },
+  { label: '待结算', value: '0' },
+  { label: '已结算', value: '0' }
+])
 
 const columns = [
-  { prop: 'name', label: '考核对象', width: 120 },
-  { prop: 'dept', label: '部门', width: 120 },
-  { prop: 'target', label: '关键指标' },
-  { prop: 'score', label: '当前得分', width: 100 },
-  { prop: 'bonus', label: '奖金影响', type: 'amount' as const, width: 120 },
-  { prop: 'status', label: '状态', type: 'tag' as const, width: 110 },
-  { prop: 'reviewer', label: '评估人', width: 100 }
+  { prop: 'employeeName', label: '员工', width: 120 },
+  { prop: 'orderNo', label: '关联订单号', width: 160 },
+  { prop: 'amount', label: '订单金额', type: 'amount' as const, width: 130 },
+  { prop: 'rate', label: '提成比例', width: 100 },
+  { prop: 'commission', label: '提成金额', type: 'amount' as const, width: 130 },
+  { prop: 'period', label: '所属期间', width: 110 },
+  { prop: 'statusText', label: '状态', type: 'tag' as const, width: 100 }
 ]
 
-const records = [
-  { name: '销售一组', dept: '销售中心', target: '回款完成率 / 新签合同额', score: '91.2', bonus: '¥42,000', status: '已完成', reviewer: '销售总监' },
-  { name: '实施交付组', dept: '交付中心', target: '项目准时率 / 客户满意度', score: '88.6', bonus: '¥28,000', status: '复核中', reviewer: '交付总监' },
-  { name: '渠道运营组', dept: '渠道部', target: '渠道贡献 / 活跃伙伴数', score: '79.4', bonus: '¥16,000', status: '待评估', reviewer: '经营办' },
-  { name: '客服团队', dept: '客服部', target: '响应时长 / 工单关闭率', score: '86.8', bonus: '¥21,000', status: '已完成', reviewer: '客服经理' }
-]
+const records = ref<Record<string, string | number>[]>([])
 
 const steps = [
   { title: '目标设定', desc: '按岗位、部门和业务目标设置指标权重', status: 'done' as const },
@@ -86,9 +87,9 @@ const steps = [
 ]
 
 const alerts = [
-  '绩效得分应保留数据来源，避免人工评分不可追溯。',
-  '奖金影响需要和薪酬模块统一口径。',
-  '低于 80 分的团队建议自动进入改进计划。'
+  '提成只看本人,管理员/财务可查看全部（按数据范围）。',
+  '提成金额需要和薪酬模块统一口径。',
+  '提成比例与订单金额变更后需重新核算。'
 ]
 
 const actions = [
@@ -96,6 +97,55 @@ const actions = [
   { label: '批量评分', type: 'success' as const, icon: 'approve' as const },
   { label: '导出结果', type: 'info' as const, icon: 'export' as const }
 ]
+
+function money(val: any): string {
+  const n = Number(val ?? 0)
+  return '¥' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+const STATUS_MAP: Record<number, string> = { 0: '待结算', 1: '已结算' }
+
+async function loadData() {
+  loading.value = true
+  try {
+    const [listRes, statRes] = await Promise.all([
+      commissionApi.list({ pageNum: 1, pageSize: 100 }),
+      commissionApi.statistics().catch(() => null)
+    ])
+    const list: any[] = (listRes as any)?.records || []
+    records.value = list.map((it) => ({
+      employeeName: it.employeeName ?? ('员工' + (it.employeeId ?? '')),
+      orderNo: it.orderNo ?? '-',
+      amount: money(it.amount),
+      rate: (it.commissionRate != null ? Number(it.commissionRate) : 0) + '%',
+      commission: money(it.commissionAmount),
+      period: it.period ?? '-',
+      statusText: STATUS_MAP[it.status] ?? '未知'
+    }))
+
+    const stat: any = statRes || {}
+    const totalCommission = stat.totalCommission != null
+      ? Number(stat.totalCommission)
+      : list.reduce((s, it) => s + Number(it.commissionAmount ?? 0), 0)
+    const totalAmount = stat.totalAmount != null
+      ? Number(stat.totalAmount)
+      : list.reduce((s, it) => s + Number(it.amount ?? 0), 0)
+    const pending = list.filter((it) => it.status === 0).length
+    const settled = list.filter((it) => it.status === 1).length
+    metrics.value = [
+      { label: '提成总额', value: money(totalCommission) },
+      { label: '关联订单额', value: money(totalAmount) },
+      { label: '待结算', value: String(pending) },
+      { label: '已结算', value: String(settled) }
+    ]
+  } catch (e) {
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>

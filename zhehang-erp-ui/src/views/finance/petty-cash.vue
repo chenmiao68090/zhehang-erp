@@ -20,6 +20,15 @@
       </div>
     </header>
 
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      title="示例数据，对应后端模块待开发"
+      description="“备用金管理”暂无对应后端接口。以下内容为界面示例，接口就绪后接入真实数据。"
+      class="demo-alert"
+    />
+
     <section class="metric-strip">
       <div class="metric-item" v-for="(m, idx) in metrics" :key="idx">
         <div class="metric-index">0{{ idx + 1 }}</div>

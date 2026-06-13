@@ -42,41 +42,40 @@
         :alerts="alerts"
         :actions="actions"
       />
+      <el-empty v-if="!loading && records.length === 0" description="暂无数据" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { salaryApi } from '@/api/hrm'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '应发总额', value: '¥812,400' },
-  { label: '实发总额', value: '¥728,960' },
-  { label: '待确认', value: '8' },
-  { label: '已发放', value: '126' }
-]
+// 真实接口:HrmSalaryController /hrm/salary/list（数据范围:HR/管理员看全部,其余只看自己工资条）
+const loading = ref(false)
+const metrics = ref<{ label: string; value: string }[]>([
+  { label: '应发总额', value: '¥0' },
+  { label: '实发总额', value: '¥0' },
+  { label: '待发放', value: '0' },
+  { label: '已发放', value: '0' }
+])
 
 const columns = [
-  { prop: 'batch', label: '批次', width: 120 },
-  { prop: 'scope', label: '发薪范围' },
+  { prop: 'salaryMonth', label: '薪资月份', width: 120 },
+  { prop: 'employeeId', label: '员工ID', width: 110 },
   { prop: 'gross', label: '应发', type: 'amount' as const, width: 120 },
   { prop: 'net', label: '实发', type: 'amount' as const, width: 120 },
-  { prop: 'tax', label: '个税社保', type: 'amount' as const, width: 120 },
-  { prop: 'status', label: '状态', type: 'tag' as const, width: 110 },
-  { prop: 'owner', label: '处理人', width: 100 }
+  { prop: 'tax', label: '个税社保公积金', type: 'amount' as const, width: 140 },
+  { prop: 'statusText', label: '状态', type: 'tag' as const, width: 110 }
 ]
 
-const records = [
-  { batch: 'PAY-2024-06', scope: '全员月薪', gross: '¥812,400', net: '¥728,960', tax: '¥83,440', status: '人事确认', owner: 'HRBP' },
-  { batch: 'BON-2024-Q2', scope: '季度绩效奖金', gross: '¥186,000', net: '¥160,820', tax: '¥25,180', status: '财务复核', owner: '薪酬专员' },
-  { batch: 'COM-2024-05', scope: '销售提成', gross: '¥94,500', net: '¥86,100', tax: '¥8,400', status: '待发放', owner: '财务' },
-  { batch: 'ADJ-2024-05', scope: '补发调薪', gross: '¥18,600', net: '¥17,260', tax: '¥1,340', status: '已发放', owner: '出纳' }
-]
+const records = ref<Record<string, string | number>[]>([])
 
 const steps = [
   { title: '考勤汇总', desc: '同步考勤、请假和入离职变动', status: 'done' as const },
@@ -96,6 +95,55 @@ const actions = [
   { label: '重新计算', type: 'info' as const, icon: 'refresh' as const },
   { label: '导出工资条', type: 'info' as const, icon: 'export' as const }
 ]
+
+function money(val: any): string {
+  const n = Number(val ?? 0)
+  return '¥' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+const STATUS_MAP: Record<number, string> = { 0: '待核算', 1: '已核算', 2: '已发放' }
+
+async function loadData() {
+  loading.value = true
+  try {
+    const res: any = await salaryApi.list({ pageNum: 1, pageSize: 100 })
+    const list: any[] = res?.records || []
+    records.value = list.map((it) => {
+      const base = Number(it.baseSalary ?? 0)
+      const perf = Number(it.performanceBonus ?? 0)
+      const ot = Number(it.overtimePay ?? 0)
+      const allow = Number(it.allowance ?? 0)
+      const gross = base + perf + ot + allow
+      const taxSum = Number(it.tax ?? 0) + Number(it.socialInsurance ?? 0) + Number(it.housingFund ?? 0)
+      return {
+        salaryMonth: it.salaryMonth ?? '-',
+        employeeId: it.employeeId ?? '-',
+        gross: money(gross),
+        net: money(it.actualSalary ?? (gross - taxSum - Number(it.deduction ?? 0))),
+        tax: money(taxSum),
+        statusText: STATUS_MAP[it.status] ?? '未知'
+      }
+    })
+
+    // 指标:基于本页明细汇总
+    const grossTotal = list.reduce((s, it) => s + Number(it.baseSalary ?? 0) + Number(it.performanceBonus ?? 0) + Number(it.overtimePay ?? 0) + Number(it.allowance ?? 0), 0)
+    const netTotal = list.reduce((s, it) => s + Number(it.actualSalary ?? 0), 0)
+    const pending = list.filter((it) => it.status === 0 || it.status === 1).length
+    const paid = list.filter((it) => it.status === 2).length
+    metrics.value = [
+      { label: '应发总额', value: money(grossTotal) },
+      { label: '实发总额', value: money(netTotal) },
+      { label: '待发放', value: String(pending) },
+      { label: '已发放', value: String(paid) }
+    ]
+  } catch (e) {
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>

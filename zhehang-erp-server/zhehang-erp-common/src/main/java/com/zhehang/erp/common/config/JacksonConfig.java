@@ -30,6 +30,10 @@ public class JacksonConfig {
         // 避免 LocalDate/LocalDateTime/数字等解析空串抛 HttpMessageNotReadableException
         // (前端表现为"请求体格式错误或为空")。全局生效,所有 DTO/接口受益。
         objectMapper.configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
+        // 忽略未知字段:前端表单常把整行(含实体没有的字段,如树形 children、回显的 createTime)一起提交,
+        // 默认会因 "Unrecognized field" 抛 HttpMessageNotReadableException(前端表现为"请求体格式错误或为空")。
+        // 全局关闭该校验,消除这一大类提交报错(部门/订单明细等)。
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         return objectMapper;
     }
 }

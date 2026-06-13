@@ -43,9 +43,12 @@ public class BizOrderController {
     @PostMapping
     @Log(module = "提单管理", type = Log.OperationType.INSERT)
     public R<Long> add(@RequestBody Map<String, Object> body) {
+        // 先取出并移除 items:BizOrder 实体无 items 字段,若留在 body 里 convertValue 会报
+        // "Unrecognized field items" → 前端带订单明细建单必 400。明细单独存 biz_order_item 子表。
+        Object itemsObj = body.remove("items");
         BizOrder order = MAPPER.convertValue(body, BizOrder.class);
-        List<BizOrderItem> items = body.get("items") != null
-                ? MAPPER.convertValue(body.get("items"), new TypeReference<List<BizOrderItem>>() {})
+        List<BizOrderItem> items = itemsObj != null
+                ? MAPPER.convertValue(itemsObj, new TypeReference<List<BizOrderItem>>() {})
                 : null;
         return R.ok(orderService.createWithItems(order, items));
     }

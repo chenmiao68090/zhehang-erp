@@ -76,9 +76,9 @@
         <el-table-column prop="deptName" :label="$t('hrm.attendance.colDept')" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.deptName || '—' }}</template>
         </el-table-column>
-        <!-- 应出勤：后端无“应出勤天数”口径 -->
+        <!-- 应出勤：后端按周一~周五计算当月工作日数（stats.expectedDays） -->
         <el-table-column :label="colExpectedLabel" width="90" align="center">
-          <template #default>—</template>
+          <template #default="{ row }">{{ row.expectedDays }}</template>
         </el-table-column>
         <el-table-column prop="actual" :label="$t('hrm.attendance.colActual')" width="90" align="center" />
         <el-table-column prop="normal" :label="$t('hrm.attendance.colNormal')" width="80" align="center">
@@ -96,11 +96,17 @@
         <el-table-column prop="absent" :label="$t('hrm.attendance.colAbsent')" width="70" align="center">
           <template #default="{ row }"><span :class="{ 'num-bad': row.absent }">{{ row.absent }}</span></template>
         </el-table-column>
-        <!-- 以下列后端无对应字段，标注 gapsNoBackend，统一显示 — -->
+        <!-- 缺卡/补卡:后端 status 无对应枚举,继续显示 — -->
         <el-table-column :label="colMissingLabel" width="70" align="center"><template #default>—</template></el-table-column>
         <el-table-column :label="colMakeupLabel" width="70" align="center"><template #default>—</template></el-table-column>
-        <el-table-column :label="colPersonalLabel" width="70" align="center"><template #default>—</template></el-table-column>
-        <el-table-column :label="colSickLabel" width="70" align="center"><template #default>—</template></el-table-column>
+        <!-- 事假/病假:关联 hrm_leave 已通过申请按月汇总(stats.personalLeave / sickLeave) -->
+        <el-table-column :label="colPersonalLabel" width="70" align="center">
+          <template #default="{ row }"><span :class="{ 'num-warn': row.personalLeave }">{{ row.personalLeave }}</span></template>
+        </el-table-column>
+        <el-table-column :label="colSickLabel" width="70" align="center">
+          <template #default="{ row }"><span :class="{ 'num-warn': row.sickLeave }">{{ row.sickLeave }}</span></template>
+        </el-table-column>
+        <!-- 产假/补卡费:后端确无对应字段,继续显示 — -->
         <el-table-column :label="colMaternityLabel" width="70" align="center"><template #default>—</template></el-table-column>
         <el-table-column :label="colMakeupFeeLabel" width="90" align="center"><template #default>—</template></el-table-column>
       </el-table>
@@ -185,23 +191,28 @@ interface AttendRow {
   employeeId: number
   name: string
   deptName: string
+  expectedDays: number  // 应出勤(当月工作日数,后端按周一~周五计算)
   actual: number   // 实际出勤(=当月考勤记录数)
   normal: number
   late: number
   early: number
   absent: number   // 旷工(缺勤)
   abnormal: number // 异常 = 迟到+早退+旷工
+  personalLeave: number // 事假天数(关联 hrm_leave 已通过)
+  sickLeave: number     // 病假天数(关联 hrm_leave 已通过)
 }
 const tableData = ref<AttendRow[]>([])
 
 // 8 个统计卡的聚合值
 const summary = reactive({
   headcount: 0,   // 考勤人数(本页员工数)
+  expected: 0,    // 应出勤(人次)= 各员工应出勤天数之和
   actual: 0,      // 实际打卡(人次)
   normal: 0,
   late: 0,
   early: 0,
-  absent: 0       // 旷工
+  absent: 0,      // 旷工
+  leaveDays: 0    // 事假+病假合计天数
 })
 
 // 列标签（用于后端缺字段列；与可用列区分开，方便维护）
@@ -215,8 +226,8 @@ const colMakeupFeeLabel = computed(() => t('hrm.attendance.colMakeupFee'))
 
 const statCards = computed(() => [
   { key: 'headcount', label: t('hrm.attendance.statHeadcount'), value: summary.headcount, class: 'c-blue', gap: false },
-  // 应出勤(人次):后端无“应出勤天数”口径 → gapsNoBackend
-  { key: 'expected', label: t('hrm.attendance.statExpected'), value: 0, class: 'c-cyan', gap: true },
+  // 应出勤(人次)= 各员工当月应出勤天数(工作日)之和,后端 stats.expectedDays 提供
+  { key: 'expected', label: t('hrm.attendance.statExpected'), value: summary.expected, class: 'c-cyan', gap: false },
   { key: 'actual', label: t('hrm.attendance.statActualClock'), value: summary.actual, class: 'c-teal', gap: false },
   { key: 'normal', label: t('hrm.attendance.statNormal'), value: summary.normal, class: 'c-green', gap: false },
   { key: 'late', label: t('hrm.attendance.statLate'), value: summary.late, class: 'c-orange', gap: false },
@@ -281,37 +292,46 @@ async function loadAll() {
       )
     )
 
-    let sNormal = 0, sLate = 0, sEarly = 0, sAbsent = 0, sActual = 0
+    let sNormal = 0, sLate = 0, sEarly = 0, sAbsent = 0, sActual = 0, sExpected = 0, sLeave = 0
     tableData.value = statsList.map(({ emp, s }) => {
       const normal = Number(s.normal || 0)
       const late = Number(s.late || 0)
       const early = Number(s.early || 0)
       const absent = Number(s.absent || 0)
       const actual = Number(s.total || 0)
+      const expectedDays = Number(s.expectedDays || 0)
+      const personalLeave = Number(s.personalLeave || 0)
+      const sickLeave = Number(s.sickLeave || 0)
       sNormal += normal; sLate += late; sEarly += early; sAbsent += absent; sActual += actual
+      sExpected += expectedDays; sLeave += personalLeave + sickLeave
       return {
         employeeId: emp.id,
         name: emp.name || '',
         deptName: emp.deptName || '',
+        expectedDays,
         actual,
         normal,
         late,
         early,
         absent,
-        abnormal: late + early + absent
+        abnormal: late + early + absent,
+        personalLeave,
+        sickLeave
       }
     })
 
     summary.headcount = total.value
+    summary.expected = sExpected
     summary.actual = sActual
     summary.normal = sNormal
     summary.late = sLate
     summary.early = sEarly
     summary.absent = sAbsent
+    summary.leaveDays = sLeave
   } catch {
     tableData.value = []
     total.value = 0
-    summary.headcount = 0; summary.actual = 0; summary.normal = 0; summary.late = 0; summary.early = 0; summary.absent = 0
+    summary.headcount = 0; summary.expected = 0; summary.actual = 0; summary.normal = 0; summary.late = 0; summary.early = 0; summary.absent = 0; summary.leaveDays = 0
   } finally {
     loading.value = false
     statsLoading.value = false

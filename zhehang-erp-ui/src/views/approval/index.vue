@@ -310,9 +310,12 @@ const CARD_GROUPS: CardGroup[] = [
     value: 'admin', label: '行政', color: '#67C23A', soft: 'rgba(103,194,58,0.1)',
     items: [
       { key: 'seal', name: '用章', icon: Stamp, matchKeys: ['seal', '用章', '印章'] },
+      { key: 'sealout', name: '印章外带', icon: Stamp, matchKeys: ['seal_out', 'sealOut', '印章外带', '外带'] },
       { key: 'purchase', name: '采购', icon: Briefcase, matchKeys: ['purchase', '采购'] },
       { key: 'meetingroom', name: '会议室', icon: OfficeBuilding, matchKeys: ['meeting', 'meetingRoom', '会议室'] },
       { key: 'contract', name: '合同审批', icon: Document, matchKeys: ['contract', '合同'] },
+      { key: 'referral', name: '转介绍返现', icon: Sell, matchKeys: ['referral', '转介绍', '返现'] },
+      { key: 'campaignfund', name: '活动经费', icon: Money, matchKeys: ['campaign_fund', 'campaignFund', '活动经费'] },
       { key: 'common', name: '通用审批', icon: ChatLineSquare, matchKeys: ['common', 'general', '通用'] }
     ]
   },
@@ -356,10 +359,17 @@ const visibleGroups = computed<CardGroup[]>(() => {
 
 function matchProcess (item: CardItem): ProcessDef | null {
   const keys = (item.matchKeys || [item.key]).map(k => k.toLowerCase())
-  return publishedProcesses.value.find(p => {
+  const procs = publishedProcesses.value
+  // 优先级匹配，避免相近 key（如 seal / seal_out）互相错配：
+  // 1) processKey 精确相等 -> 2) name 精确相等 -> 3) 模糊包含（pk/name 含关键字）
+  const exactPk = procs.find(p => keys.includes((p.processKey || '').toLowerCase()))
+  if (exactPk) return exactPk
+  const exactNm = procs.find(p => keys.includes((p.name || '').toLowerCase()))
+  if (exactNm) return exactNm
+  return procs.find(p => {
     const pk = (p.processKey || '').toLowerCase()
     const nm = (p.name || '').toLowerCase()
-    return keys.some(k => pk === k || pk.includes(k) || nm.includes(k))
+    return keys.some(k => pk.includes(k) || nm.includes(k))
   }) || null
 }
 

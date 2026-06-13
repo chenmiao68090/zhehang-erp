@@ -145,21 +145,32 @@
             <h2>行政制度</h2>
             <p>制度即承诺，规范即效率。以下为公司核心管理制度纲要，详细条款以正式发布的制度文件为准。</p>
           </div>
-          <el-tag type="info" effect="plain">内容可后续接入制度库 CMS</el-tag>
+          <el-button v-if="canManage" type="primary" plain @click="openEdit('policy')">
+            <el-icon><Plus /></el-icon>新增制度
+          </el-button>
+          <el-tag v-else type="info" effect="plain">如需调整请联系管理员</el-tag>
         </div>
-        <div class="culture-policy-grid">
-          <el-card v-for="item in policyList" :key="item.title" shadow="hover" class="culture-policy-card">
+        <div v-loading="policyLoading" class="culture-policy-grid">
+          <el-card v-for="item in policyList" :key="item.id" shadow="hover" class="culture-policy-card">
             <div class="culture-policy-head">
               <span class="culture-policy-icon" :style="{ background: item.color }">{{ item.icon }}</span>
               <div>
                 <strong>{{ item.title }}</strong>
-                <em>{{ item.subtitle }}</em>
+              </div>
+              <div v-if="canManage" class="culture-card-ops">
+                <el-button link type="primary" size="small" @click="openEdit('policy', item)">
+                  <el-icon><EditPen /></el-icon>编辑
+                </el-button>
+                <el-button link type="danger" size="small" @click="removeContent(item, 'policy')">
+                  <el-icon><Delete /></el-icon>删除
+                </el-button>
               </div>
             </div>
             <ul class="culture-policy-points">
-              <li v-for="point in item.points" :key="point">{{ point }}</li>
+              <li v-for="(point, idx) in item.points" :key="idx">{{ point }}</li>
             </ul>
           </el-card>
+          <el-empty v-if="!policyLoading && !policyList.length" description="暂无行政制度，请点击右上角新增" :image-size="80" />
         </div>
       </el-tab-pane>
 
@@ -171,23 +182,45 @@
             <h2>企业文化</h2>
             <p>使命、愿景、价值观，是浙杭人共同的语言与行动准则。</p>
           </div>
-          <el-tag type="info" effect="plain">内容可后续接入文化专栏 CMS</el-tag>
+          <el-button v-if="canManage" type="primary" plain @click="openEdit('culture')">
+            <el-icon><Plus /></el-icon>新增文化内容
+          </el-button>
+          <el-tag v-else type="info" effect="plain">如需调整请联系管理员</el-tag>
         </div>
 
-        <div class="culture-mvv-grid">
-          <div v-for="item in mvvList" :key="item.key" class="culture-mvv-card" :class="item.key">
-            <span class="culture-mvv-label">{{ item.label }}</span>
-            <strong class="culture-mvv-text">{{ item.text }}</strong>
-            <p>{{ item.desc }}</p>
+        <div v-loading="cultureLoading">
+          <div class="culture-mvv-grid">
+            <div v-for="(item, idx) in mvvList" :key="item.id" class="culture-mvv-card" :class="mvvClass(idx)">
+              <span class="culture-mvv-label">{{ item.title }}</span>
+              <strong class="culture-mvv-text">{{ item.text }}</strong>
+              <p>{{ item.desc }}</p>
+              <div v-if="canManage" class="culture-mvv-ops">
+                <el-button link size="small" @click="openEdit('culture', item)">
+                  <el-icon><EditPen /></el-icon>编辑
+                </el-button>
+                <el-button link size="small" @click="removeContent(item, 'culture')">
+                  <el-icon><Delete /></el-icon>删除
+                </el-button>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="culture-value-grid">
-          <div v-for="value in coreValues" :key="value.title" class="culture-value-card">
-            <span class="culture-value-icon">{{ value.icon }}</span>
-            <strong>{{ value.title }}</strong>
-            <p>{{ value.desc }}</p>
+          <div class="culture-value-grid">
+            <div v-for="value in coreValues" :key="value.id" class="culture-value-card">
+              <span class="culture-value-icon">{{ value.icon }}</span>
+              <strong>{{ value.title }}</strong>
+              <p>{{ value.desc }}</p>
+              <div v-if="canManage" class="culture-card-ops culture-card-ops-center">
+                <el-button link type="primary" size="small" @click="openEdit('culture', value)">
+                  <el-icon><EditPen /></el-icon>编辑
+                </el-button>
+                <el-button link type="danger" size="small" @click="removeContent(value, 'culture')">
+                  <el-icon><Delete /></el-icon>删除
+                </el-button>
+              </div>
+            </div>
           </div>
+          <el-empty v-if="!cultureLoading && !mvvList.length && !coreValues.length" description="暂无企业文化内容，请点击右上角新增" :image-size="80" />
         </div>
       </el-tab-pane>
 
@@ -217,15 +250,60 @@
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 人文内容编辑弹窗（管理员） -->
+    <el-dialog
+      v-model="editVisible"
+      :title="editTitle"
+      width="560px"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="84px">
+        <el-form-item label="标题" prop="title">
+          <el-input v-model="editForm.title" maxlength="128" show-word-limit placeholder="如：考勤与休假 / 使命 Mission" />
+        </el-form-item>
+        <el-form-item label="图标">
+          <el-input v-model="editForm.icon" maxlength="16" placeholder="emoji，如 🕘 💰 🎯（可留空）" />
+        </el-form-item>
+        <el-form-item label="内容" prop="content">
+          <el-input
+            v-model="editForm.content"
+            type="textarea"
+            :rows="6"
+            maxlength="2000"
+            show-word-limit
+            placeholder="每行一条要点；换行分段"
+          />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="editForm.sortOrder" :min="0" :max="9999" controls-position="right" />
+          <span class="culture-form-hint">数字越小越靠前</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="submitEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
-import { EditPen, Search, OfficeBuilding, User } from '@element-plus/icons-vue'
+import { EditPen, Search, OfficeBuilding, User, Plus, Delete } from '@element-plus/icons-vue'
 import { structureApi, employeeApi } from '@/api/org'
+import { contentApi } from '@/api/culture'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
+
+// 管理员/老板/经理可维护人文内容
+const canManage = computed(() => {
+  const roles = userStore.roles || []
+  return roles.includes('admin') || roles.includes('boss') || roles.includes('manager')
+})
 
 const activeTab = ref('structure')
 
@@ -420,70 +498,152 @@ const empStatusClass = (status: number) => {
 }
 const avatarText = (name: string) => String(name || '员').slice(0, 1)
 
-// ===== 行政制度（结构化静态内容，标注后续可接 CMS） =====
-const policyList = [
-  {
-    title: '考勤与休假',
-    subtitle: '出勤管理 · 假期申请',
-    icon: '🕘',
-    color: '#e6f0ff',
-    points: ['标准工作时间 9:00-18:00，弹性 30 分钟', '请假、调休、加班均通过审批中心线上申请', '月度考勤与薪资、绩效联动核算']
-  },
-  {
-    title: '薪酬与绩效',
-    subtitle: '激励导向 · 多劳多得',
-    icon: '💰',
-    color: '#fff3e0',
-    points: ['基本工资 + 绩效 + 提成的复合薪酬结构', '销售/交付按业务结果计提，季度复盘调整', '绩效结果与晋升、培养计划挂钩']
-  },
-  {
-    title: '入离职管理',
-    subtitle: '规范流程 · 平稳交接',
-    icon: '📝',
-    color: '#e8f5e9',
-    points: ['入职当天完成档案建立与系统权限开通', '离职提前申请并完成工作与客户交接', '账号、数据权限在离职生效时同步回收']
-  },
-  {
-    title: '行为规范',
-    subtitle: '诚信合规 · 客户至上',
-    icon: '🤝',
-    color: '#f3e8ff',
-    points: ['对客户信息、商业数据严格保密', '严禁飞单、私单与利益输送', '统一对外话术与服务标准，维护品牌形象']
-  },
-  {
-    title: '报销与采购',
-    subtitle: '预算管控 · 阳光透明',
-    icon: '🧾',
-    color: '#e0f7fa',
-    points: ['费用先申请后发生，按预算与审批权限执行', '发票合规、单据齐全方可报销入账', '渠道/供应商采购统一走采购审批流程']
-  },
-  {
-    title: '数据与权限',
-    subtitle: '分级授权 · 留痕可溯',
-    icon: '🔐',
-    color: '#fde8e8',
-    points: ['按角色与数据范围分级授权，最小够用', '关键操作全程留痕，支持审计回溯', '客户/线索资源按规则归属与回收']
-  }
-]
+// ===== 行政制度 / 企业文化（改为后端 /culture/content 可维护） =====
+// 后端 CultureContent: { id, type(policy/culture/honor), title, content, icon, sortOrder, status }
+// content 内为多行文本：每行一条要点（行政制度按行渲染为 li；企业文化首行作为主文案、其余作为描述）
+const policyRaw = ref<any[]>([])
+const cultureRaw = ref<any[]>([])
+const policyLoading = ref(false)
+const cultureLoading = ref(false)
 
-// ===== 企业文化（结构化静态内容，标注后续可接 CMS） =====
-const mvvList = [
-  { key: 'mission', label: '使命 Mission', text: '让企业服务更简单高效', desc: '以专业与技术，帮助中小企业把工商财税、获客经营做得更轻松。' },
-  { key: 'vision', label: '愿景 Vision', text: '成为值得信赖的企业服务伙伴', desc: '做客户身边长期、可靠、有温度的一站式企业服务平台。' },
-  { key: 'values', label: '价值观 Values', text: '客户至上 · 诚信务实 · 协同共赢', desc: '以客户成功为中心，用诚信和结果赢得信任与口碑。' }
-]
-const coreValues = [
-  { icon: '🎯', title: '客户至上', desc: '一切以客户成功为出发点，把客户的事当成自己的事。' },
-  { icon: '🛡️', title: '诚信务实', desc: '不夸大、不承诺做不到的事，言行一致，结果说话。' },
-  { icon: '🚀', title: '高效执行', desc: '快速响应、闭环交付，把复杂流程做到简单顺畅。' },
-  { icon: '🤝', title: '协同共赢', desc: '跨部门并肩作战，资源共享，与客户和伙伴共同成长。' },
-  { icon: '📈', title: '持续成长', desc: '鼓励学习与复盘，在挑战中不断提升专业与认知。' },
-  { icon: '❤️', title: '团队温度', desc: '尊重每一位伙伴，让浙杭成为有归属感的大家庭。' }
-]
+// 卡片左侧色块（按序循环），保持原视觉
+const POLICY_COLORS = ['#e6f0ff', '#fff3e0', '#e8f5e9', '#f3e8ff', '#e0f7fa', '#fde8e8']
+
+const splitLines = (content: string): string[] =>
+  String(content || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+
+// 行政制度卡片：content 按行拆成要点
+const policyList = computed(() =>
+  policyRaw.value.map((item, idx) => ({
+    id: item.id,
+    title: item.title,
+    icon: item.icon || '📋',
+    color: POLICY_COLORS[idx % POLICY_COLORS.length],
+    points: splitLines(item.content),
+    raw: item
+  }))
+)
+
+// 企业文化：前 3 条（按 sortOrder）作为 使命/愿景/价值观 大卡，其余作为价值观卡
+const mvvList = computed(() =>
+  cultureRaw.value.slice(0, 3).map(item => {
+    const lines = splitLines(item.content)
+    return {
+      id: item.id,
+      title: item.title,
+      text: lines[0] || '',
+      desc: lines.slice(1).join(' ') || '',
+      raw: item
+    }
+  })
+)
+const coreValues = computed(() =>
+  cultureRaw.value.slice(3).map(item => {
+    const lines = splitLines(item.content)
+    return {
+      id: item.id,
+      title: item.title,
+      icon: item.icon || '✨',
+      desc: lines.join(' '),
+      raw: item
+    }
+  })
+)
+const mvvClass = (idx: number) => ['mission', 'vision', 'values'][idx] || 'mission'
+
+const loadPolicy = async () => {
+  policyLoading.value = true
+  try {
+    const res = await contentApi.list('policy')
+    policyRaw.value = (res as any)?.data || []
+  } catch (e) {
+    policyRaw.value = []
+  } finally {
+    policyLoading.value = false
+  }
+}
+const loadCulture = async () => {
+  cultureLoading.value = true
+  try {
+    const res = await contentApi.list('culture')
+    cultureRaw.value = (res as any)?.data || []
+  } catch (e) {
+    cultureRaw.value = []
+  } finally {
+    cultureLoading.value = false
+  }
+}
+
+// ===== 编辑/新增/删除（管理员） =====
+const editVisible = ref(false)
+const editSaving = ref(false)
+const editFormRef = ref()
+const editForm = reactive<{ id: number | null; type: string; title: string; content: string; icon: string; sortOrder: number; status: number }>({
+  id: null, type: 'policy', title: '', content: '', icon: '', sortOrder: 0, status: 1
+})
+const editRules = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  content: [{ required: true, message: '请输入内容', trigger: 'blur' }]
+}
+const editTitle = computed(() => {
+  const label = editForm.type === 'policy' ? '行政制度' : '企业文化'
+  return (editForm.id ? '编辑' : '新增') + label
+})
+
+const openEdit = (type: string, row?: any) => {
+  const raw = row?.raw || row
+  editForm.id = raw?.id ?? null
+  editForm.type = type
+  editForm.title = raw?.title || ''
+  editForm.content = raw?.content || ''
+  editForm.icon = raw?.icon || ''
+  editForm.sortOrder = Number(raw?.sortOrder ?? 0)
+  editForm.status = Number(raw?.status ?? 1)
+  editVisible.value = true
+}
+
+const submitEdit = async () => {
+  await editFormRef.value?.validate(async (valid: boolean) => {
+    if (!valid) return
+    editSaving.value = true
+    try {
+      await contentApi.save({ ...editForm })
+      ElMessage.success(editForm.id ? '已更新' : '已新增')
+      editVisible.value = false
+      editForm.type === 'policy' ? await loadPolicy() : await loadCulture()
+    } catch (e) {
+      // 全局拦截器已提示错误
+    } finally {
+      editSaving.value = false
+    }
+  })
+}
+
+const removeContent = async (row: any, type: string) => {
+  const raw = row?.raw || row
+  if (!raw?.id) return
+  try {
+    await ElMessageBox.confirm(`确定删除「${raw.title}」吗？`, '删除确认', {
+      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  try {
+    await contentApi.remove(raw.id)
+    ElMessage.success('已删除')
+    type === 'policy' ? await loadPolicy() : await loadCulture()
+  } catch (e) {
+    // 全局拦截器已提示错误
+  }
+}
 
 onMounted(async () => {
   await loadStructure()
   await loadAllEmployees()
+  // 人文内容（行政制度/企业文化）从后端拉取
+  loadPolicy()
+  loadCulture()
   // 默认右侧明细展示全部，树默认展开
   await nextTick()
 })
@@ -761,6 +921,22 @@ onMounted(async () => {
   font-size: 12px;
   font-style: normal;
 }
+/* 卡片右上角管理操作 */
+.culture-card-ops {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  white-space: nowrap;
+}
+.culture-card-ops-center {
+  margin: 8px auto 0;
+  justify-content: center;
+}
+.culture-form-hint {
+  margin-left: 10px;
+  color: #98a2b3;
+  font-size: 12px;
+}
 .culture-policy-points {
   margin: 0;
   padding-left: 18px;
@@ -808,6 +984,21 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.7;
   opacity: 0.94;
+}
+.culture-mvv-card {
+  position: relative;
+}
+.culture-mvv-ops {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+.culture-mvv-ops :deep(.el-button) {
+  color: #fff;
+  opacity: 0.92;
+}
+.culture-mvv-ops :deep(.el-button:hover) {
+  opacity: 1;
 }
 .culture-value-grid {
   display: grid;

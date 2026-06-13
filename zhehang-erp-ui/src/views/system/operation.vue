@@ -4,10 +4,10 @@
       <div>
         <span class="eyebrow">RULE CENTER</span>
         <h1>规则配置中心</h1>
-        <p>把分配、回收、自动化、权限和接入类规则统一维护,业务页面只保留执行入口和状态说明。</p>
+        <p>统一维护分配、回收、呼叫、交付、渠道、财务、权限和清理规则，业务页面只保留执行动作、状态说明和必要跳转。</p>
       </div>
       <div class="header-actions">
-        <el-button @click="activeTab = 'overview'">查看归并结果</el-button>
+        <el-button @click="activeTab = 'overview'">归并总览</el-button>
         <el-button type="primary" @click="saveSection(activeTab)">保存当前分类</el-button>
       </div>
     </header>
@@ -25,16 +25,18 @@
         <section class="section-block">
           <div class="section-head">
             <div>
-              <h2>规则归并结果</h2>
-              <p>平级散落的规则页面已收口到这里,旧页面已删除,老地址保留跳转到对应分类。</p>
+              <h2>归并结果</h2>
+              <p>把“能改规则”的地方集中到一个责任入口，旧业务页只做执行和查看，避免同一规则被多处维护。</p>
             </div>
-            <el-tag type="success" effect="plain">已统一入口</el-tag>
+            <el-tag type="success" effect="plain">8 类规则</el-tag>
           </div>
-          <el-table :data="conflictItems" border stripe>
-            <el-table-column prop="oldName" label="原入口/页面" width="180" />
-            <el-table-column prop="problem" label="冲突点" min-width="240" />
-            <el-table-column prop="newOwner" label="归集位置" width="180" />
-            <el-table-column label="处理方式" width="160">
+
+          <el-table :data="ownershipRows" border stripe>
+            <el-table-column prop="oldName" label="原入口/散落位置" min-width="180" />
+            <el-table-column prop="conflict" label="问题" min-width="240" />
+            <el-table-column prop="newOwner" label="归集到" width="160" />
+            <el-table-column prop="boundary" label="业务页保留边界" min-width="220" />
+            <el-table-column label="处理" width="130" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.level" effect="plain">{{ row.action }}</el-tag>
               </template>
@@ -58,156 +60,46 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="线索分配" name="distribution">
+      <el-tab-pane
+        v-for="module in moduleCards"
+        :key="module.key"
+        :label="module.title"
+        :name="module.key"
+      >
         <section class="section-block">
           <div class="section-head">
             <div>
-              <h2>渠道路由与分配规则</h2>
-              <p>所有获客入口先进入统一分配引擎,再按池、团队、容量和权重决定负责人。</p>
+              <h2>{{ module.title }}</h2>
+              <p>{{ module.desc }}</p>
             </div>
-            <el-button type="primary" @click="addDistributionRoute">新增路由规则</el-button>
+            <el-tag effect="plain">{{ module.owner }}</el-tag>
           </div>
-          <el-table :data="distributionRoutes" border stripe>
-            <el-table-column prop="source" label="来源" min-width="150" />
-            <el-table-column prop="targetPool" label="目标池" width="130" />
-            <el-table-column label="分配模式" width="150">
-              <template #default="{ row }">
-                <el-select v-model="row.mode" size="small">
-                  <el-option label="自动分配" value="auto" />
-                  <el-option label="主管手动" value="manual" />
-                  <el-option label="主动抢单" value="grab" />
-                  <el-option label="审批制" value="approval" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="承接团队" min-width="150">
-              <template #default="{ row }">
-                <el-input v-model="row.team" size="small" />
-              </template>
-            </el-table-column>
-            <el-table-column label="优先级" width="110" align="center">
-              <template #default="{ row }">
-                <el-input-number v-model="row.priority" :min="1" :max="9" size="small" controls-position="right" />
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="90" align="center">
-              <template #default="{ row }">
-                <el-switch v-model="row.enabled" />
-              </template>
-            </el-table-column>
-          </el-table>
-        </section>
 
-        <section class="section-block">
-          <div class="section-head">
-            <div>
-              <h2>权重公式</h2>
-              <p>加权轮询只保留一套算法,业务页面不再各自维护分配逻辑。</p>
-            </div>
-            <el-tag :type="weightSum === 100 ? 'success' : 'danger'" effect="plain">合计 {{ weightSum }}%</el-tag>
-          </div>
-          <div class="factor-grid">
-            <div v-for="item in weightFactors" :key="item.key" class="factor-row">
-              <div>
-                <strong>{{ item.label }}</strong>
-                <span>{{ item.desc }}</span>
-              </div>
-              <el-slider v-model="item.value" :min="0" :max="100" show-input :show-input-controls="false" />
-            </div>
-          </div>
-        </section>
-      </el-tab-pane>
-
-      <el-tab-pane label="回收预警" name="recycle">
-        <section class="section-block">
-          <div class="section-head">
-            <div>
-              <h2>回收规则</h2>
-              <p>客户保护期、超期回收、连续回收降级统一在这里配置。</p>
-            </div>
-            <el-button type="primary" @click="addRecycleRule">新增回收规则</el-button>
-          </div>
-          <el-table :data="recycleRules" border stripe>
-            <el-table-column prop="name" label="规则名称" min-width="170" />
-            <el-table-column prop="scope" label="适用范围" width="150" />
-            <el-table-column label="回收天数" width="120" align="center">
-              <template #default="{ row }">
-                <el-input-number v-model="row.recycleDays" :min="1" :max="90" size="small" controls-position="right" />
-              </template>
-            </el-table-column>
-            <el-table-column label="预警节奏" min-width="220">
-              <template #default="{ row }">
-                <span class="warning-seq">绿灯 {{ row.green }} 天 · 黄灯 {{ row.yellow }} 天 · 红灯 {{ row.red }} 天</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="targetPool" label="回收去向" width="140" />
-            <el-table-column label="状态" width="90" align="center">
-              <template #default="{ row }">
-                <el-switch v-model="row.enabled" />
-              </template>
-            </el-table-column>
-          </el-table>
-        </section>
-
-        <section class="policy-strip">
-          <div v-for="item in recyclePolicies" :key="item.title">
-            <span>{{ item.title }}</span>
-            <b>{{ item.value }}</b>
-            <em>{{ item.desc }}</em>
-          </div>
-        </section>
-      </el-tab-pane>
-
-      <el-tab-pane label="自动化流程" name="automation">
-        <section class="section-block">
-          <div class="section-head">
-            <div>
-              <h2>自动化流程规则</h2>
-              <p>新客入库、续费提醒、离职交接、异常升级统一编排,不再散在业务页。</p>
-            </div>
-          </div>
-          <div class="workflow-grid">
-            <article v-for="item in workflowRules" :key="item.key" class="workflow-card">
-              <div class="workflow-top">
-                <strong>{{ item.name }}</strong>
-                <el-switch v-model="item.enabled" />
-              </div>
-              <p>{{ item.desc }}</p>
-              <div class="workflow-steps">
-                <span v-for="step in item.steps" :key="step">{{ step }}</span>
-              </div>
-              <footer>
-                <span>触发: {{ item.trigger }}</span>
-                <el-button link type="primary" @click="runFlow(item.name)">立即执行</el-button>
-              </footer>
-            </article>
-          </div>
-        </section>
-      </el-tab-pane>
-
-      <el-tab-pane label="权限与接入" name="system">
-        <section class="section-block">
-          <div class="section-head">
-            <div>
-              <h2>系统规则归属</h2>
-              <p>权限、菜单、三方登录、开放接口是系统规则,保留原业务页但从这里统一看归属和风险。</p>
-            </div>
-          </div>
-          <el-table :data="systemRuleGroups" border stripe>
-            <el-table-column prop="name" label="规则类型" width="160" />
-            <el-table-column prop="owner" label="责任页面" width="180" />
-            <el-table-column prop="desc" label="说明" min-width="260" />
-            <el-table-column label="状态" width="120">
+          <el-table :data="rulesForTab(module.key)" border stripe>
+            <el-table-column prop="name" label="规则项" min-width="170" />
+            <el-table-column prop="owner" label="责任页面/数据源" min-width="180" />
+            <el-table-column prop="conflict" label="原冲突点" min-width="240" />
+            <el-table-column prop="decision" label="统一口径" min-width="260" />
+            <el-table-column label="状态" width="110" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.level" effect="plain">{{ row.status }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="入口" width="120" align="center">
+            <el-table-column label="入口" width="110" align="center">
               <template #default="{ row }">
-                <el-button link type="primary" @click="go(row.path)">打开</el-button>
+                <el-button v-if="row.path" link type="primary" @click="go(row.path)">打开</el-button>
+                <span v-else class="muted">已收口</span>
               </template>
             </el-table-column>
           </el-table>
+        </section>
+
+        <section class="check-grid">
+          <article v-for="item in checksForTab(module.key)" :key="item.title" class="check-card">
+            <span>{{ item.badge }}</span>
+            <strong>{{ item.title }}</strong>
+            <p>{{ item.desc }}</p>
+          </article>
         </section>
       </el-tab-pane>
     </el-tabs>
@@ -219,11 +111,41 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-type RuleTab = 'overview' | 'distribution' | 'recycle' | 'automation' | 'system'
+type ModuleTab = 'distribution' | 'pool' | 'call' | 'delivery' | 'channel' | 'finance' | 'permission' | 'cleanup'
+type RuleTab = 'overview' | ModuleTab
+type TagLevel = 'success' | 'warning' | 'danger' | 'info' | 'primary'
+
+interface ModuleCard {
+  key: ModuleTab
+  code: string
+  title: string
+  desc: string
+  count: string
+  owner: string
+}
+
+interface RuleRow {
+  tab: ModuleTab
+  name: string
+  owner: string
+  conflict: string
+  decision: string
+  status: string
+  level: TagLevel
+  path?: string
+}
+
+interface CheckItem {
+  tab: ModuleTab
+  badge: string
+  title: string
+  desc: string
+}
 
 const route = useRoute()
 const router = useRouter()
-const tabNames: RuleTab[] = ['overview', 'distribution', 'recycle', 'automation', 'system']
+
+const tabNames: RuleTab[] = ['overview', 'distribution', 'pool', 'call', 'delivery', 'channel', 'finance', 'permission', 'cleanup']
 const queryTab = String(route.query.tab || '')
 const activeTab = ref<RuleTab>(tabNames.includes(queryTab as RuleTab) ? queryTab as RuleTab : 'overview')
 
@@ -240,113 +162,124 @@ watch(activeTab, tab => {
   }
 })
 
-const conflictItems = [
-  { oldName: '分配规则', problem: '与公海局部规则、私域分配入口重复', newOwner: '线索分配', action: '删旧页留跳转', level: 'success' },
-  { oldName: '回收规则', problem: '与自动化流程里的回收配置重复', newOwner: '回收预警', action: '删旧页留跳转', level: 'success' },
-  { oldName: '流程引擎', problem: '命名偏技术,与规则配置并列后口径不清', newOwner: '自动化流程', action: '改为分类', level: 'primary' },
-  { oldName: '公海规则弹窗', problem: '业务页可编辑规则,容易和系统规则冲突', newOwner: '线索分配/回收预警', action: '保留跳转', level: 'warning' }
+const moduleCards: ModuleCard[] = [
+  { key: 'distribution', code: '01', title: '线索分配', desc: '电销、网销、私域、工商新注册线索的入池和派发策略。', count: '5 项', owner: '销售运营负责人' },
+  { key: 'pool', code: '02', title: '公海私海', desc: '公海池、私海持有上限、保护期、回收和撞单处理口径。', count: '6 项', owner: '销售主管' },
+  { key: 'call', code: '03', title: '呼叫中心', desc: '坐席、技能组、号码线路、IVR 和外呼任务规则。', count: '5 项', owner: '电销主管' },
+  { key: 'delivery', code: '04', title: '财税交付', desc: '服务类型到任务模板、周期任务、交接和满意度升级规则。', count: '5 项', owner: '交付主管' },
+  { key: 'channel', code: '05', title: '渠道合作', desc: '同行渠道、挂靠地址资源、报价毛利、账期额度和冻结规则。', count: '5 项', owner: '渠道负责人' },
+  { key: 'finance', code: '06', title: '财务绩效', desc: '科目归集、费用审批、提成、薪酬绩效和凭证模板规则。', count: '6 项', owner: '财务负责人' },
+  { key: 'permission', code: '07', title: '权限接入', desc: '角色数据范围、菜单按钮、三方登录、OpenAPI 和通知模板规则。', count: '6 项', owner: '系统管理员' },
+  { key: 'cleanup', code: '08', title: '数据清理', desc: '重复客户、无效线索、超期归档、日志保留和定时任务。', count: '5 项', owner: '运营管理层' }
 ]
 
-const moduleCards = [
-  { key: 'distribution' as RuleTab, code: '01', title: '线索分配', desc: '渠道路由、权重公式、公海池分配模式', count: '8 条规则' },
-  { key: 'recycle' as RuleTab, code: '02', title: '回收预警', desc: '保护期、三色预警、超期回收去向', count: '4 条规则' },
-  { key: 'automation' as RuleTab, code: '03', title: '自动化流程', desc: '新客、续费、离职交接、异常升级', count: '4 个流程' },
-  { key: 'system' as RuleTab, code: '04', title: '权限与接入', desc: '角色菜单、三方登录、开放接口', count: '5 类规则' }
+const ownershipRows = [
+  { oldName: '分配规则 / 私域归属规则', conflict: '电销、网销、私域、公海各自维护分配口径，容易重复派发。', newOwner: '线索分配', boundary: '业务页只展示命中规则和执行分配。', action: '统一', level: 'success' as TagLevel },
+  { oldName: '公海管理 / 回收规则 / 持有上限', conflict: '公海配置、回收天数、保护期、持有量散在多个页面。', newOwner: '公海私海', boundary: '公海页只做领取、转移、查看预警。', action: '隐藏旧菜单', level: 'success' as TagLevel },
+  { oldName: '坐席管理 / 技能组 / 号码线路 / IVR', conflict: '呼叫配置和外呼执行混在同一模块，销售日常菜单过重。', newOwner: '呼叫中心', boundary: '呼叫中心只保留监控、通话、外呼、报表。', action: '隐藏旧菜单', level: 'success' as TagLevel },
+  { oldName: '周期任务侧边规则 / 合同续费阶梯', conflict: '交付模板和任务执行页面混在一起，后续服务类型会越来越乱。', newOwner: '财税交付', boundary: '任务页只做派单、处理、验收和回访。', action: '收口', level: 'primary' as TagLevel },
+  { oldName: '渠道价格卡 / 账期规则 / 地址资源规则', conflict: '渠道报价、额度和冻结规则藏在业务表格上方。', newOwner: '渠道合作', boundary: '渠道页只做客户、供应商、资源和采购动作。', action: '收口', level: 'primary' as TagLevel },
+  { oldName: '成本科目 / 绩效提成 / 薪酬规则', conflict: '财务统计、发放、提成规则没有统一口径。', newOwner: '财务绩效', boundary: '财务页只做登记、审核、生成凭证。', action: '收口', level: 'primary' as TagLevel },
+  { oldName: '角色权限 / 菜单 / OAuth / OpenAPI', conflict: '权限、接入、通知属于系统规则，不能分散在业务模块。', newOwner: '权限接入', boundary: '系统页保留细粒度维护，规则中心统一索引。', action: '索引', level: 'info' as TagLevel },
+  { oldName: '查重、回收扫描、归档、日志保留', conflict: '数据生命周期规则没有统一体检入口。', newOwner: '数据清理', boundary: '业务页只展示清理结果和处理队列。', action: '新增', level: 'warning' as TagLevel }
 ]
 
-const distributionRoutes = ref([
-  { source: '探迹/工商新注册公司', targetPool: '新企商机池', mode: 'auto', team: '网销运营组', priority: 1, enabled: true },
-  { source: '官网表单/在线客服', targetPool: '网销线索池', mode: 'auto', team: '网销销售组', priority: 2, enabled: true },
-  { source: '电销外呼导入', targetPool: '电销线索池', mode: 'manual', team: '电销主管', priority: 3, enabled: true },
-  { source: '同行地址渠道', targetPool: '渠道客户池', mode: 'approval', team: '渠道地址组', priority: 2, enabled: true },
-  { source: '回收池再激活', targetPool: '回收公海池', mode: 'grab', team: '销售全员', priority: 5, enabled: true }
-])
+const ruleRows: RuleRow[] = [
+  { tab: 'distribution', name: '工商新注册线索路由', owner: '营销获客/拓客情报', conflict: '探迹线索、企业号码查询、私域留资都能建线索。', decision: '统一先查重，再按来源、地区、业务类型入池。', status: '已归集', level: 'success', path: '/system/operation?tab=distribution' },
+  { tab: 'distribution', name: '电销/网销权重分配', owner: '客户中心/线索管理', conflict: '销售手动分配和自动分配并存。', decision: '用同一套权重公式：负载、转化率、角色、冷却期。', status: '已归集', level: 'success', path: '/system/distribute-config' },
+  { tab: 'distribution', name: '私域来源归属', owner: '私域运营', conflict: '私域页面可编辑归属规则，和公海分配口径冲突。', decision: '私域页保留结果预览，规则主档挂到线索分配。', status: '待迁移接口', level: 'warning', path: '/leads/private-domain?tab=ownership' },
+  { tab: 'distribution', name: '活动 ROI 归因', owner: '营销活动/网销投产比', conflict: '投放成本和线索归属如果分开，ROI 会算偏。', decision: '线索必须带 campaignId/sourceCost，订单回款反写 ROI。', status: '待接真数', level: 'warning', path: '/leads/online-roi' },
+  { tab: 'distribution', name: '重复分配冷却', owner: '线索管理', conflict: '同一员工可能连续拿高价值线索。', decision: '按 24 小时高价值线索冷却和公平修正执行。', status: '规则定义', level: 'info' },
 
-const weightFactors = ref([
-  { key: 'role', label: '角色职级', desc: '主管/高绩效销售基础权重更高', value: 25 },
-  { key: 'load', label: '当前负载', desc: '持有量越低越容易分配到新线索', value: 35 },
-  { key: 'ability', label: '成交能力', desc: '近 30 天转化率和成单率', value: 30 },
-  { key: 'fairness', label: '公平修正', desc: '避免同一人连续获得高价值线索', value: 10 }
-])
+  { tab: 'pool', name: '公海池配置', owner: '公海管理', conflict: '公海类型、可见范围、操作范围原来在客户中心菜单里。', decision: '从客户中心隐藏，统一归属公海私海规则。', status: '菜单隐藏', level: 'success', path: '/customer/pool-admin' },
+  { tab: 'pool', name: '回收规则', owner: '回收规则', conflict: '回收规则和自动化扫描重复。', decision: '回收天数、预警灯、去向池统一维护。', status: '已跳转', level: 'success', path: '/system/recycle-config' },
+  { tab: 'pool', name: '持有上限', owner: '个人私海', conflict: '角色持有上限在页面和接口 Mock 中都有。', decision: '按角色维护 maxHolding、宽容率和超时释放。', status: '待接真数', level: 'warning', path: '/customer/personal-pool' },
+  { tab: 'pool', name: '撞单仲裁', owner: '撞单管理', conflict: '查重规则、冲突处理规则和公海规则交叉。', decision: '规则中心定口径，撞单页只处理案件。', status: '保留案件页', level: 'primary', path: '/customer/collision-manage' },
+  { tab: 'pool', name: '保护期策略', owner: '线索/客户主档', conflict: '不同来源保护期不一致。', decision: '按来源和客户价值维护保护期，回收不得早于保护期。', status: '规则定义', level: 'info' },
+  { tab: 'pool', name: '连续回收降级', owner: '回收预警', conflict: '多次回收后是否降级没有统一动作。', decision: '3 次回收自动降级并限制原负责人重领。', status: '规则定义', level: 'info' },
 
-const recycleRules = ref([
-  { name: '新线索 3 天未首跟', scope: '新企/网销/电销', recycleDays: 3, green: 2, yellow: 1, red: 0, targetPool: '回收公海池', enabled: true },
-  { name: '普通客户 15 天未有效跟进', scope: '普通客户池', recycleDays: 15, green: 7, yellow: 3, red: 1, targetPool: '普通公海池', enabled: true },
-  { name: '高意向客户 7 天未推进', scope: '高意向客户', recycleDays: 7, green: 4, yellow: 2, red: 1, targetPool: '主管复核池', enabled: true },
-  { name: '地址渠道 30 天未成交', scope: '渠道地址池', recycleDays: 30, green: 10, yellow: 5, red: 2, targetPool: '渠道公海池', enabled: true }
-])
+  { tab: 'call', name: '坐席容量', owner: '坐席管理', conflict: '配置页占据呼叫中心日常菜单。', decision: '从左侧隐藏，归呼叫规则中心索引。', status: '菜单隐藏', level: 'success', path: '/call-center/agent' },
+  { tab: 'call', name: '技能组路由', owner: '技能组', conflict: '技能组决定线索承接和 IVR 分流，不能散在呼叫页。', decision: '技能组作为呼叫规则主数据。', status: '菜单隐藏', level: 'success', path: '/call-center/skill' },
+  { tab: 'call', name: '号码与线路', owner: '号码与线路', conflict: '线路异常会影响外呼和客户归属。', decision: '号码池、归属部门、可用时段统一维护。', status: '菜单隐藏', level: 'success', path: '/call-center/number' },
+  { tab: 'call', name: 'IVR 流程', owner: 'IVR 流程', conflict: '流程配置偏后台，不应混在销售日常菜单。', decision: 'IVR 按业务线挂到呼叫规则。', status: '菜单隐藏', level: 'success', path: '/call-center/ivr' },
+  { tab: 'call', name: '外呼任务节奏', owner: '外呼任务', conflict: '拨打频次和回收规则联动。', decision: '外呼页执行任务，频次策略在规则中心登记。', status: '已归集', level: 'primary', path: '/call-center/outbound' },
 
-const recyclePolicies = [
-  { title: '连续回收降级', value: '3 次', desc: '连续回收后自动降级并限制再次分配' },
-  { title: '原负责人冷却', value: '15 天', desc: '回收后原负责人冷却期内不可重领' },
-  { title: '红灯通知', value: '老板/主管', desc: '高价值客户红灯同步管理层' }
+  { tab: 'delivery', name: '服务任务模板', owner: '周期性任务', conflict: '不同服务类型的任务清单写在页面静态规则里。', decision: '服务类型到任务模板统一建模。', status: '待迁移接口', level: 'warning', path: '/task-center/periodic' },
+  { tab: 'delivery', name: '一次性任务分类', owner: '一次性任务', conflict: '工商、税务、异常解除任务拆分不统一。', decision: '按业务类型生成标准子任务和 SLA。', status: '规则定义', level: 'info', path: '/task-center/once' },
+  { tab: 'delivery', name: '客户交接', owner: '客户交接', conflict: '销售转会计、会计转项目交接字段不统一。', decision: '交接资料、责任人和确认节点模板化。', status: '已归集', level: 'primary', path: '/task-center/handover' },
+  { tab: 'delivery', name: '续费提醒阶梯', owner: '合同管理/续费管理', conflict: '合同页和续费页各自写提醒阶段。', decision: '统一按 30/15/7/3/1 天提醒并升级。', status: '已归集', level: 'primary', path: '/order/contract' },
+  { tab: 'delivery', name: '满意度升级', owner: '满意度回访', conflict: '低评分后是否派 C/D 类任务不统一。', decision: '低评分自动升级项目部或老板任务。', status: '规则定义', level: 'info', path: '/task-center/satisfaction' },
+
+  { tab: 'channel', name: '同行渠道等级', owner: '同行渠道', conflict: '等级、毛利和账期展示在渠道页卡片里。', decision: '等级决定售价、账期、额度和审批门槛。', status: '已归集', level: 'primary', path: '/supply/channel-partner' },
+  { tab: 'channel', name: '挂靠地址资源定价', owner: '地址资源池', conflict: '资源底价、库存预警和报价规则分散。', decision: '地址资源先定底价，再按渠道等级加价。', status: '已归集', level: 'primary', path: '/supply/receipt' },
+  { tab: 'channel', name: '地址供应商准入', owner: '地址供应商', conflict: '供应商资质和资源采购动作混在一起。', decision: '准入、续评、黑名单归渠道合作规则。', status: '规则定义', level: 'info', path: '/supply/vendor' },
+  { tab: 'channel', name: '月结额度冻结', owner: '同行渠道', conflict: '逾期和额度超限后是否停单不明确。', decision: '超过额度 80% 预警，逾期 15 天冻结新单。', status: '规则定义', level: 'info', path: '/supply/channel-partner' },
+  { tab: 'channel', name: '采购补货阈值', owner: '资源补充单', conflict: '库存低于多少补货缺统一阈值。', decision: '按区域、业务热度和交付 SLA 触发采购。', status: '规则定义', level: 'info', path: '/supply/purchase' },
+
+  { tab: 'finance', name: '日记账科目归集', owner: '日记账', conflict: '二级科目口径不一致，影响老板看账。', decision: '按业务收入、渠道成本、运营投放、人力费用等一级模块归集。', status: '已归集', level: 'primary', path: '/finance/journal' },
+  { tab: 'finance', name: '业务支出审批', owner: '业务支出管理', conflict: '支出、报销、备用金边界不清。', decision: '对公支出走业务支出，个人垫付走报销，预借走备用金。', status: '规则定义', level: 'info', path: '/finance/expense' },
+  { tab: 'finance', name: '提成结算', owner: '提成结算/绩效提成', conflict: '销售业绩、任务提成、财务发放各有口径。', decision: '任务中心算明细，财务绩效做复核和发放入账。', status: '已归集', level: 'primary', path: '/task-center/commission' },
+  { tab: 'finance', name: '成本预算', owner: '管理成本', conflict: '成本科目和部门预算规则在看板里展示。', decision: '预算规则归中心，成本页只看执行和偏差。', status: '待迁移接口', level: 'warning', path: '/finance/cost' },
+  { tab: 'finance', name: '凭证模板', owner: '凭证管理', conflict: '业务动作生成凭证缺统一模板。', decision: '按收款、退款、成本、薪酬维护凭证模板。', status: '规则定义', level: 'info', path: '/finance/journal' },
+  { tab: 'finance', name: '薪酬绩效', owner: '薪酬管理', conflict: '薪酬和绩效发放节奏不统一。', decision: '薪酬基数、绩效周期、扣减项统一登记。', status: '规则定义', level: 'info', path: '/finance/salary' },
+
+  { tab: 'permission', name: '角色数据范围', owner: '角色管理', conflict: '不同模块看到的数据范围必须统一。', decision: '以角色 dataScope 为准，菜单和接口都遵守。', status: '已实现', level: 'success', path: '/system/role' },
+  { tab: 'permission', name: '菜单按钮权限', owner: '菜单管理', conflict: '前端菜单和后端按钮权限容易脱节。', decision: '菜单作为路由源，按钮按权限码控制。', status: '已归集', level: 'primary', path: '/system/menu' },
+  { tab: 'permission', name: '第三方登录', owner: '第三方登录配置', conflict: '企微、飞书、钉钉登录接入没有菜单。', decision: '配置页隐藏，规则中心提供管理员入口。', status: '新增入口', level: 'success', path: '/system/oauth-config' },
+  { tab: 'permission', name: 'OpenAPI 应用', owner: '开放接口配置', conflict: '密钥、签名、限流属于接入规则。', decision: '配置页隐藏，统一从规则中心进入。', status: '新增入口', level: 'success', path: '/system/openapi' },
+  { tab: 'permission', name: '通知模板', owner: '消息中心', conflict: '消息模板和业务通知策略混在一起。', decision: '消息中心负责内容，规则中心登记触发条件。', status: '已归集', level: 'primary', path: '/system/notification' },
+  { tab: 'permission', name: '员工账号绑定', owner: '用户管理/员工管理', conflict: 'sys_user 和 org_employee 不绑定会导致数据归属错。', decision: '账号、员工、部门、角色必须一对一绑定。', status: 'P0 风险', level: 'danger', path: '/system/user' },
+
+  { tab: 'cleanup', name: '重复客户归并', owner: '撞单管理/企业主体库', conflict: '同一个企业可能有多个客户主档。', decision: '强命中直接归并，弱命中进入仲裁。', status: '规则定义', level: 'info', path: '/customer/collision-manage' },
+  { tab: 'cleanup', name: '无效线索归档', owner: '线索管理', conflict: '无效、空号、停机、注销公司没有统一归档。', decision: '按无效原因归档，保留审计和可恢复入口。', status: '规则定义', level: 'info', path: '/customer/lead' },
+  { tab: 'cleanup', name: '回收扫描定时任务', owner: '回收预警', conflict: '手动回收和自动扫描混用。', decision: '定时任务只生成队列，主管可复核高价值客户。', status: '已归集', level: 'primary', path: '/system/recycle-config' },
+  { tab: 'cleanup', name: '日志保留周期', owner: '操作日志/登录日志', conflict: '日志一直增长会影响系统稳定。', decision: '操作日志保留 180 天，登录日志保留 90 天，异常日志长期归档。', status: '规则定义', level: 'info', path: '/system/oper-log' },
+  { tab: 'cleanup', name: '离职客户清理', owner: '员工异动/交接', conflict: '离职后客户和任务容易私下交接。', decision: '离职触发冻结、回收、转交、消息通知和审计。', status: '已归集', level: 'primary', path: '/task-center/handover' }
 ]
 
-const workflowRules = ref([
-  { key: 'newLead', name: '新客入库流程', trigger: '新线索创建', enabled: true, desc: '查重、工商信息补全、标签识别、分配入池。', steps: ['查重', '补工商', '打标签', '分配'] },
-  { key: 'recycle', name: '回收扫描流程', trigger: '每日 01:00', enabled: true, desc: '扫描超期客户,生成预警,执行回收入池。', steps: ['扫描', '预警', '回收', '通知'] },
-  { key: 'renewal', name: '续费提醒流程', trigger: '合同到期前', enabled: true, desc: '按 30/15/7/3/1 天提醒负责人和主管。', steps: ['识别', '提醒', '升级', '复盘'] },
-  { key: 'handover', name: '离职交接流程', trigger: '员工离职', enabled: true, desc: '客户、任务、合同和跟进记录自动转交。', steps: ['冻结', '转交', '通知', '审计'] }
-])
-
-const systemRuleGroups = [
-  { name: '角色权限', owner: '角色管理', desc: '岗位角色、菜单权限和数据范围统一在角色管理维护。', status: '保留', level: 'success', path: '/system/role' },
-  { name: '菜单规则', owner: '菜单管理', desc: '路由、菜单显示、按钮权限不再放到业务页配置。', status: '保留', level: 'success', path: '/system/menu' },
-  { name: '三方登录', owner: '第三方登录配置', desc: '企业微信等 OAuth 接入属于系统接入规则,后续接入后归此类。', status: '待接入菜单', level: 'warning', path: '/system/operation?tab=system' },
-  { name: '开放接口', owner: 'OpenAPI 应用', desc: '外部系统调用、签名、限流和密钥归接入规则。', status: '待接入菜单', level: 'warning', path: '/system/operation?tab=system' },
-  { name: '通知规则', owner: '消息中心', desc: '消息模板与通知策略和飞书消息模块保持一致。', status: '保留', level: 'success', path: '/system/notification' }
+const checkItems: CheckItem[] = [
+  { tab: 'distribution', badge: '校验', title: '每条线索必须有来源', desc: '没有 source/campaignId 的线索不能进入自动分配，否则 ROI 和责任人都会断。' },
+  { tab: 'distribution', badge: '校验', title: '分配前先查重', desc: '手机号、公司名、统一社会信用代码命中后先冻结再分配。' },
+  { tab: 'pool', badge: '校验', title: '保护期先于回收期', desc: '回收天数不能小于保护期，老客转介绍和同行渠道必须加长保护。' },
+  { tab: 'pool', badge: '校验', title: '高价值客户主管复核', desc: '回款潜力高、已有合同、即将续费客户不能被自动粗暴回收。' },
+  { tab: 'call', badge: '校验', title: '线路归属到团队', desc: '号码、技能组、坐席和销售团队要能对应，否则通话记录无法反算线索质量。' },
+  { tab: 'call', badge: '校验', title: '外呼频次避开投诉', desc: '同一客户每日、每周呼叫次数要限额，空号和拒接要进入降频。' },
+  { tab: 'delivery', badge: '校验', title: '服务类型生成任务清单', desc: '代理记账、工商注册、异常解除、挂靠地址必须有不同的交付模板。' },
+  { tab: 'delivery', badge: '校验', title: '交付超期自动升级', desc: 'SLA 红灯后通知主管，连续超期进入老板任务。' },
+  { tab: 'channel', badge: '校验', title: '渠道订单检查库存', desc: '地址资源不足时不能直接下单，要先触发采购或换区。' },
+  { tab: 'channel', badge: '校验', title: '低毛利必须审批', desc: '低于等级毛利底线时，订单必须走主管审批。' },
+  { tab: 'finance', badge: '校验', title: '业务发生即带科目', desc: '提单、收款、采购、投放、薪酬进入财务时必须带一级模块和二级科目。' },
+  { tab: 'finance', badge: '校验', title: '提成以回款为准', desc: '未回款或被退款的订单不能直接进入可发放提成。' },
+  { tab: 'permission', badge: '校验', title: '账号必须绑定员工', desc: '没有员工档案的账号不能参与提成、任务、考勤和数据范围判断。' },
+  { tab: 'permission', badge: '校验', title: '老板视角和员工视角分离', desc: '老板看全局，主管看团队，员工只看自己负责的数据。' },
+  { tab: 'cleanup', badge: '校验', title: '清理动作必须留痕', desc: '归并、删除、回收、归档都要有操作日志，方便复盘和追责。' },
+  { tab: 'cleanup', badge: '校验', title: '清理前先可恢复', desc: '删除类动作先进入回收站或冻结库，确认后再物理清理。' }
 ]
-
-const weightSum = computed(() => weightFactors.value.reduce((sum, item) => sum + item.value, 0))
 
 const summaryCards = computed(() => {
-  const enabledRoutes = distributionRoutes.value.filter(item => item.enabled).length
-  const enabledRecycle = recycleRules.value.filter(item => item.enabled).length
-  const enabledFlows = workflowRules.value.filter(item => item.enabled).length
+  const hiddenMenus = ruleRows.filter(item => item.status.includes('菜单隐藏')).length
+  const warningRules = ruleRows.filter(item => item.level === 'warning' || item.level === 'danger').length
   return [
-    { label: '统一规则分类', value: '4', sub: '分配/回收/流程/系统' },
-    { label: '启用分配路由', value: `${enabledRoutes}`, sub: '旧分配页已删除' },
-    { label: '启用回收规则', value: `${enabledRecycle}`, sub: '旧回收页已删除' },
-    { label: '自动化流程', value: `${enabledFlows}`, sub: '流程引擎已归并' }
+    { label: '规则分类', value: `${moduleCards.length}`, sub: '按业务责任人归口' },
+    { label: '已登记规则项', value: `${ruleRows.length}`, sub: '含旧入口处理方式' },
+    { label: '隐藏旧菜单', value: `${hiddenMenus}`, sub: '保留旧地址不打断' },
+    { label: '待落地风险', value: `${warningRules}`, sub: '接口/人员绑定优先处理' }
   ]
 })
 
-function addDistributionRoute() {
-  distributionRoutes.value.push({
-    source: '新来源',
-    targetPool: '待配置池',
-    mode: 'manual',
-    team: '待指定',
-    priority: 9,
-    enabled: false
-  })
-  ElMessage.success('已新增路由规则草稿')
+function rulesForTab(tab: ModuleTab) {
+  return ruleRows.filter(item => item.tab === tab)
 }
 
-function addRecycleRule() {
-  recycleRules.value.push({
-    name: '新回收规则',
-    scope: '待配置',
-    recycleDays: 7,
-    green: 4,
-    yellow: 2,
-    red: 1,
-    targetPool: '回收公海池',
-    enabled: false
-  })
-  ElMessage.success('已新增回收规则草稿')
+function checksForTab(tab: ModuleTab) {
+  return checkItems.filter(item => item.tab === tab)
 }
 
 function saveSection(tab: RuleTab) {
-  if (tab === 'distribution' && weightSum.value !== 100) {
-    ElMessage.warning('权重合计必须等于 100%')
-    return
-  }
-  ElMessage.success('当前分类规则已保存')
-}
-
-function runFlow(name: string) {
-  ElMessage.success(`${name} 已加入执行队列`)
+  const title = tab === 'overview'
+    ? '规则归并总览'
+    : moduleCards.find(item => item.key === tab)?.title || '当前分类'
+  ElMessage.success(`${title} 已记录为统一口径`)
 }
 
 function go(path: string) {
@@ -358,6 +291,7 @@ function go(path: string) {
 .rule-center {
   color: #1f2937;
 }
+
 .rule-header {
   display: flex;
   align-items: flex-start;
@@ -369,6 +303,7 @@ function go(path: string) {
   border-radius: 8px;
   background: #fff;
 }
+
 .eyebrow {
   display: block;
   margin-bottom: 6px;
@@ -377,37 +312,43 @@ function go(path: string) {
   font-weight: 700;
   letter-spacing: 0;
 }
+
 .rule-header h1 {
   margin: 0 0 6px;
   font-size: 22px;
   font-weight: 750;
 }
+
 .rule-header p,
 .section-head p,
-.workflow-card p {
+.check-card p {
   margin: 0;
   color: #667085;
   font-size: 13px;
   line-height: 1.7;
 }
+
 .header-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
+
 .summary-item {
   padding: 14px;
   border: 1px solid #e9edf5;
   border-radius: 8px;
   background: #fff;
 }
+
 .summary-item span,
 .summary-item em {
   display: block;
@@ -415,6 +356,7 @@ function go(path: string) {
   font-size: 12px;
   font-style: normal;
 }
+
 .summary-item b {
   display: block;
   margin: 6px 0 4px;
@@ -422,15 +364,18 @@ function go(path: string) {
   font-size: 24px;
   font-weight: 760;
 }
+
 .rule-tabs {
   padding: 16px;
   border: 1px solid #e5eaf3;
   border-radius: 8px;
   background: #fff;
 }
+
 .section-block {
   margin-bottom: 14px;
 }
+
 .section-head {
   display: flex;
   align-items: flex-start;
@@ -438,26 +383,28 @@ function go(path: string) {
   gap: 14px;
   margin-bottom: 12px;
 }
+
 .section-head h2 {
   margin: 0 0 4px;
   font-size: 16px;
   font-weight: 720;
 }
+
 .module-grid,
-.workflow-grid {
+.check-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
+
 .module-card,
-.workflow-card,
-.factor-row,
-.policy-strip div {
+.check-card {
   min-width: 0;
   border: 1px solid #e8edf5;
   border-radius: 8px;
   background: #f8fafc;
 }
+
 .module-card {
   display: flex;
   flex-direction: column;
@@ -466,124 +413,72 @@ function go(path: string) {
   text-align: left;
   cursor: pointer;
 }
+
 .module-card:hover {
   border-color: #3370ff;
   background: #f5f9ff;
 }
-.module-card span {
+
+.module-card span,
+.check-card span {
   color: #3370ff;
   font-size: 12px;
   font-weight: 700;
 }
+
 .module-card strong,
-.workflow-card strong,
-.factor-row strong {
+.check-card strong {
   color: #1f2937;
   font-size: 14px;
   font-weight: 720;
 }
+
 .module-card em,
 .module-card small,
-.factor-row span,
-.policy-strip em {
+.check-card p,
+.muted {
   color: #667085;
   font-size: 12px;
   font-style: normal;
   line-height: 1.6;
 }
-.factor-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.factor-row {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-}
-.factor-row span {
-  display: block;
-  margin-top: 3px;
-}
-.warning-seq {
-  color: #344054;
-  font-size: 13px;
-}
-.policy-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.policy-strip div {
-  padding: 14px;
-}
-.policy-strip span {
-  display: block;
-  color: #667085;
-  font-size: 12px;
-}
-.policy-strip b {
-  display: block;
-  margin: 5px 0;
-  color: #111827;
-  font-size: 18px;
-}
-.workflow-card {
-  padding: 14px;
-}
-.workflow-top {
+
+.check-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.workflow-steps {
-  display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
-  margin: 12px 0;
+  padding: 14px;
 }
-.workflow-steps span {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #eef4ff;
-  color: #3370ff;
-  font-size: 12px;
+
+:deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: #edf1f7;
 }
-.workflow-card footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: #667085;
-  font-size: 12px;
+
+:deep(.el-table) {
+  --el-table-border-color: #edf1f7;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-text-color: #344054;
+  color: #344054;
 }
-@media (max-width: 1080px) {
+
+@media (max-width: 1180px) {
   .summary-grid,
   .module-grid,
-  .workflow-grid {
+  .check-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .factor-grid,
-  .policy-strip {
-    grid-template-columns: 1fr;
-  }
 }
+
 @media (max-width: 760px) {
   .rule-header,
-  .section-head,
-  .workflow-card footer {
+  .section-head {
     flex-direction: column;
   }
+
   .summary-grid,
   .module-grid,
-  .workflow-grid {
-    grid-template-columns: 1fr;
-  }
-  .factor-row {
+  .check-grid {
     grid-template-columns: 1fr;
   }
 }

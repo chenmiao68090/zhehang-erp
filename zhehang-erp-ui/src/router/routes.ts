@@ -190,7 +190,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: 'pool-admin',
         name: 'PoolAdmin',
         component: () => import('@/views/leads/pool-admin.vue'),
-        meta: { title: '公海管理', icon: 'Setting' }
+        meta: { title: '公海管理', icon: 'Setting', hidden: true }
       },
       {
         path: 'collision-manage',
@@ -302,10 +302,10 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'monitor', name: 'CallCenterMonitor', component: () => import('@/views/call-center/monitor.vue'), meta: { title: '实时监控', icon: 'Monitor' } },
       { path: 'call-record', name: 'CallCenterRecord', component: () => import('@/views/call-center/call-record.vue'), meta: { title: '通话记录', icon: 'Document' } },
       { path: 'outbound', name: 'CallCenterOutbound', component: () => import('@/views/call-center/outbound.vue'), meta: { title: '外呼任务', icon: 'Promotion' } },
-      { path: 'agent', name: 'CallCenterAgent', component: () => import('@/views/call-center/agent.vue'), meta: { title: '坐席管理', icon: 'Avatar' } },
-      { path: 'skill', name: 'CallCenterSkill', component: () => import('@/views/call-center/skill.vue'), meta: { title: '技能组', icon: 'Connection' } },
-      { path: 'number', name: 'CallCenterNumber', component: () => import('@/views/call-center/number.vue'), meta: { title: '号码与线路', icon: 'PhoneFilled' } },
-      { path: 'ivr', name: 'CallCenterIvr', component: () => import('@/views/call-center/ivr.vue'), meta: { title: 'IVR 流程', icon: 'Share' } },
+      { path: 'agent', name: 'CallCenterAgent', component: () => import('@/views/call-center/agent.vue'), meta: { title: '坐席管理', icon: 'Avatar', hidden: true } },
+      { path: 'skill', name: 'CallCenterSkill', component: () => import('@/views/call-center/skill.vue'), meta: { title: '技能组', icon: 'Connection', hidden: true } },
+      { path: 'number', name: 'CallCenterNumber', component: () => import('@/views/call-center/number.vue'), meta: { title: '号码与线路', icon: 'PhoneFilled', hidden: true } },
+      { path: 'ivr', name: 'CallCenterIvr', component: () => import('@/views/call-center/ivr.vue'), meta: { title: 'IVR 流程', icon: 'Share', hidden: true } },
       { path: 'report', name: 'CallCenterReport', component: () => import('@/views/call-center/report.vue'), meta: { title: '通话报表', icon: 'TrendCharts' } }
     ]
   },
@@ -334,7 +334,14 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'notification', name: 'Notification', component: () => import('@/views/system/notification.vue'), meta: { title: '消息中心' } },
       { path: 'operation', name: 'RuleCenter', component: () => import('@/views/system/operation.vue'), meta: { title: '规则配置中心', icon: 'SetUp' } },
       { path: 'distribute-config', redirect: { path: '/system/operation', query: { tab: 'distribution' } }, meta: { title: '分配规则', hidden: true } },
-      { path: 'recycle-config', redirect: { path: '/system/operation', query: { tab: 'recycle' } }, meta: { title: '回收规则', hidden: true } }
+      { path: 'recycle-config', redirect: { path: '/system/operation', query: { tab: 'pool' } }, meta: { title: '回收规则', hidden: true } },
+      { path: 'pool-config', redirect: { path: '/system/operation', query: { tab: 'pool' } }, meta: { title: '公海私海规则', hidden: true } },
+      { path: 'call-config', redirect: { path: '/system/operation', query: { tab: 'call' } }, meta: { title: '呼叫中心规则', hidden: true } },
+      { path: 'delivery-config', redirect: { path: '/system/operation', query: { tab: 'delivery' } }, meta: { title: '财税交付规则', hidden: true } },
+      { path: 'channel-config', redirect: { path: '/system/operation', query: { tab: 'channel' } }, meta: { title: '渠道合作规则', hidden: true } },
+      { path: 'finance-config', redirect: { path: '/system/operation', query: { tab: 'finance' } }, meta: { title: '财务绩效规则', hidden: true } },
+      { path: 'oauth-config', name: 'OAuthConfig', component: () => import('@/views/system/oauth-config.vue'), meta: { title: '第三方登录配置', hidden: true } },
+      { path: 'openapi', name: 'OpenApi', component: () => import('@/views/system/openapi.vue'), meta: { title: '开放接口配置', hidden: true } }
     ]
   }
 ]

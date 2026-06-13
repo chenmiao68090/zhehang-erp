@@ -763,7 +763,6 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { contractMgmtApi, type BizContract, type BizContractTemplate, type ContractStageRecord, type ContractLinkageRecord } from '@/api/contract-mgmt'
 import { orderApi, type BizOrder } from '@/api/order'
-import { onContractEffective } from '@/utils/biz-linkage'
 import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 // ============== 基础状态 ==============
@@ -1294,9 +1293,9 @@ async function confirmEffective(row: BizContract) {
     '确认生效',
     { type: 'success', confirmButtonText: '确认生效并派发任务' }
   ).then(async () => {
-    // 1) 调用联动函数（写入 biz_contract_list / biz_task_list）
-    try { onContractEffective(row.id) } catch (e) { /* ignore */ }
-    // 2) 记录联动事件到合同时间线
+    // 交付任务 + 销售提成已由后端在「确认签署」事务内自动编排
+    // （BizContractServiceImpl.confirmSign → dispatchDeliveryTasks / generateCommission），
+    // 此处仅拉取最新详情刷新时间线，无独立「生效」端点。
     await contractMgmtApi.markEffective({ id: row.id, taskTitles: titles })
     ElMessage.success('合同已生效，服务任务已自动创建')
     await loadList()

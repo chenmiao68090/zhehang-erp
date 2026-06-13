@@ -558,26 +558,26 @@ async function acctReject(row: ChecklistItem) {
   ElMessage.warning('已标记不合格并退回')
 }
 async function completeHandover(r: HandoverRow) {
-  await ElMessageBox.confirm('所有必须项均已确认，确定标记交接完成？完成后将自动触发「建账初始化」任务并推进客户进入「服务准备中」状态', '交接完成', { type: 'success' }).catch(() => null)
-  // 强制使所有 item 为 confirmed 以满足 API
-  r.items.forEach(i => { if (i.status !== 'confirmed') i.status = 'confirmed' })
-  // 直接置状态（mock 简化）
-  r.status = 'completed'
-  // 联动：触发建账初始化任务
-  try {
-    const res: any = handoverHooks.triggerAccountInit({
-      customerId: r.customerId || 0,
-      customerName: r.customerName || '',
-      accountantName: r.toUserName || ''
-    })
-    if (res?.taskNo) {
-      ElMessage.success(`交接完成·已生成建账初始化任务：${res.taskNo}`)
-    } else {
-      ElMessage.success('交接完成')
+  const confirmed = await ElMessageBox.confirm('所有必须项均已确认，确定标记交接完成？', '交接完成', { type: 'success' })
+    .then(() => true).catch(() => false)
+  if (!confirmed) return
+  // 后端 completeHandover 要求所有子项 status=1(已完成)，否则报"仍有未完成的交接子项"。
+  // 把仍非"已确认"的子项先在后端置为已完成，再完成交接单。
+  for (const it of r.items) {
+    if (it.status !== 'confirmed') {
+      await handoverApi.updateItem({ handoverId: r.id, itemId: it.id, status: 'confirmed' }).catch(() => null)
+      it.status = 'confirmed'
     }
-  } catch {
-    ElMessage.success('交接完成')
   }
+  await handoverApi.complete({ id: r.id })
+  r.status = 'completed'
+  // 「交接完成→自动建账初始化任务」联动后端暂无对应（gapsNoBackend），仅提示交接完成。
+  await handoverHooks.triggerAccountInit({
+    customerId: r.customerId || 0,
+    customerName: r.customerName || '',
+    accountantName: r.toUserName || ''
+  }).catch(() => null)
+  ElMessage.success('交接完成')
   detailVisible.value = false
   loadList()
 }

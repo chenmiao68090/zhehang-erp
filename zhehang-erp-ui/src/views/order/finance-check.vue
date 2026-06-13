@@ -941,7 +941,6 @@ import {
 } from '@element-plus/icons-vue'
 import { receiptApi, calcOverdueLevel, refundReasonLabel, refundWayLabel, type BizReceipt, type BizReceiptPlan, type BizInvoice, type RefundRequest, type ReceiptSummary, type ReceiptTimelineEvent, type RefundReasonKey, type RefundWayKey } from '@/api/receipt'
 import { orderApi, type BizOrder } from '@/api/order'
-import { onRefundCompleted } from '@/utils/biz-linkage'
 
 // ===== 顶部时间 =====
 const currentDate = (() => {
@@ -1130,17 +1129,9 @@ async function loadRefunds() {
   }
 }
 
-// ===== 入账（前端独立 localStorage 管理） =====
-const POSTING_KEY = 'biz_receipt_postings'
+// ===== 入账（gapsNoBackend：后端无入账/科目接口，仅会话内存维护，刷新即清空） =====
 const postings = ref<Record<string, string>>({})
 
-function loadPostings() {
-  const raw = localStorage.getItem(POSTING_KEY)
-  postings.value = raw ? JSON.parse(raw) : {}
-}
-function savePostings() {
-  localStorage.setItem(POSTING_KEY, JSON.stringify(postings.value))
-}
 function isPosted(id: number) { return !!postings.value[String(id)] }
 function getPostingAccount(id: number) { return postings.value[String(id)] || '' }
 
@@ -1386,16 +1377,9 @@ async function submitMarkPaid() {
 
 async function sendReminder(row: BizReceiptPlan) {
   await ElMessageBox.confirm(`确认向 ${row.customerName} 发送催收提醒？`, '催收提醒', { type: 'info' })
+  // gapsNoBackend：后端收款计划无催收计数/催收时间字段，仅做前端态提示，不持久化。
   row.reminderCount += 1
   row.lastReminderTime = new Date().toISOString().slice(0, 19).replace('T', ' ')
-  // 同步 localStorage
-  const PL_KEY = 'biz_receipt_plans'
-  const list = JSON.parse(localStorage.getItem(PL_KEY) || '[]')
-  const idx = list.findIndex((p: any) => p.id === row.id)
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], reminderCount: row.reminderCount, lastReminderTime: row.lastReminderTime }
-    localStorage.setItem(PL_KEY, JSON.stringify(list))
-  }
   ElMessage.success('催收提醒已发送')
 }
 async function escalateToManager(row: BizReceiptPlan) {
@@ -1623,18 +1607,9 @@ async function submitRefundExec() {
       refundWay: refundExecForm.way,
       remark: refundExecForm.remark
     })
-    // 联动：财务确认退款完成 → 合同终止 / 任务取消 / 提成扣回 / 客户冻结
-    let linkSummary = ''
-    try {
-      const linkRes = onRefundCompleted(row.orderId, row.refundAmount)
-      if (linkRes.ok) linkSummary = linkRes.message
-      else linkSummary = `联动提示：${linkRes.message}`
-    } catch (err) { /* ignore */ }
-    if (linkSummary) {
-      ElMessage.success(`退款已执行 · ${linkSummary}`)
-    } else {
-      ElMessage.success('退款已执行')
-    }
+    // 退款落库由后端 /receipt/refund 完成（将原收款置为「已退款」）。
+    // gapsNoBackend：后端 refund() 未编排「合同终止 / 任务取消 / 提成扣回 / 客户冻结」下游联动，故此处不再做前端 mock 联动。
+    ElMessage.success('退款已执行')
     refundExecDialog.visible = false
     await Promise.all([loadRefunds(), loadReceipts(), loadSummary(), loadTimeline()])
   } catch (e: any) {
@@ -1653,7 +1628,6 @@ function openPostingDialog(row: BizReceipt) {
 function submitPosting() {
   if (!postingDialog.row) return
   postings.value[String(postingDialog.row.id)] = postingForm.account
-  savePostings()
   ElMessage.success(`收款 ${postingDialog.row.receiptNo} 已入账至「${postingForm.account}」`)
   postingDialog.visible = false
 }
@@ -1666,7 +1640,6 @@ function formatDate(d: Date | string): string {
 
 // =================== 初始化 ===================
 onMounted(async () => {
-  loadPostings()
   await Promise.all([orderApi.ensureSamples(), receiptApi.ensureSamples()])
   await Promise.all([loadReceipts(), loadPlans(), loadInvoices(), loadRefunds(), loadSummary(), loadTimeline(), loadRefundableOrders()])
 })

@@ -322,7 +322,6 @@ import { reactive, ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { TASK_ASSIGNEES, TASK_CONTRACT_OPTIONS, taskApi, type BizTask } from '@/api/task-center'
-import { onAllTasksCompleted } from '@/utils/biz-linkage'
 import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
 
 const CAT = 'A'
@@ -402,14 +401,6 @@ function parseRemark(remark: string) {
 
 function buildRemark(cat: string, subType: string, rest = '') {
   return `${cat}|${subType}|${rest}`
-}
-
-function ensureSeed() {
-  const KEY = 'biz_tasks'
-  const raw = localStorage.getItem(KEY)
-  const list: BizTask[] = raw ? (() => { try { return JSON.parse(raw) } catch { return [] } })() : []
-  // 不再写入种子数据，仅读取已有数据
-  void list
 }
 
 function dateOff(d: number) {
@@ -593,15 +584,7 @@ async function doReview() {
   const target = current.value
   await taskApi.review({ id: target.id, result: r, opinion: reviewForm.opinion + (reviewForm.result === 'rework' ? '（需返工）' : '') })
   ElMessage.success(reviewForm.result === 'pass' ? '验收通过' : reviewForm.result === 'rework' ? '已退回返工' : '验收不通过')
-  // 联动：验收通过后检查该客户是否所有一次性任务都已完成 → 转「服务中」
-  if (r === 'pass' && target.customerId) {
-    try {
-      const linkRes = onAllTasksCompleted(target.customerId)
-      if (linkRes.ok) {
-        ElMessage.success(linkRes.message)
-      }
-    } catch (err) { /* ignore */ }
-  }
+  // 验收通过后的「客户全部交付任务完成 → 合同转服务中」联动已由后端 review() 自动编排，前端无需再触发。
   dlg.review = false
   loadList()
 }
@@ -612,8 +595,6 @@ function openDetail(row: BizTask & { _subType?: string }) {
 }
 
 onMounted(async () => {
-  await taskApi.ensureSamples(['A'])
-  ensureSeed()
   await loadList()
 })
 </script>

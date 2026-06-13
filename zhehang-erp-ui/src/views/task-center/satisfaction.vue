@@ -428,28 +428,24 @@ async function submitForm() {
     improvementSuggestion: form.value.improvementSuggestion,
     status: 'completed'
   })
-  // 升级/联动处理
+  // 升级/联动处理（低分自动升级建任务、3 分自动再次回访 后端暂无对应模型，仅做回访提交 + 提示）
   const score = form.value.overallScore
   const cName = customer?.name || ''
   if (score <= 2) {
-    try {
-      const r: any = escalationApi.fromSatisfaction({
-        customerId: form.value.customerId,
-        customerName: cName,
-        score,
-        feedback: form.value.feedback || ''
-      })
-      ElMessage.warning(`${score === 1 ? '已自动创建 D 类任务（老板 · 投诉处理）' : '已自动创建 C 类任务（项目部 · 客户挽回）'}：${r?.taskNo || ''}`)
-    } catch { ElMessage.warning('已提交（升级任务创建异常）') }
+    await escalationApi.fromSatisfaction({
+      customerId: form.value.customerId,
+      customerName: cName,
+      score,
+      feedback: form.value.feedback || ''
+    }).catch(() => null)
+    ElMessage.warning(`评分 ${score} 分：${score === 1 ? '建议升级为 D 类任务（老板 · 投诉处理）' : '建议升级为 C 类任务（项目部 · 客户挽回）'}，请在任务中心手动派单`)
   } else if (score === 3) {
-    try {
-      escalationApi.fromSatisfactionFollowUp({
-        customerId: form.value.customerId,
-        customerName: cName,
-        score
-      })
-      ElMessage.success('评分 3 分：已自动创建 15 天后再次回访任务')
-    } catch { ElMessage.success('回访结果已提交') }
+    await escalationApi.fromSatisfactionFollowUp({
+      customerId: form.value.customerId,
+      customerName: cName,
+      score
+    }).catch(() => null)
+    ElMessage.success('回访结果已提交，建议 15 天后再次回访')
   } else if (score === 5) {
     ElMessage.success('评分 5 分：已标记为标杆客户，请销售跟进转介绍')
   } else {

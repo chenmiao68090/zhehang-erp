@@ -1,5 +1,27 @@
-// ===== 财务核对 API（localStorage Mock 模式） =====
-import { onPaymentConfirmed } from '@/utils/biz-linkage'
+// ===== 回款/财务核对 API（真实后端：modules/receipt 下 /receipt/list /confirm /plans /overdue /invoices /invoice /summary /refund） =====
+// 说明：
+// 1. request.ts 的响应拦截器在 code===200 时 resolve 的是 R 信封 {code,message,data}，这里统一用 unwrap() 取 data 载荷。
+// 2. 分页接口返回 MyBatis-Plus IPage {records,total,...}，api 层适配成视图期望的 {list,total}。
+// 3. 后端 Jackson 开启 FAIL_ON_UNKNOWN_PROPERTIES，所以写入请求体按后端 Entity 字段白名单构造。
+// 4. 导出的函数名与返回形状保持与原 mock 版完全一致，视图零改动（或极小改动）。
+// 5. 状态/字段映射以后端 Entity 真实字段为准（camelCase），状态枚举语义以后端 Service 为准：
+//    - BizReceipt.status      1待确认 2已确认 3已退款（无 rejected；驳回退化为不改库的前端提示，见 confirm()）
+//    - BizReceiptPlan.status  1未收 2部分收款 3已收齐 4逾期；字段 period(期数) planAmount paidAmount planDate paidDate
+//    - BizInvoice.status      1待开 2已开 3已邮寄 4已签收 5红冲；字段 title/invoiceType(general/special)/taxAmount/totalAmount/invoiceDate/trackingNo
+//    - paymentMethod(收款方式) receiveTime(到账时间) voucher(凭证) —— 对应视图的 paymentChannel/paymentTime/voucherUrl
+// 6. 已移除 localStorage 与 @/utils/biz-linkage：
+//    - 收款确认→自动生成合同草稿 已由后端 confirm() 编排（BizReceiptServiceImpl.confirm 内 generateFromOrder），前端不再调 onPaymentConfirmed。
+//    - 退款完成→合同终止/任务取消/提成扣回 后端 refund() 仅置收款为已退款，未做下游编排（gapsNoBackend）；视图已移除 onRefundCompleted 调用。
+// 7. gapsNoBackend（后端无对应能力，本文件做最小化/前端态降级，见文末 receiptApi 注释）：
+//    - 退款审批流（申请→主管审批→财务确认）后端无 RefundRequest 表与审批接口，仅有 /receipt/refund 一步置「已退款」；
+//      本文件用模块内存（非 localStorage）维护退款单的中间态，财务确认时落地真实 /receipt/refund。
+//    - 财务联动时间线 后端无接口，用模块内存维护，刷新页面即清空。
+//    - 收款无 receiptType/orderNo/confirmerName 字段、计划无 orderNo/customerName/installmentTotal/pendingAmount/reminderCount 字段，按可得数据回退。
+//    - getSummary 后端 /summary 仅返回当月 {count,totalAmount}，其余指标（待确认/逾期/发票/退款）由本文件聚合多接口在前端算出。
+
+import { get, post, put } from './request'
+
+// ---------- 视图层类型（保持原 mock 形状，视图零改动） ----------
 
 export interface BizReceipt {
   id: number
@@ -127,482 +149,144 @@ export interface ReceiptSummary {
   refundPending: number
 }
 
-const RC_KEY = 'biz_receipts'
-const PL_KEY = 'biz_receipt_plans'
-const IV_KEY = 'biz_invoices'
-const RF_KEY = 'biz_refunds'
-const TL_KEY = 'biz_receipt_timeline'
+// ---------- 通用小工具 ----------
 
-const delay = <T>(data: T, ms = 100): Promise<T> =>
-  new Promise(resolve => setTimeout(() => resolve(data), ms))
-
-const ts = (off = 0): string => {
-  const d = new Date()
-  d.setDate(d.getDate() + off)
-  return d.toISOString().slice(0, 19).replace('T', ' ')
-}
-const dateOnly = (off = 0): string => {
-  const d = new Date()
-  d.setDate(d.getDate() + off)
-  return d.toISOString().slice(0, 10)
+/** 拦截器 resolve 的是 R 信封，这里取 data 载荷（兼容未来拦截器直接返回载荷的情况） */
+function unwrap<T = any>(res: any): T {
+  if (res && typeof res === 'object' && 'code' in res && 'data' in res) return res.data as T
+  return res as T
 }
 
-function pad4(n: number) { return String(n).padStart(4, '0') }
-function genNo(prefix: string, n: number) {
-  const d = new Date()
-  return `${prefix}${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${pad4(n)}`
+/** IPage -> {list,total} */
+function toPage<T>(data: any): { list: T[]; total: number } {
+  const list = Array.isArray(data?.records) ? data.records : (Array.isArray(data?.list) ? data.list : [])
+  return { list, total: Number(data?.total || list.length || 0) }
 }
 
-function load<T>(key: string, builder: () => T[]): T[] {
-  const raw = localStorage.getItem(key)
-  if (raw) {
-    try { return JSON.parse(raw) as T[] } catch { /* ignore */ }
+const num = (v: any): number => (v === null || v === undefined || v === '' ? 0 : Number(v) || 0)
+
+/** LocalDateTime/ISO -> 'YYYY-MM-DD HH:mm:ss' */
+function fmtDateTime(v: any): string {
+  if (!v) return ''
+  const s = String(v).replace('T', ' ')
+  return s.slice(0, 19)
+}
+/** LocalDate/ISO -> 'YYYY-MM-DD' */
+function fmtDate(v: any): string {
+  if (!v) return ''
+  return String(v).slice(0, 10)
+}
+const ts = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ')
+
+// ---------- 状态枚举映射（后端数字码 <-> 视图字符串） ----------
+
+const RECEIPT_STATUS_NUM: Record<string, number> = { pending: 1, confirmed: 2, refunded: 3 }
+function receiptStatusStr(n: any): BizReceipt['status'] {
+  return ({ 1: 'pending', 2: 'confirmed', 3: 'refunded' } as Record<number, BizReceipt['status']>)[Number(n)] || 'pending'
+}
+
+function planStatusStr(n: any): BizReceiptPlan['status'] {
+  // 1未收 2部分收款 3已收齐 4逾期
+  return ({ 1: 'pending', 2: 'partial', 3: 'paid', 4: 'overdue' } as Record<number, BizReceiptPlan['status']>)[Number(n)] || 'pending'
+}
+
+function invoiceStatusStr(n: any): BizInvoice['status'] {
+  // 1待开 2已开 3已邮寄 4已签收 5红冲
+  return ({ 1: 'pending', 2: 'issued', 3: 'mailed', 4: 'received', 5: 'cancelled' } as Record<number, BizInvoice['status']>)[Number(n)] || 'pending'
+}
+const INVOICE_STATUS_NUM: Record<string, number> = { pending: 1, issued: 2, mailed: 3, received: 4, cancelled: 5 }
+
+// 后端发票仅 general/special 两类；视图三类（含 electronic）做近似映射
+function invoiceTypeStr(t: any): BizInvoice['invoiceType'] {
+  return t === 'special' ? 'vat_special' : 'vat_general'
+}
+function invoiceTypeBackend(t: BizInvoice['invoiceType']): string {
+  return t === 'vat_special' ? 'special' : 'general'
+}
+
+// ---------- 收款：后端实体 BizReceipt <-> 视图形状 ----------
+
+type Raw = Record<string, any>
+
+function adaptReceipt(r: Raw): BizReceipt {
+  const amount = num(r.amount)
+  return {
+    id: Number(r.id),
+    receiptNo: r.receiptNo || '',
+    orderId: Number(r.orderId || 0),
+    orderNo: r.orderId ? String(r.orderId) : '', // 后端收款无 orderNo，回退订单ID（见 gapsNoBackend）
+    customerId: Number(r.customerId || 0),
+    customerName: r.customerName || '',
+    amount,
+    paymentChannel: (r.paymentMethod || 'bank') as BizReceipt['paymentChannel'],
+    paymentTime: fmtDateTime(r.receiveTime),
+    receiptType: 'full', // 后端无 receiptType 字段，默认全款（见 gapsNoBackend）
+    voucherUrl: r.voucher || '',
+    confirmerId: Number(r.confirmerId || 0),
+    confirmerName: '', // 后端只存 confirmerId，无姓名
+    confirmTime: fmtDateTime(r.confirmTime),
+    status: receiptStatusStr(r.status),
+    remark: r.remark || '',
+    createTime: fmtDateTime(r.createTime)
   }
-  const seed = builder()
-  localStorage.setItem(key, JSON.stringify(seed))
-  return seed
-}
-function save<T>(key: string, list: T[]) { localStorage.setItem(key, JSON.stringify(list)) }
-
-function seedReceipts(): BizReceipt[] {
-  return [
-    {
-      id: 1,
-      receiptNo: genNo('RC', 1),
-      orderId: 110,
-      orderNo: 'TD2026060110',
-      customerId: 110,
-      customerName: '杭州启明电商有限公司',
-      amount: 13200,
-      paymentChannel: 'bank',
-      paymentTime: ts(-1),
-      receiptType: 'full',
-      voucherUrl: '',
-      confirmerId: 0,
-      confirmerName: '',
-      confirmTime: '',
-      status: 'pending',
-      remark: '客户已转账，待财务核对到账凭证',
-      createTime: ts(-1)
-    },
-    {
-      id: 2,
-      receiptNo: genNo('RC', 2),
-      orderId: 111,
-      orderNo: 'TD2026060111',
-      customerId: 111,
-      customerName: '宁波蔚蓝企业管理有限公司',
-      amount: 3000,
-      paymentChannel: 'wechat',
-      paymentTime: ts(0),
-      receiptType: 'deposit',
-      voucherUrl: '',
-      confirmerId: 0,
-      confirmerName: '',
-      confirmTime: '',
-      status: 'pending',
-      remark: '审计报告定金，待确认',
-      createTime: ts()
-    },
-    {
-      id: 3,
-      receiptNo: genNo('RC', 3),
-      orderId: 101,
-      orderNo: 'TD2026060101',
-      customerId: 101,
-      customerName: '杭州森禾科技有限公司',
-      amount: 16800,
-      paymentChannel: 'bank',
-      paymentTime: ts(-2),
-      receiptType: 'full',
-      voucherUrl: '/mock/receipt_3.png',
-      confirmerId: 1003,
-      confirmerName: '王会计',
-      confirmTime: ts(-2),
-      status: 'confirmed',
-      remark: '年度代理记账款已确认',
-      createTime: ts(-3)
-    },
-    {
-      id: 4,
-      receiptNo: genNo('RC', 4),
-      orderId: 102,
-      orderNo: 'TD2026060102',
-      customerId: 102,
-      customerName: '浙江云桥贸易有限公司',
-      amount: 6800,
-      paymentChannel: 'alipay',
-      paymentTime: ts(-3),
-      receiptType: 'full',
-      voucherUrl: '/mock/receipt_4.png',
-      confirmerId: 1003,
-      confirmerName: '王会计',
-      confirmTime: ts(-3),
-      status: 'confirmed',
-      remark: '工商注册服务费已确认',
-      createTime: ts(-4)
-    },
-    {
-      id: 5,
-      receiptNo: genNo('RC', 5),
-      orderId: 105,
-      orderNo: 'TD2026060105',
-      customerId: 105,
-      customerName: '绍兴南麓服饰有限公司',
-      amount: 18000,
-      paymentChannel: 'bank',
-      paymentTime: ts(-12),
-      receiptType: 'installment',
-      voucherUrl: '/mock/receipt_5.png',
-      confirmerId: 1003,
-      confirmerName: '王会计',
-      confirmTime: ts(-12),
-      status: 'confirmed',
-      remark: '上半年度服务费已确认',
-      createTime: ts(-13)
-    },
-    {
-      id: 6,
-      receiptNo: genNo('RC', 6),
-      orderId: 103,
-      orderNo: 'TD2026060103',
-      customerId: 103,
-      customerName: '杭州叁木文化传媒有限公司',
-      amount: 8000,
-      paymentChannel: 'bank',
-      paymentTime: ts(-5),
-      receiptType: 'deposit',
-      voucherUrl: '',
-      confirmerId: 1003,
-      confirmerName: '王会计',
-      confirmTime: ts(-5),
-      status: 'rejected',
-      remark: '付款方名称不一致，已驳回销售补充材料',
-      createTime: ts(-6)
-    },
-    {
-      id: 7,
-      receiptNo: genNo('RC', 7),
-      orderId: 104,
-      orderNo: 'TD2026060104',
-      customerId: 104,
-      customerName: '湖州锦辰餐饮管理有限公司',
-      amount: 12000,
-      paymentChannel: 'pos',
-      paymentTime: ts(-28),
-      receiptType: 'full',
-      voucherUrl: '/mock/receipt_7.png',
-      confirmerId: 1003,
-      confirmerName: '王会计',
-      confirmTime: ts(-28),
-      status: 'refunded',
-      remark: '客户退费，收款已退款',
-      createTime: ts(-30)
-    }
-  ]
 }
 
-function seedPlans(): BizReceiptPlan[] {
-  return [
-    {
-      id: 1,
-      planNo: genNo('PL', 1),
-      orderId: 110,
-      orderNo: 'TD2026060110',
-      customerId: 110,
-      customerName: '杭州启明电商有限公司',
-      totalAmount: 13200,
-      installmentNo: 1,
-      installmentTotal: 1,
-      planAmount: 13200,
-      paidAmount: 0,
-      pendingAmount: 13200,
-      planDate: dateOnly(-8),
-      paidDate: '',
-      status: 'overdue',
-      reminderCount: 1,
-      lastReminderTime: ts(-2),
-      remark: '全款待确认，确认后生成合同草稿'
-    },
-    {
-      id: 2,
-      planNo: genNo('PL', 2),
-      orderId: 111,
-      orderNo: 'TD2026060111',
-      customerId: 111,
-      customerName: '宁波蔚蓝企业管理有限公司',
-      totalAmount: 9800,
-      installmentNo: 1,
-      installmentTotal: 2,
-      planAmount: 3000,
-      paidAmount: 0,
-      pendingAmount: 3000,
-      planDate: dateOnly(2),
-      paidDate: '',
-      status: 'pending',
-      reminderCount: 0,
-      lastReminderTime: '',
-      remark: '审计报告定金'
-    },
-    {
-      id: 3,
-      planNo: genNo('PL', 3),
-      orderId: 105,
-      orderNo: 'TD2026060105',
-      customerId: 105,
-      customerName: '绍兴南麓服饰有限公司',
-      totalAmount: 36000,
-      installmentNo: 1,
-      installmentTotal: 2,
-      planAmount: 18000,
-      paidAmount: 18000,
-      pendingAmount: 0,
-      planDate: dateOnly(-180),
-      paidDate: dateOnly(-12),
-      status: 'paid',
-      reminderCount: 0,
-      lastReminderTime: '',
-      remark: '上半年度已结清'
-    },
-    {
-      id: 4,
-      planNo: genNo('PL', 4),
-      orderId: 105,
-      orderNo: 'TD2026060105',
-      customerId: 105,
-      customerName: '绍兴南麓服饰有限公司',
-      totalAmount: 36000,
-      installmentNo: 2,
-      installmentTotal: 2,
-      planAmount: 18000,
-      paidAmount: 0,
-      pendingAmount: 18000,
-      planDate: dateOnly(12),
-      paidDate: '',
-      status: 'pending',
-      reminderCount: 0,
-      lastReminderTime: '',
-      remark: '下半年度待收'
-    },
-    {
-      id: 5,
-      planNo: genNo('PL', 5),
-      orderId: 103,
-      orderNo: 'TD2026060103',
-      customerId: 103,
-      customerName: '杭州叁木文化传媒有限公司',
-      totalAmount: 25800,
-      installmentNo: 2,
-      installmentTotal: 2,
-      planAmount: 17800,
-      paidAmount: 0,
-      pendingAmount: 17800,
-      planDate: dateOnly(-22),
-      paidDate: '',
-      status: 'overdue',
-      reminderCount: 2,
-      lastReminderTime: ts(-3),
-      remark: '资质代办尾款逾期，主管需介入'
-    },
-    {
-      id: 6,
-      planNo: genNo('PL', 6),
-      orderId: 106,
-      orderNo: 'TD2026060106',
-      customerId: 106,
-      customerName: '嘉兴禾创智能装备有限公司',
-      totalAmount: 58000,
-      installmentNo: 2,
-      installmentTotal: 2,
-      planAmount: 38000,
-      paidAmount: 0,
-      pendingAmount: 38000,
-      planDate: dateOnly(-46),
-      paidDate: '',
-      status: 'overdue',
-      reminderCount: 4,
-      lastReminderTime: ts(-1),
-      remark: '方案落地尾款逾期，建议暂停服务交付'
-    }
-  ]
+// ---------- 收款计划：后端实体 BizReceiptPlan <-> 视图形状 ----------
+
+function adaptPlan(p: Raw): BizReceiptPlan {
+  const planAmount = num(p.planAmount)
+  const paidAmount = num(p.paidAmount)
+  return {
+    id: Number(p.id),
+    planNo: `PL${String(p.id || '')}`,
+    orderId: Number(p.orderId || 0),
+    orderNo: p.orderId ? String(p.orderId) : '', // 后端计划无 orderNo，回退订单ID
+    customerId: 0,
+    customerName: '', // 后端计划无客户名（见 gapsNoBackend）
+    totalAmount: planAmount,
+    installmentNo: Number(p.period || 1),
+    installmentTotal: Number(p.period || 1), // 后端无总期数，回退当前期数
+    planAmount,
+    paidAmount,
+    pendingAmount: +Math.max(planAmount - paidAmount, 0).toFixed(2),
+    planDate: fmtDate(p.planDate),
+    paidDate: fmtDate(p.paidDate),
+    status: planStatusStr(p.status),
+    reminderCount: 0, // 后端无催收计数（见 gapsNoBackend）
+    lastReminderTime: '',
+    remark: p.remark || ''
+  }
 }
 
-function seedInvoices(): BizInvoice[] {
-  return [
-    {
-      id: 1,
-      invoiceNo: genNo('INV', 1),
-      orderId: 101,
-      orderNo: 'TD2026060101',
-      customerId: 101,
-      customerName: '杭州森禾科技有限公司',
-      invoiceTitle: '杭州森禾科技有限公司',
-      taxNo: '91330100MA2H000001',
-      invoiceType: 'vat_general',
-      amount: 16800,
-      taxRate: 6,
-      taxAmount: 1008,
-      status: 'pending',
-      issueTime: '',
-      mailNo: '',
-      remark: '收款确认后待开票',
-      createTime: ts(-2)
-    },
-    {
-      id: 2,
-      invoiceNo: genNo('INV', 2),
-      orderId: 102,
-      orderNo: 'TD2026060102',
-      customerId: 102,
-      customerName: '浙江云桥贸易有限公司',
-      invoiceTitle: '浙江云桥贸易有限公司',
-      taxNo: '91330000MA2H000002',
-      invoiceType: 'electronic',
-      amount: 6800,
-      taxRate: 6,
-      taxAmount: 408,
-      status: 'issued',
-      issueTime: ts(-2),
-      mailNo: '',
-      remark: '电子票已开具',
-      createTime: ts(-3)
-    },
-    {
-      id: 3,
-      invoiceNo: genNo('INV', 3),
-      orderId: 105,
-      orderNo: 'TD2026060105',
-      customerId: 105,
-      customerName: '绍兴南麓服饰有限公司',
-      invoiceTitle: '绍兴南麓服饰有限公司',
-      taxNo: '91330600MA2H000003',
-      invoiceType: 'vat_special',
-      amount: 18000,
-      taxRate: 6,
-      taxAmount: 1080,
-      status: 'mailed',
-      issueTime: ts(-10),
-      mailNo: 'SF1234567890',
-      remark: '专票已寄出',
-      createTime: ts(-12)
-    },
-    {
-      id: 4,
-      invoiceNo: genNo('INV', 4),
-      orderId: 104,
-      orderNo: 'TD2026060104',
-      customerId: 104,
-      customerName: '湖州锦辰餐饮管理有限公司',
-      invoiceTitle: '湖州锦辰餐饮管理有限公司',
-      taxNo: '91330500MA2H000004',
-      invoiceType: 'vat_general',
-      amount: 12000,
-      taxRate: 6,
-      taxAmount: 720,
-      status: 'received',
-      issueTime: ts(-26),
-      mailNo: 'SF9876543210',
-      remark: '客户已确认收到',
-      createTime: ts(-28)
-    }
-  ]
+// ---------- 发票：后端实体 BizInvoice <-> 视图形状 ----------
+
+function adaptInvoice(v: Raw): BizInvoice {
+  const amount = num(v.amount)
+  const taxAmount = num(v.taxAmount)
+  const taxRate = amount > 0 ? +((taxAmount / amount) * 100).toFixed(0) : 6
+  return {
+    id: Number(v.id),
+    invoiceNo: v.invoiceNo || '',
+    orderId: Number(v.orderId || 0),
+    orderNo: v.orderId ? String(v.orderId) : '',
+    customerId: Number(v.customerId || 0),
+    customerName: v.customerName || '',
+    invoiceTitle: v.title || v.customerName || '',
+    taxNo: v.taxNo || '',
+    invoiceType: invoiceTypeStr(v.invoiceType),
+    amount,
+    taxRate,
+    taxAmount,
+    status: invoiceStatusStr(v.status),
+    issueTime: fmtDate(v.invoiceDate),
+    mailNo: v.trackingNo || '',
+    remark: v.remark || '',
+    createTime: fmtDateTime(v.createTime)
+  }
 }
 
-function seedRefunds(): RefundRequest[] {
-  return [
-    {
-      id: 1,
-      refundNo: genNo('RF', 1),
-      receiptId: 7,
-      orderId: 104,
-      orderNo: 'TD2026060104',
-      customerName: '湖州锦辰餐饮管理有限公司',
-      refundAmount: 12000,
-      reasonKey: 'agreement_terminated',
-      reason: '客户经营计划调整，双方协商解除',
-      refundWay: 'origin',
-      applyTime: ts(-20),
-      applicantId: 1001,
-      applicantName: '陈思羽',
-      approverId: 1010,
-      approverName: '李主管',
-      approvalTime: ts(-19),
-      financeConfirmerId: 1003,
-      financeConfirmerName: '王会计',
-      financeConfirmTime: ts(-18),
-      status: 'completed',
-      remark: '已原路退回'
-    },
-    {
-      id: 2,
-      refundNo: genNo('RF', 2),
-      receiptId: 5,
-      orderId: 105,
-      orderNo: 'TD2026060105',
-      customerName: '绍兴南麓服饰有限公司',
-      refundAmount: 2000,
-      reasonKey: 'service_unsatisfied',
-      reason: '客户要求扣减部分服务费',
-      refundWay: 'bank_transfer',
-      applyTime: ts(-1),
-      applicantId: 1001,
-      applicantName: '周慧',
-      approverId: 0,
-      approverName: '',
-      approvalTime: '',
-      financeConfirmerId: 0,
-      financeConfirmerName: '',
-      financeConfirmTime: '',
-      status: 'pending',
-      remark: ''
-    },
-    {
-      id: 3,
-      refundNo: genNo('RF', 3),
-      receiptId: 4,
-      orderId: 102,
-      orderNo: 'TD2026060102',
-      customerName: '浙江云桥贸易有限公司',
-      refundAmount: 800,
-      reasonKey: 'other',
-      reason: '刻章费用客户自行承担，需退回差额',
-      refundWay: 'origin',
-      applyTime: ts(-2),
-      applicantId: 1001,
-      applicantName: '李建国',
-      approverId: 1010,
-      approverName: '李主管',
-      approvalTime: ts(-1),
-      financeConfirmerId: 0,
-      financeConfirmerName: '',
-      financeConfirmTime: '',
-      status: 'approved',
-      remark: '等待财务执行'
-    }
-  ]
-}
+// ---------- 逾期阶梯判定函数（纯前端计算，与原 mock 一致） ----------
 
-function paginate<T>(list: T[], page = 1, pageSize = 10) {
-  const total = list.length
-  const start = (page - 1) * pageSize
-  return { list: list.slice(start, start + pageSize), total }
-}
-
-export function refundWayLabel(key?: RefundWayKey): string {
-  return ({ origin: '原路退回', bank_transfer: '对公转账', other: '其他' } as Record<string, string>)[key || 'origin'] || '其他'
-}
-
-export function refundReasonLabel(key?: RefundReasonKey): string {
-  return ({
-    service_unsatisfied: '服务不满意',
-    customer_regret: '客户反悔',
-    service_unavailable: '服务无法继续',
-    agreement_terminated: '协商解除',
-    other: '其他'
-  } as Record<string, string>)[key || 'other'] || '其他'
-}
-
-// ===== 逾期阶梯判定函数 =====
 export function calcOverdueLevel(plan: BizReceiptPlan | null | undefined): OverdueLevelInfo {
   if (!plan) return { key: 'none', days: 0, label: '—', action: '', notify: '', cls: 'lv-success' }
   if (plan.status === 'paid') return { key: 'none', days: 0, label: '已结清', action: '', notify: '', cls: 'lv-success' }
@@ -628,21 +312,33 @@ export function calcOverdueLevel(plan: BizReceiptPlan | null | undefined): Overd
   return { key: 'level4', days, label: '合同终止', action: '合同终止标记', notify: '全员', cls: 'lv-critical' }
 }
 
-// ===== 时间线事件 =====
-function loadTimeline(): ReceiptTimelineEvent[] {
-  const raw = localStorage.getItem(TL_KEY)
-  if (raw) {
-    try { return JSON.parse(raw) as ReceiptTimelineEvent[] } catch { /* ignore */ }
-  }
-  return []
+// ---------- 文案映射（视图直接引用） ----------
+
+export function refundWayLabel(key?: RefundWayKey): string {
+  return ({ origin: '原路退回', bank_transfer: '对公转账', other: '其他' } as Record<string, string>)[key || 'origin'] || '其他'
 }
-function saveTimeline(list: ReceiptTimelineEvent[]) {
-  localStorage.setItem(TL_KEY, JSON.stringify(list))
+
+export function refundReasonLabel(key?: RefundReasonKey): string {
+  return ({
+    service_unsatisfied: '服务不满意',
+    customer_regret: '客户反悔',
+    service_unavailable: '服务无法继续',
+    agreement_terminated: '协商解除',
+    other: '其他'
+  } as Record<string, string>)[key || 'other'] || '其他'
+}
+
+// ---------- 退款单 / 时间线：后端无持久化，模块内存维护（非 localStorage，刷新即清空，见 gapsNoBackend） ----------
+
+const refundStore: RefundRequest[] = []
+const timelineStore: ReceiptTimelineEvent[] = []
+function genNo(prefix: string, n: number) {
+  const d = new Date()
+  return `${prefix}${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(n).padStart(4, '0')}`
 }
 function appendTimeline(evt: Omit<ReceiptTimelineEvent, 'id' | 'time'> & { time?: string }) {
-  const list = loadTimeline()
-  const id = (list.reduce((m, e) => Math.max(m, e.id), 0) || 0) + 1
-  list.unshift({
+  const id = (timelineStore.reduce((m, e) => Math.max(m, e.id), 0) || 0) + 1
+  timelineStore.unshift({
     id,
     receiptId: evt.receiptId,
     orderId: evt.orderId,
@@ -652,495 +348,358 @@ function appendTimeline(evt: Omit<ReceiptTimelineEvent, 'id' | 'time'> & { time?
     operator: evt.operator,
     time: evt.time || ts()
   })
-  // 最多保留 100 条
-  saveTimeline(list.slice(0, 100))
+  if (timelineStore.length > 100) timelineStore.length = 100
 }
 
-function seedTimelineFromData(
-  receipts: BizReceipt[],
-  refunds: RefundRequest[],
-  plans: BizReceiptPlan[]
-): ReceiptTimelineEvent[] {
-  const confirmed = receipts.filter(r => r.status === 'confirmed')
-  const refunded = refunds.find(r => r.status === 'completed')
-  const urgentPlan = plans
-    .filter(p => p.status !== 'paid' && calcOverdueLevel(p).days >= 30)
-    .sort((a, b) => calcOverdueLevel(b).days - calcOverdueLevel(a).days)[0]
-
-  const events: ReceiptTimelineEvent[] = confirmed.slice(0, 2).map((receipt, idx) => ({
-    id: idx + 1,
-    receiptId: receipt.id,
-    orderId: receipt.orderId,
-    type: 'receipt_confirmed',
-    title: `收款确认 · ${receipt.receiptNo}`,
-    detail: `财务确认 ${receipt.customerName} 收款 ¥${receipt.amount}`,
-    time: receipt.confirmTime || receipt.paymentTime || ts(-idx),
-    operator: receipt.confirmerName || '财务'
-  }))
-
-  if (confirmed[0]) {
-    events.push({
-      id: events.length + 1,
-      receiptId: confirmed[0].id,
-      orderId: confirmed[0].orderId,
-      type: 'contract_generated',
-      title: `合同草稿已存在 · #${confirmed[0].orderNo || confirmed[0].orderId}`,
-      detail: '历史全额收款已进入合同管理，后续确认收款将自动校验是否需要生成合同草稿',
-      time: ts(-1),
-      operator: '系统'
-    })
-  }
-  if (refunded) {
-    events.push({
-      id: events.length + 1,
-      receiptId: refunded.receiptId,
-      orderId: refunded.orderId,
-      type: 'refund_completed',
-      title: `退款完成 · ${refunded.refundNo}`,
-      detail: `${refunded.customerName} 已退款 ¥${refunded.refundAmount}`,
-      time: refunded.financeConfirmTime || refunded.approvalTime || refunded.applyTime,
-      operator: refunded.financeConfirmerName || '财务'
-    })
-  }
-  if (urgentPlan) {
-    events.push({
-      id: events.length + 1,
-      orderId: urgentPlan.orderId,
-      type: 'overdue_escalation',
-      title: `逾期升级 · ${urgentPlan.orderNo}`,
-      detail: `${urgentPlan.customerName} 逾期 ${calcOverdueLevel(urgentPlan).days} 天，${calcOverdueLevel(urgentPlan).action}`,
-      time: urgentPlan.lastReminderTime || ts(-1),
-      operator: '系统'
-    })
-  }
-
-  return events.sort((a, b) => (b.time || '').localeCompare(a.time || ''))
+// 全量收款缓存：getPlans/getOverdue/getSummary 需要跨订单聚合，列表接口仅按 status 过滤
+async function fetchAllReceipts(): Promise<BizReceipt[]> {
+  const res = await get('/receipt/list', { pageNum: 1, pageSize: 500 })
+  return toPage<Raw>(unwrap(res)).list.map(adaptReceipt)
 }
 
-function ensureSeedStorage() {
-  let receipts = load<BizReceipt>(RC_KEY, seedReceipts)
-  let plans = load<BizReceiptPlan>(PL_KEY, seedPlans)
-  let invoices = load<BizInvoice>(IV_KEY, seedInvoices)
-  let refunds = load<RefundRequest>(RF_KEY, seedRefunds)
-
-  if (receipts.length === 0) {
-    receipts = seedReceipts()
-    save(RC_KEY, receipts)
-  }
-  if (plans.length === 0) {
-    plans = seedPlans()
-    save(PL_KEY, plans)
-  }
-  if (invoices.length === 0) {
-    invoices = seedInvoices()
-    save(IV_KEY, invoices)
-  }
-  if (refunds.length === 0) {
-    refunds = seedRefunds()
-    save(RF_KEY, refunds)
-  }
-  if (loadTimeline().length === 0) {
-    saveTimeline(seedTimelineFromData(receipts, refunds, plans))
-  }
-
-  return { receipts, plans, invoices, refunds, timeline: loadTimeline() }
-}
-
-function settlePlansForReceipt(receipt: BizReceipt, actualAmount: number) {
-  const plans = load<BizReceiptPlan>(PL_KEY, seedPlans)
-  const orderPlans = plans
-    .filter(p => p.orderId === receipt.orderId)
-    .sort((a, b) => a.installmentNo - b.installmentNo || (a.planDate || '').localeCompare(b.planDate || ''))
-  let remaining = Math.max(actualAmount, 0)
-  let changed = false
-
-  orderPlans.forEach(plan => {
-    if (remaining <= 0 || plan.status === 'paid') return
-    const payable = Math.max(plan.planAmount - plan.paidAmount, 0)
-    if (payable <= 0) return
-    const paid = Math.min(payable, remaining)
-    plan.paidAmount = +(plan.paidAmount + paid).toFixed(2)
-    plan.pendingAmount = +Math.max(plan.planAmount - plan.paidAmount, 0).toFixed(2)
-    plan.paidDate = dateOnly()
-    plan.status = plan.pendingAmount <= 0 ? 'paid' : 'partial'
-    plan.remark = [plan.remark, `财务确认收款 ${receipt.receiptNo}，本期核销 ¥${paid.toFixed(2)}`]
-      .filter(Boolean)
-      .join(' | ')
-    remaining = +(remaining - paid).toFixed(2)
-    changed = true
-  })
-
-  if (changed) save(PL_KEY, plans)
-
-  const refreshed = plans.filter(p => p.orderId === receipt.orderId)
-  const unpaid = refreshed.filter(p => p.status !== 'paid')
-  return {
-    hasPlans: refreshed.length > 0,
-    allPaid: refreshed.length > 0 && unpaid.length === 0,
-    unpaidCount: unpaid.length
-  }
+async function fetchAllInvoices(): Promise<BizInvoice[]> {
+  const res = await get('/receipt/invoices', { pageNum: 1, pageSize: 500 })
+  return toPage<Raw>(unwrap(res)).list.map(adaptInvoice)
 }
 
 export const receiptApi = {
-  ensureSamples() {
-    return delay(ensureSeedStorage())
+  /** 真实后端无 seed 接口；保留空实现兼容视图 onMounted 调用（不读写 localStorage） */
+  async ensureSamples() {
+    return { ok: true }
   },
-  list(params: { page?: number; pageSize?: number; status?: string; orderNo?: string; customerName?: string } = {}) {
-    let list = load<BizReceipt>(RC_KEY, seedReceipts)
-    if (params.status) list = list.filter(r => r.status === params.status)
-    if (params.orderNo) list = list.filter(r => (r.orderNo || '').includes(params.orderNo!))
-    if (params.customerName) list = list.filter(r => (r.customerName || '').includes(params.customerName!))
-    list = list.sort((a, b) => (b.createTime || '').localeCompare(a.createTime || ''))
-    return delay(paginate(list, params.page, params.pageSize))
+
+  /** GET /receipt/list（后端支持 customerId/orderId/status 过滤；orderNo/customerName 在前端过滤） */
+  async list(params: { page?: number; pageSize?: number; status?: string; orderNo?: string; customerName?: string } = {}): Promise<{ list: BizReceipt[]; total: number }> {
+    const res = await get('/receipt/list', {
+      pageNum: params.page || 1,
+      pageSize: params.pageSize || 10,
+      status: params.status ? RECEIPT_STATUS_NUM[params.status] : undefined
+    })
+    const page = toPage<Raw>(unwrap(res))
+    let list = page.list.map(adaptReceipt)
+    let total = page.total
+    if (params.orderNo) {
+      list = list.filter(r => (r.orderNo || '').includes(params.orderNo!) || r.receiptNo.includes(params.orderNo!))
+      total = list.length
+    }
+    if (params.customerName) {
+      list = list.filter(r => (r.customerName || '').includes(params.customerName!))
+      total = list.length
+    }
+    return { list, total }
   },
-  detail(id: number) {
-    const list = load<BizReceipt>(RC_KEY, seedReceipts)
-    return delay(list.find(r => r.id === id) || null)
+
+  async detail(id: number): Promise<BizReceipt | null> {
+    const raw = unwrap<Raw | null>(await get(`/receipt/${id}`))
+    return raw ? adaptReceipt(raw) : null
   },
-  create(data: Partial<BizReceipt>): Promise<BizReceipt> {
-    const list = load<BizReceipt>(RC_KEY, seedReceipts)
-    const id = (list.reduce((m, r) => Math.max(m, r.id), 0) || 0) + 1
-    const next: BizReceipt = {
-      id,
-      receiptNo: data.receiptNo || genNo('RC', id),
-      orderId: data.orderId || 0,
-      orderNo: data.orderNo || '',
-      customerId: data.customerId || 0,
-      customerName: data.customerName || '',
+
+  /** POST /receipt/confirm（白名单映射到后端实体；后端将 status 直接置 2 已确认） */
+  async create(data: Partial<BizReceipt>): Promise<BizReceipt> {
+    const body: Record<string, any> = {
+      receiptNo: data.receiptNo || undefined,
+      orderId: data.orderId || undefined,
+      customerId: data.customerId || undefined,
+      customerName: data.customerName || undefined,
       amount: data.amount || 0,
-      paymentChannel: data.paymentChannel || 'bank',
-      paymentTime: data.paymentTime || ts(),
-      receiptType: data.receiptType || 'deposit',
-      voucherUrl: data.voucherUrl || '',
-      confirmerId: 0,
-      confirmerName: '',
-      confirmTime: '',
-      status: data.status || 'pending',
+      paymentMethod: data.paymentChannel || 'bank',
       remark: data.remark || '',
-      createTime: ts()
+      status: RECEIPT_STATUS_NUM[data.status || 'pending'] || 1
     }
-    list.push(next)
-    save(RC_KEY, list)
-    return delay(next)
+    await post('/receipt/confirm', body)
+    const id = num(data.orderId)
+    return adaptReceipt({ ...body, id, status: body.status })
   },
-  confirm(payload: { id: number; confirmerId?: number; confirmerName?: string; status?: 'confirmed' | 'rejected'; remark?: string; actualAmount?: number }) {
-    const list = load<BizReceipt>(RC_KEY, seedReceipts)
-    const idx = list.findIndex(r => r.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('收款记录不存在'))
-    if (list[idx].status !== 'pending') return Promise.reject(new Error('当前状态不可确认'))
-    const finalStatus: BizReceipt['status'] = payload.status || 'confirmed'
-    const expectedAmount = list[idx].amount
-    const actualAmount = payload.actualAmount != null ? payload.actualAmount : expectedAmount
-    list[idx] = {
-      ...list[idx],
-      status: finalStatus,
-      amount: actualAmount,
-      confirmerId: payload.confirmerId || 1003,
-      confirmerName: payload.confirmerName || '财务',
-      confirmTime: ts(),
-      remark: payload.remark || list[idx].remark
-    }
-    save(RC_KEY, list)
 
-    // 联动事件：收款确认 → 检查是否最后一期，生成待开票，追加时间线
-    if (finalStatus === 'confirmed') {
-      const receipt = list[idx]
+  /**
+   * POST /receipt/confirm（后端 confirm 同时编排：收款确认→自动生成合同草稿，幂等）。
+   * 后端无 rejected 状态：status==='rejected' 时不调后端置库（避免误置已确认/已退款），仅做前端态降级并写时间线提示。
+   */
+  async confirm(payload: { id: number; confirmerId?: number; confirmerName?: string; status?: 'confirmed' | 'rejected'; remark?: string; actualAmount?: number }): Promise<BizReceipt> {
+    const current = await this.detail(payload.id)
+    if (!current) return Promise.reject(new Error('收款记录不存在'))
+
+    if (payload.status === 'rejected') {
+      // gapsNoBackend：后端无驳回态，仅前端提示，不落库
       appendTimeline({
-        receiptId: receipt.id,
-        orderId: receipt.orderId,
-        type: 'receipt_confirmed',
-        title: `收款确认 · ${receipt.receiptNo}`,
-        detail: `财务确认 ${receipt.customerName} 收款 ¥${receipt.amount}`,
-        operator: receipt.confirmerName || '财务'
+        receiptId: current.id, orderId: current.orderId,
+        type: 'refund_rejected',
+        title: `收款驳回 · ${current.receiptNo}`,
+        detail: payload.remark || '财务驳回（后端无驳回态，未改库）',
+        operator: payload.confirmerName || '财务'
       })
-
-      const settleResult = settlePlansForReceipt(receipt, actualAmount)
-      const fullyMatched = actualAmount >= expectedAmount
-      const isLastInstallment =
-        settleResult.allPaid ||
-        (fullyMatched && (receipt.receiptType === 'full' || receipt.receiptType === 'final'))
-
-      if (isLastInstallment) {
-        appendTimeline({
-          receiptId: receipt.id,
-          orderId: receipt.orderId,
-          type: 'order_completed',
-          title: `订单全额收齐 · #${receipt.orderNo || receipt.orderId}`,
-          detail: settleResult.hasPlans ? '本单分期计划已全部结清' : '本单为一次性全额收款',
-          operator: receipt.confirmerName || '系统'
-        })
-        const linkRes = onPaymentConfirmed({
-          receiptId: receipt.id,
-          orderId: receipt.orderId,
-          isLast: true,
-          amount: receipt.amount
-        })
-        appendTimeline({
-          receiptId: receipt.id,
-          orderId: receipt.orderId,
-          type: 'contract_generated',
-          title: linkRes.ok ? `合同草稿生成 · #${receipt.orderNo || receipt.orderId}` : `合同生成检查 · #${receipt.orderNo || receipt.orderId}`,
-          detail: linkRes.message,
-          operator: '系统'
-        })
-      }
-      // 自动生成待开票记录（若该收款还没有发票）
-      const invoices = load<BizInvoice>(IV_KEY, seedInvoices)
-      const exists = invoices.find(iv => iv.orderId === receipt.orderId && iv.amount === receipt.amount && iv.status === 'pending')
-      if (!exists) {
-        const id = (invoices.reduce((m, i) => Math.max(m, i.id), 0) || 0) + 1
-        invoices.push({
-          id,
-          invoiceNo: `INV${new Date().getFullYear()}${pad4(id)}`,
-          orderId: receipt.orderId,
-          orderNo: receipt.orderNo || '',
-          customerId: receipt.customerId,
-          customerName: receipt.customerName || '',
-          invoiceTitle: receipt.customerName || '',
-          taxNo: '',
-          invoiceType: 'vat_general',
-          amount: receipt.amount,
-          taxRate: 6,
-          taxAmount: +(receipt.amount * 0.06).toFixed(2),
-          status: 'pending',
-          issueTime: '', mailNo: '',
-          remark: '收款确认后自动生成待开票',
-          createTime: ts()
-        })
-        save(IV_KEY, invoices)
-      }
+      return { ...current, status: 'rejected', remark: payload.remark || current.remark }
     }
-    return delay(list[idx])
+
+    const actualAmount = payload.actualAmount != null ? payload.actualAmount : current.amount
+    const body: Record<string, any> = {
+      id: current.id,
+      receiptNo: current.receiptNo || undefined,
+      orderId: current.orderId || undefined,
+      customerId: current.customerId || undefined,
+      customerName: current.customerName || undefined,
+      amount: actualAmount,
+      paymentMethod: current.paymentChannel,
+      remark: payload.remark || current.remark
+    }
+    await post('/receipt/confirm', body, { params: { operatorId: payload.confirmerId } })
+
+    const confirmed: BizReceipt = { ...current, status: 'confirmed', amount: actualAmount, confirmTime: ts(), remark: body.remark }
+    appendTimeline({
+      receiptId: confirmed.id, orderId: confirmed.orderId,
+      type: 'receipt_confirmed',
+      title: `收款确认 · ${confirmed.receiptNo}`,
+      detail: `财务确认 ${confirmed.customerName || '客户'} 收款 ¥${confirmed.amount}`,
+      operator: payload.confirmerName || '财务'
+    })
+    appendTimeline({
+      receiptId: confirmed.id, orderId: confirmed.orderId,
+      type: 'contract_generated',
+      title: `合同草稿检查 · #${confirmed.orderNo || confirmed.orderId}`,
+      detail: '后端已在确认收款时校验并按需生成合同草稿（幂等）',
+      operator: '系统'
+    })
+    return confirmed
   },
-  getPlans(params: { page?: number; pageSize?: number; status?: string; orderNo?: string } = {}) {
-    let list = load<BizReceiptPlan>(PL_KEY, seedPlans)
+
+  /**
+   * 收款计划列表：后端仅 GET /receipt/plans/{orderId}（按单查），无全量分页接口。
+   * 这里先取全部收款拿到订单集合，再逐单拉计划合并，保持视图 getPlans({pageSize}) 的 {list,total} 形状。
+   */
+  async getPlans(params: { page?: number; pageSize?: number; status?: string; orderNo?: string } = {}): Promise<{ list: BizReceiptPlan[]; total: number }> {
+    const receipts = await fetchAllReceipts()
+    const orderIds = Array.from(new Set(receipts.map(r => r.orderId).filter(Boolean)))
+    const nameByOrder = new Map<number, string>()
+    receipts.forEach(r => { if (r.orderId && r.customerName) nameByOrder.set(r.orderId, r.customerName) })
+    const lists = await Promise.all(orderIds.map(async oid => {
+      try {
+        const rows = unwrap<Raw[]>(await get(`/receipt/plans/${oid}`)) || []
+        return rows.map(adaptPlan).map(p => ({ ...p, customerName: nameByOrder.get(p.orderId) || '' }))
+      } catch { return [] as BizReceiptPlan[] }
+    }))
+    let list = lists.flat()
     if (params.status) list = list.filter(p => p.status === params.status)
     if (params.orderNo) list = list.filter(p => (p.orderNo || '').includes(params.orderNo!))
-    return delay(paginate(list, params.page, params.pageSize))
+    return { list, total: list.length }
   },
-  markPlanPaid(payload: { id: number; paidAmount: number; paidDate?: string }) {
-    const list = load<BizReceiptPlan>(PL_KEY, seedPlans)
-    const idx = list.findIndex(p => p.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('计划不存在'))
-    const plan = list[idx]
-    const totalPaid = plan.paidAmount + payload.paidAmount
-    plan.paidAmount = totalPaid
-    plan.pendingAmount = Math.max(plan.planAmount - totalPaid, 0)
-    plan.paidDate = payload.paidDate || dateOnly()
-    plan.status = totalPaid >= plan.planAmount ? 'paid' : 'partial'
-    list[idx] = plan
-    save(PL_KEY, list)
-    return delay(plan)
+
+  /** POST /receipt/plan/pay（后端按 {planId,amount} 核销，自动推进 部分收款/已收齐 状态） */
+  async markPlanPaid(payload: { id: number; paidAmount: number; paidDate?: string }): Promise<{ id: number; paidAmount: number }> {
+    await post('/receipt/plan/pay', { planId: payload.id, amount: payload.paidAmount })
+    return { id: payload.id, paidAmount: payload.paidAmount }
   },
-  getOverdue(params: { page?: number; pageSize?: number } = {}) {
-    const list = load<BizReceiptPlan>(PL_KEY, seedPlans)
-      .filter(p => p.status !== 'paid')
+
+  /** GET /receipt/overdue（后端返回 planDate<今天 且 status!=3 的计划，附逾期阶梯标记） */
+  async getOverdue(params: { page?: number; pageSize?: number } = {}): Promise<{ list: BizReceiptPlan[]; total: number }> {
+    const rows = unwrap<Raw[]>(await get('/receipt/overdue')) || []
+    const list = rows.map(adaptPlan)
       .map(p => ({ ...p, overdueLevel: calcOverdueLevel(p).key, overdueAction: calcOverdueLevel(p).action }))
       .filter(p => p.overdueLevel !== 'none')
       .sort((a, b) => calcOverdueLevel(b).days - calcOverdueLevel(a).days)
-    return delay(paginate(list, params.page, params.pageSize))
+    return { list, total: list.length }
   },
-  // ===== 退款业务 =====
-  getRefunds(params: { page?: number; pageSize?: number; status?: string } = {}) {
-    let list = load<RefundRequest>(RF_KEY, seedRefunds)
+
+  // ===== 退款业务（后端仅一步式 POST /receipt/refund，无审批流；中间态用模块内存维护，见 gapsNoBackend） =====
+
+  /** 退款列表：后端无退款表，返回模块内存中的退款单 */
+  async getRefunds(params: { page?: number; pageSize?: number; status?: string } = {}): Promise<{ list: RefundRequest[]; total: number }> {
+    let list = refundStore.slice().sort((a, b) => (b.applyTime || '').localeCompare(a.applyTime || ''))
     if (params.status) list = list.filter(r => r.status === params.status)
-    list = list.sort((a, b) => (b.applyTime || '').localeCompare(a.applyTime || ''))
-    return delay(paginate(list, params.page, params.pageSize))
+    return { list, total: list.length }
   },
-  createRefund(payload: Partial<RefundRequest> & { receiptId: number; refundAmount: number; reason: string }) {
-    const list = load<RefundRequest>(RF_KEY, seedRefunds)
-    // 校验退款金额不大于实收金额
-    const receipts = load<BizReceipt>(RC_KEY, seedReceipts)
-    const r = receipts.find(x => x.id === payload.receiptId)
-    if (r && payload.refundAmount > r.amount) {
-      return Promise.reject(new Error(`退款金额不得超过实收金额 ¥${r.amount}`))
+
+  /** 发起退款（仅前端态：写入内存退款单，等待主管审批+财务确认；财务确认时才真正落库） */
+  async createRefund(payload: Partial<RefundRequest> & { receiptId: number; refundAmount: number; reason: string }): Promise<RefundRequest> {
+    const receipt = await this.detail(payload.receiptId)
+    if (receipt && payload.refundAmount > receipt.amount) {
+      return Promise.reject(new Error(`退款金额不得超过实收金额 ¥${receipt.amount}`))
     }
-    const id = (list.reduce((m, r) => Math.max(m, r.id), 0) || 0) + 1
+    const id = (refundStore.reduce((m, r) => Math.max(m, r.id), 0) || 0) + 1
     const refund: RefundRequest = {
       id,
       refundNo: payload.refundNo || genNo('RF', id),
       receiptId: payload.receiptId,
-      orderId: payload.orderId || (r?.orderId ?? 0),
-      orderNo: payload.orderNo || (r?.orderNo ?? ''),
-      customerName: payload.customerName || (r?.customerName ?? ''),
+      orderId: payload.orderId || receipt?.orderId || 0,
+      orderNo: payload.orderNo || receipt?.orderNo || '',
+      customerName: payload.customerName || receipt?.customerName || '',
       refundAmount: payload.refundAmount,
       reasonKey: payload.reasonKey || 'other',
       reason: payload.reason,
       refundWay: payload.refundWay || 'origin',
       applyTime: ts(),
-      applicantId: payload.applicantId || 1001,
+      applicantId: payload.applicantId || 0,
       applicantName: payload.applicantName || '当前用户',
       approverId: 0, approverName: '', approvalTime: '',
       financeConfirmerId: 0, financeConfirmerName: '', financeConfirmTime: '',
       status: 'pending',
       remark: payload.remark || ''
     }
-    list.push(refund)
-    save(RF_KEY, list)
+    refundStore.push(refund)
     appendTimeline({
       receiptId: refund.receiptId, orderId: refund.orderId,
       type: 'refund_applied',
       title: `退款申请 · ${refund.refundNo}`,
-      detail: `${refund.applicantName} 发起退款¥${refund.refundAmount}，原因：${refund.reason}`,
+      detail: `${refund.applicantName} 发起退款 ¥${refund.refundAmount}，原因：${refund.reason}`,
       operator: refund.applicantName || '销售'
     })
-    return delay(refund)
+    return refund
   },
-  approveRefund(payload: { id: number; approverName?: string; approverId?: number; remark?: string }) {
-    const list = load<RefundRequest>(RF_KEY, seedRefunds)
-    const idx = list.findIndex(r => r.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('退款记录不存在'))
-    if (list[idx].status !== 'pending') return Promise.reject(new Error('当前状态不可审批'))
-    list[idx] = {
-      ...list[idx],
-      status: 'approved',
-      approverId: payload.approverId || 1010,
-      approverName: payload.approverName || '当前主管',
-      approvalTime: ts(),
-      remark: payload.remark || list[idx].remark
-    }
-    save(RF_KEY, list)
+
+  /** 主管审批（前端态） */
+  async approveRefund(payload: { id: number; approverName?: string; approverId?: number; remark?: string }): Promise<RefundRequest> {
+    const r = refundStore.find(x => x.id === payload.id)
+    if (!r) return Promise.reject(new Error('退款记录不存在'))
+    if (r.status !== 'pending') return Promise.reject(new Error('当前状态不可审批'))
+    r.status = 'approved'
+    r.approverId = payload.approverId || 0
+    r.approverName = payload.approverName || '当前主管'
+    r.approvalTime = ts()
+    if (payload.remark) r.remark = payload.remark
     appendTimeline({
-      receiptId: list[idx].receiptId, orderId: list[idx].orderId,
+      receiptId: r.receiptId, orderId: r.orderId,
       type: 'refund_approved',
-      title: `主管审批通过 · ${list[idx].refundNo}`,
-      detail: `${list[idx].approverName} 审批通过，等待财务确认`,
-      operator: list[idx].approverName || '主管'
+      title: `主管审批通过 · ${r.refundNo}`,
+      detail: `${r.approverName} 审批通过，等待财务确认`,
+      operator: r.approverName || '主管'
     })
-    return delay(list[idx])
+    return r
   },
-  confirmRefund(payload: { id: number; financeConfirmerName?: string; refundWay?: RefundWayKey; remark?: string }) {
-    const list = load<RefundRequest>(RF_KEY, seedRefunds)
-    const idx = list.findIndex(r => r.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('退款记录不存在'))
-    if (list[idx].status !== 'approved') return Promise.reject(new Error('需主管审批后才可财务确认'))
-    list[idx] = {
-      ...list[idx],
-      status: 'completed',
-      refundWay: payload.refundWay || list[idx].refundWay || 'origin',
-      financeConfirmerId: 1003,
-      financeConfirmerName: payload.financeConfirmerName || '财务赵敏',
-      financeConfirmTime: ts(),
-      remark: payload.remark || list[idx].remark
-    }
-    save(RF_KEY, list)
-    // 同步更新原收款状态为已退款
-    const receipts = load<BizReceipt>(RC_KEY, seedReceipts)
-    const ridx = receipts.findIndex(x => x.id === list[idx].receiptId)
-    if (ridx >= 0) {
-      receipts[ridx].status = 'refunded'
-      save(RC_KEY, receipts)
-    }
+
+  /** 财务确认退款：落地真实 POST /receipt/refund（后端将原收款置为「已退款」） */
+  async confirmRefund(payload: { id: number; financeConfirmerName?: string; financeConfirmerId?: number; refundWay?: RefundWayKey; remark?: string }): Promise<RefundRequest> {
+    const r = refundStore.find(x => x.id === payload.id)
+    if (!r) return Promise.reject(new Error('退款记录不存在'))
+    if (r.status !== 'approved') return Promise.reject(new Error('需主管审批后才可财务确认'))
+    await post('/receipt/refund', {
+      receiptId: r.receiptId,
+      amount: r.refundAmount,
+      reason: r.reason,
+      operatorId: payload.financeConfirmerId
+    })
+    r.status = 'completed'
+    r.refundWay = payload.refundWay || r.refundWay || 'origin'
+    r.financeConfirmerId = payload.financeConfirmerId || 0
+    r.financeConfirmerName = payload.financeConfirmerName || '财务'
+    r.financeConfirmTime = ts()
+    if (payload.remark) r.remark = payload.remark
     appendTimeline({
-      receiptId: list[idx].receiptId, orderId: list[idx].orderId,
+      receiptId: r.receiptId, orderId: r.orderId,
       type: 'refund_completed',
-      title: `财务退款完成 · ${list[idx].refundNo}`,
-      detail: `退款¥${list[idx].refundAmount}已执行（${refundWayLabel(list[idx].refundWay)}）`,
-      operator: list[idx].financeConfirmerName || '财务'
+      title: `财务退款完成 · ${r.refundNo}`,
+      detail: `退款 ¥${r.refundAmount} 已执行（${refundWayLabel(r.refundWay)}）`,
+      operator: r.financeConfirmerName || '财务'
     })
-    return delay(list[idx])
+    return r
   },
-  rejectRefund(payload: { id: number; rejectReason?: string; operatorName?: string }) {
-    const list = load<RefundRequest>(RF_KEY, seedRefunds)
-    const idx = list.findIndex(r => r.id === payload.id)
-    if (idx < 0) return Promise.reject(new Error('退款记录不存在'))
-    if (list[idx].status === 'completed' || list[idx].status === 'rejected') {
+
+  /** 驳回退款（前端态） */
+  async rejectRefund(payload: { id: number; rejectReason?: string; operatorName?: string }): Promise<RefundRequest> {
+    const r = refundStore.find(x => x.id === payload.id)
+    if (!r) return Promise.reject(new Error('退款记录不存在'))
+    if (r.status === 'completed' || r.status === 'rejected') {
       return Promise.reject(new Error('当前状态不可驳回'))
     }
-    list[idx] = {
-      ...list[idx],
-      status: 'rejected',
-      rejectReason: payload.rejectReason || '不符合退款条件',
-      remark: list[idx].remark
-    }
-    save(RF_KEY, list)
+    r.status = 'rejected'
+    r.rejectReason = payload.rejectReason || '不符合退款条件'
     appendTimeline({
-      receiptId: list[idx].receiptId, orderId: list[idx].orderId,
+      receiptId: r.receiptId, orderId: r.orderId,
       type: 'refund_rejected',
-      title: `退款驳回 · ${list[idx].refundNo}`,
+      title: `退款驳回 · ${r.refundNo}`,
       detail: payload.rejectReason || '未通过审批',
       operator: payload.operatorName || '主管'
     })
-    return delay(list[idx])
+    return r
   },
-  // 兼容旧接口
+
+  /** 兼容旧接口 */
   refund(payload: Partial<RefundRequest> & { receiptId: number; refundAmount: number; reason: string }) {
-    return (this as any).createRefund(payload)
+    return this.createRefund(payload)
   },
-  getTimeline(params: { receiptId?: number; orderId?: number; limit?: number } = {}) {
-    let list = loadTimeline()
+
+  /** 联动时间线：后端无接口，返回模块内存事件（见 gapsNoBackend） */
+  async getTimeline(params: { receiptId?: number; orderId?: number; limit?: number } = {}): Promise<ReceiptTimelineEvent[]> {
+    let list = timelineStore.slice()
     if (params.receiptId) list = list.filter(e => e.receiptId === params.receiptId)
     if (params.orderId) list = list.filter(e => e.orderId === params.orderId)
-    return delay(list.slice(0, params.limit ?? 50))
+    return list.slice(0, params.limit ?? 50)
   },
-  getInvoices(params: { page?: number; pageSize?: number; status?: string; customerName?: string } = {}) {
-    let list = load<BizInvoice>(IV_KEY, seedInvoices)
-    if (params.status) list = list.filter(i => i.status === params.status)
-    if (params.customerName) list = list.filter(i => (i.customerName || '').includes(params.customerName!))
-    return delay(paginate(list, params.page, params.pageSize))
+
+  /** GET /receipt/invoices（后端支持 customerId/status；customerName 在前端过滤） */
+  async getInvoices(params: { page?: number; pageSize?: number; status?: string; customerName?: string } = {}): Promise<{ list: BizInvoice[]; total: number }> {
+    const res = await get('/receipt/invoices', {
+      pageNum: params.page || 1,
+      pageSize: params.pageSize || 10,
+      status: params.status ? INVOICE_STATUS_NUM[params.status] : undefined
+    })
+    const page = toPage<Raw>(unwrap(res))
+    let list = page.list.map(adaptInvoice)
+    let total = page.total
+    if (params.customerName) {
+      list = list.filter(i => (i.customerName || '').includes(params.customerName!))
+      total = list.length
+    }
+    return { list, total }
   },
-  createInvoice(data: Partial<BizInvoice>): Promise<BizInvoice> {
-    const list = load<BizInvoice>(IV_KEY, seedInvoices)
-    const id = (list.reduce((m, i) => Math.max(m, i.id), 0) || 0) + 1
-    const amount = data.amount || 0
+
+  /** POST /receipt/invoice（白名单映射；taxAmount/totalAmount 由前端按税率算好发后端） */
+  async createInvoice(data: Partial<BizInvoice>): Promise<BizInvoice> {
+    const amount = num(data.amount)
     const taxRate = data.taxRate ?? 6
-    const next: BizInvoice = {
-      id,
-      invoiceNo: data.invoiceNo || `INV${new Date().getFullYear()}${pad4(id)}`,
-      orderId: data.orderId || 0,
-      orderNo: data.orderNo || '',
-      customerId: data.customerId || 0,
-      customerName: data.customerName || '',
-      invoiceTitle: data.invoiceTitle || '',
+    const taxAmount = +(amount * taxRate / 100).toFixed(2)
+    const body: Record<string, any> = {
+      invoiceNo: data.invoiceNo || undefined,
+      orderId: data.orderId || undefined,
+      receiptId: (data as any).receiptId || undefined,
+      customerId: data.customerId || undefined,
+      customerName: data.customerName || undefined,
+      title: data.invoiceTitle || data.customerName || '',
       taxNo: data.taxNo || '',
-      invoiceType: data.invoiceType || 'vat_general',
+      invoiceType: invoiceTypeBackend(data.invoiceType || 'vat_general'),
       amount,
-      taxRate,
-      taxAmount: +(amount * taxRate / 100).toFixed(2),
-      status: data.status || 'pending',
-      issueTime: '',
-      mailNo: '',
+      taxAmount,
+      totalAmount: +(amount + taxAmount).toFixed(2),
       remark: data.remark || '',
-      createTime: ts()
+      status: data.status ? INVOICE_STATUS_NUM[data.status] : 1
     }
-    list.push(next)
-    save(IV_KEY, list)
-    return delay(next)
+    const id = unwrap<number>(await post('/receipt/invoice', body))
+    return adaptInvoice({ ...body, id, invoiceDate: '', trackingNo: '', createTime: ts() })
   },
-  updateInvoice(data: Partial<BizInvoice> & { id: number }) {
-    const list = load<BizInvoice>(IV_KEY, seedInvoices)
-    const idx = list.findIndex(i => i.id === data.id)
-    if (idx < 0) return Promise.reject(new Error('发票不存在'))
-    const merged = { ...list[idx], ...data } as BizInvoice
-    if (data.amount != null || data.taxRate != null) {
-      merged.taxAmount = +(merged.amount * merged.taxRate / 100).toFixed(2)
-    }
-    if (data.status === 'issued' && !merged.issueTime) merged.issueTime = ts()
-    list[idx] = merged
-    save(IV_KEY, list)
-    return delay(merged)
+
+  /**
+   * PUT /receipt/invoice/{id}（后端只读 {status,trackingNo}；invoiceNo/amount 等不可改）。
+   * 开票/寄出/签收 三档状态推进都走此接口，mailNo 映射后端 trackingNo。
+   */
+  async updateInvoice(data: Partial<BizInvoice> & { id: number }): Promise<{ id: number }> {
+    const body: Record<string, any> = {}
+    if (data.status !== undefined) body.status = INVOICE_STATUS_NUM[data.status]
+    if (data.mailNo !== undefined) body.trackingNo = data.mailNo
+    await put(`/receipt/invoice/${data.id}`, body)
+    return { id: data.id }
   },
-  getSummary(): Promise<ReceiptSummary> {
-    const receipts = load<BizReceipt>(RC_KEY, seedReceipts)
-    const plans = load<BizReceiptPlan>(PL_KEY, seedPlans)
-    const invoices = load<BizInvoice>(IV_KEY, seedInvoices)
-    const refunds = load<RefundRequest>(RF_KEY, seedRefunds)
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    monthStart.setHours(0, 0, 0, 0)
-    // 逾期计算：以逾期阶梯判定为准，覆盖 status 为 overdue 与 pending 超期两种场景
-    const overduePlans = plans.filter(p => p.status !== 'paid' && calcOverdueLevel(p).key !== 'none')
-    return delay({
-      totalReceipt: receipts.filter(r => r.status === 'confirmed').reduce((s, r) => s + r.amount, 0),
-      pendingReceipt: receipts.filter(r => r.status === 'pending').reduce((s, r) => s + r.amount, 0),
-      monthReceipt: receipts
-        .filter(r => r.status === 'confirmed' && new Date(r.paymentTime.replace(' ', 'T')).getTime() >= monthStart.getTime())
-        .reduce((s, r) => s + r.amount, 0),
+
+  /**
+   * 财务核对台汇总指标：后端 /summary 仅给当月 {count,totalAmount}，其余指标本文件聚合多接口在前端算出。
+   * 返回形状与原 mock ReceiptSummary 完全一致。
+   */
+  async getSummary(): Promise<ReceiptSummary> {
+    const [receipts, invoices, overdueRows, monthRaw] = await Promise.all([
+      fetchAllReceipts(),
+      fetchAllInvoices(),
+      get('/receipt/overdue').then(r => unwrap<Raw[]>(r) || []).catch(() => [] as Raw[]),
+      get('/receipt/summary').then(r => unwrap<Raw>(r) || {}).catch(() => ({} as Raw))
+    ])
+    const overduePlans = overdueRows.map(adaptPlan).filter(p => calcOverdueLevel(p).key !== 'none')
+    const confirmed = receipts.filter(r => r.status === 'confirmed')
+    const pending = receipts.filter(r => r.status === 'pending')
+    return {
+      totalReceipt: confirmed.reduce((s, r) => s + r.amount, 0),
+      pendingReceipt: pending.reduce((s, r) => s + r.amount, 0),
+      monthReceipt: num(monthRaw?.totalAmount),
       overdueAmount: overduePlans.reduce((s, p) => s + p.pendingAmount, 0),
       overdueCount: overduePlans.length,
       invoicePending: invoices.filter(i => i.status === 'pending').length,
       invoiceIssued: invoices.filter(i => i.status === 'issued' || i.status === 'mailed' || i.status === 'received').length,
-      refundPending: refunds.filter(r => r.status === 'pending' || r.status === 'approved').length
-    })
+      refundPending: refundStore.filter(r => r.status === 'pending' || r.status === 'approved').length
+    }
   }
 }

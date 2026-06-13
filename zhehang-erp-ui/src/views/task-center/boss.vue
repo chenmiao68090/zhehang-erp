@@ -240,7 +240,8 @@ function bossTaskAvatarClass(status: string) {
   } as Record<string, string>)[status] || 'danger'
 }
 
-const REPORT_KEY = 'biz_d_reports'
+// D 类任务进度汇报：后端无对应模型（gapsNoBackend），仅在当前会话内存中保留，不再落 localStorage。
+const reportStore = ref<Record<number, { time: string; reporter: string; content: string }[]>>({})
 const CURRENT_USER = ''
 
 const currentDate = (() => {
@@ -269,21 +270,10 @@ function parseRemark(remark: string) {
 function buildRemark(cat: string, subType: string, rest = '') { return `${cat}|${subType}|${rest}` }
 function dateOff(d: number) { const x = new Date(); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10) }
 
-function ensureSeed() {
-  const KEY = 'biz_tasks'
-  const raw = localStorage.getItem(KEY)
-  // 仅读取本地存储以保留原有逻辑兼容性，不再写入任何模拟种子数据
-  if (raw) {
-    try { JSON.parse(raw) } catch { /* ignore */ }
-  }
-}
-
 function loadReports() {
-  const raw = localStorage.getItem(REPORT_KEY)
-  if (raw) try { return JSON.parse(raw) as Record<number, any[]> } catch { /* */ }
-  return {}
+  return reportStore.value
 }
-function saveReports(map: Record<number, any[]>) { localStorage.setItem(REPORT_KEY, JSON.stringify(map)) }
+function saveReports(map: Record<number, { time: string; reporter: string; content: string }[]>) { reportStore.value = map }
 
 async function loadList() {
   loading.value = true
@@ -403,7 +393,7 @@ function openDetail(row: BizTask & { _subType: string }) {
   dlg.detail = true
 }
 
-onMounted(() => { ensureSeed(); loadList() })
+onMounted(() => { loadList() })
 </script>
 
 <style lang="scss" scoped>

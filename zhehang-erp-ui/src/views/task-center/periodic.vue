@@ -214,17 +214,6 @@ function parseRemark(remark: string) {
   if (m) return { cat: m[1], subType: m[2], rest: m[3] || '' }
   return { cat: '', subType: '', rest: remark || '' }
 }
-function buildRemark(cat: string, subType: string, rest = '') { return `${cat}|${subType}|${rest}` }
-function dateOff(d: number) { const x = new Date(); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10) }
-
-function ensureSeed() {
-  const KEY = 'biz_tasks'
-  const raw = localStorage.getItem(KEY)
-  const list: BizTask[] = raw ? (() => { try { return JSON.parse(raw) } catch { return [] } })() : []
-  // 不再写入种子数据，仅读取已有数据
-  void list
-}
-
 function inMonth(d: string, m: string) { return d && d.startsWith(m) }
 
 async function loadList() {
@@ -374,7 +363,7 @@ async function doStart(row: BizTask) { await taskApi.start(row.id); ElMessage.su
 async function doMark(row: BizTask) { await taskApi.complete({ id: row.id }); ElMessage.success('已提交完成'); loadList() }
 async function doPass(row: BizTask) { await taskApi.review({ id: row.id, result: 'pass', opinion: '验收通过' }); ElMessage.success('验收通过'); loadList() }
 
-onMounted(() => { ensureSeed(); loadList() })
+onMounted(() => { loadList() })
 </script>
 
 <style lang="scss" scoped>

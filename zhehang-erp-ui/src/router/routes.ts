@@ -279,6 +279,27 @@ export const asyncRoutes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/multidim',
+    component: Layout,
+    redirect: '/multidim/index',
+    meta: { title: '多维表格', icon: 'Grid', roles: ['admin', 'boss', 'manager', 'dept_manager'] },
+    children: [
+      {
+        // 多维表格(类飞书多维表):表列表→点击进详情;真实接 /multidim/* 后端(table/record/template),接口失败才降级演示数据
+        path: 'index',
+        name: 'MultidimIndex',
+        component: () => import('@/views/multidim/index.vue'),
+        meta: { title: '多维表格', icon: 'Grid' }
+      },
+      {
+        path: 'detail',
+        name: 'MultidimDetail',
+        component: () => import('@/views/multidim/detail.vue'),
+        meta: { title: '表格编辑', hidden: true }
+      }
+    ]
+  },
+  {
     path: '/call-center',
     component: Layout,
     redirect: '/call-center/monitor',

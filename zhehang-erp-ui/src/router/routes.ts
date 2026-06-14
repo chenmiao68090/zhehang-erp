@@ -165,13 +165,13 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: 'company-pool',
         name: 'LeadsCompanyPool',
         component: () => import('@/views/leads/company-pool.vue'),
-        meta: { title: '公司公海', icon: 'OfficeBuilding' }
+        meta: { title: '公司公海', icon: 'OfficeBuilding', hidden: true } /* 与线索管理·公司公海Tab同接口(/crm/lead/pool)重复→隐藏 */
       },
       {
         path: 'personal-pool',
         name: 'LeadsPersonalPool',
         component: () => import('@/views/leads/personal-pool.vue'),
-        meta: { title: '个人私海', icon: 'User' }
+        meta: { title: '个人私海', icon: 'User', hidden: true } /* 与线索管理·我的线索Tab同接口(/crm/lead/my)重复→隐藏 */
       },
       {
         path: 'service-renewal',
@@ -260,10 +260,10 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/finance',
     component: Layout,
-    redirect: '/finance/journal',
+    redirect: '/finance/petty-cash',
     meta: { title: '财务结算', icon: 'Wallet', roles: ['admin', 'boss', 'finance', 'finance_hq'] },
     children: [
-      { path: 'journal', name: 'FinJournal', component: () => import('@/views/finance/journal.vue'), meta: { title: '日记账', icon: 'Notebook' } },
+      { path: 'journal', name: 'FinJournal', component: () => import('@/views/finance/journal.vue'), meta: { title: '日记账', icon: 'Notebook', hidden: true } /* localStorage假数据,后端ledger是复式记账模型对不上→隐藏,待建fin_journal表 */ },
       { path: 'petty-cash', name: 'FinPettyCash', component: () => import('@/views/finance/petty-cash.vue'), meta: { title: '备用金管理', icon: 'Money' } },
       { path: 'expense', name: 'FinExpense', component: () => import('@/views/finance/expense.vue'), meta: { title: '业务支出管理', icon: 'CreditCard' } },
       { path: 'reimburse', name: 'FinReimburse', component: () => import('@/views/finance/reimburse.vue'), meta: { title: '报销管理', icon: 'Tickets' } },
@@ -341,7 +341,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'login-log', name: 'LoginLog', component: () => import('@/views/system/login-log.vue'), meta: { title: '登录日志' } },
       { path: 'oper-log', name: 'OperLog', component: () => import('@/views/system/oper-log.vue'), meta: { title: '操作日志' } },
       { path: 'notification', name: 'Notification', component: () => import('@/views/system/notification.vue'), meta: { title: '消息中心' } },
-      { path: 'operation', name: 'RuleCenter', component: () => import('@/views/system/operation.vue'), meta: { title: '规则配置中心', icon: 'SetUp' } },
+      { path: 'operation', name: 'RuleCenter', component: () => import('@/views/system/operation.vue'), meta: { title: '规则配置中心', icon: 'SetUp', hidden: true } /* 零接口空壳,"保存"只弹toast不落库→隐藏,待接规则后端 */ },
       { path: 'distribute-config', redirect: { path: '/system/operation', query: { tab: 'distribution' } }, meta: { title: '分配规则', hidden: true } },
       { path: 'recycle-config', redirect: { path: '/system/operation', query: { tab: 'pool' } }, meta: { title: '回收规则', hidden: true } },
       { path: 'pool-config', redirect: { path: '/system/operation', query: { tab: 'pool' } }, meta: { title: '公海私海规则', hidden: true } },

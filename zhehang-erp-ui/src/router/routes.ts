@@ -27,7 +27,6 @@ export const constantRoutes: RouteRecordRaw[] = [
   { path: '/crm/lead', redirect: '/customer/lead', meta: { hidden: true } },
   { path: '/crm/contract', redirect: '/order/contract', meta: { hidden: true } },
   { path: '/sales/order', redirect: '/order/bill', meta: { hidden: true } },
-  { path: '/finance/voucher', redirect: '/finance/journal', meta: { hidden: true } },
   { path: '/finance/report', redirect: '/dashboard/cockpit', meta: { hidden: true } },
   { path: '/workflow/todo', redirect: '/task-center/once', meta: { hidden: true } },
   { path: '/collaboration/notification', redirect: '/system/notification', meta: { hidden: true } },
@@ -68,12 +67,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'Cockpit',
         component: () => import('@/views/dashboard/cockpit.vue'),
         meta: { title: '驾驶舱', icon: 'DataAnalysis' }
-      },
-      {
-        path: 'marketing-stats',
-        name: 'MarketingStats',
-        component: () => import('@/views/report/marketing-stats.vue'),
-        meta: { title: '营销统计', icon: 'TrendCharts', hidden: true } /* localStorage 假漏斗,与营销获客真实页重复→隐藏,待接后端 growth 聚合 */
       }
     ]
   },
@@ -263,7 +256,6 @@ export const asyncRoutes: RouteRecordRaw[] = [
     redirect: '/finance/expense-center',
     meta: { title: '财务结算', icon: 'Wallet', roles: ['admin', 'boss', 'finance', 'finance_hq'] },
     children: [
-      { path: 'journal', name: 'FinJournal', component: () => import('@/views/finance/journal.vue'), meta: { title: '日记账', icon: 'Notebook', hidden: true } /* localStorage假数据,后端ledger是复式记账模型对不上→隐藏,待建fin_journal表 */ },
       // 支出中心:报销/业务支出/备用金 三类同构支出单据合并为一页三标签(消除重叠菜单);旧路径重定向
       { path: 'expense-center', name: 'ExpenseCenter', component: () => import('@/views/finance/expense-center.vue'), meta: { title: '支出中心', icon: 'CreditCard' } },
       { path: 'petty-cash', redirect: '/finance/expense-center', meta: { hidden: true } },

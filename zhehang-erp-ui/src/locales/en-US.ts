@@ -160,6 +160,7 @@ export default {
       remark: 'Remark',
       menuPermission: 'Menu Permission',
       dataScope: 'Data Scope',
+      configPermission: 'Configure Permission',
       confirmDelete: 'Confirm to delete this role?',
       createTime: 'Created At',
       dataScopeType: 'Data Scope',

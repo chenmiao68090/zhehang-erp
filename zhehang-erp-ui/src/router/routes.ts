@@ -260,13 +260,15 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/finance',
     component: Layout,
-    redirect: '/finance/petty-cash',
+    redirect: '/finance/expense-center',
     meta: { title: '财务结算', icon: 'Wallet', roles: ['admin', 'boss', 'finance', 'finance_hq'] },
     children: [
       { path: 'journal', name: 'FinJournal', component: () => import('@/views/finance/journal.vue'), meta: { title: '日记账', icon: 'Notebook', hidden: true } /* localStorage假数据,后端ledger是复式记账模型对不上→隐藏,待建fin_journal表 */ },
-      { path: 'petty-cash', name: 'FinPettyCash', component: () => import('@/views/finance/petty-cash.vue'), meta: { title: '备用金管理', icon: 'Money' } },
-      { path: 'expense', name: 'FinExpense', component: () => import('@/views/finance/expense.vue'), meta: { title: '业务支出管理', icon: 'CreditCard' } },
-      { path: 'reimburse', name: 'FinReimburse', component: () => import('@/views/finance/reimburse.vue'), meta: { title: '报销管理', icon: 'Tickets' } },
+      // 支出中心:报销/业务支出/备用金 三类同构支出单据合并为一页三标签(消除重叠菜单);旧路径重定向
+      { path: 'expense-center', name: 'ExpenseCenter', component: () => import('@/views/finance/expense-center.vue'), meta: { title: '支出中心', icon: 'CreditCard' } },
+      { path: 'petty-cash', redirect: '/finance/expense-center', meta: { hidden: true } },
+      { path: 'expense', redirect: '/finance/expense-center', meta: { hidden: true } },
+      { path: 'reimburse', redirect: '/finance/expense-center', meta: { hidden: true } },
       { path: 'salary', name: 'FinSalary', component: () => import('@/views/finance/salary.vue'), meta: { title: '薪酬管理', icon: 'Coin' } },
       { path: 'cost', name: 'FinCost', component: () => import('@/views/finance/cost.vue'), meta: { title: '管理成本', icon: 'PieChart' } }
     ]

@@ -168,6 +168,7 @@ export default {
       remark: '备注',
       menuPermission: '菜单权限',
       dataScope: '数据权限',
+      configPermission: '配置权限',
       confirmDelete: '确认删除该角色？',
       createTime: '创建时间',
       dataScopeType: '数据查看权限',

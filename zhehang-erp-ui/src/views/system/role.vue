@@ -51,9 +51,10 @@
           </template>
         </el-table-column>
         <el-table-column :label="$t('system.role.createTime')" prop="createTime" width="180" align="center" />
-        <el-table-column :label="$t('common.operation')" width="250" align="center" fixed="right">
+        <el-table-column :label="$t('common.operation')" width="330" align="center" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" v-hasPermi="['system:role:edit']" @click="handleEdit(row)"><el-icon><Edit /></el-icon>{{ $t('common.edit') }}</el-button>
+            <el-button link type="primary" v-hasPermi="['system:role:edit']" @click="handlePermission(row)"><el-icon><Lock /></el-icon>{{ $t('system.role.configPermission') }}</el-button>
             <el-button link type="primary" v-hasPermi="['system:role:edit']" @click="handleDataScope(row)"><el-icon><CircleCheck /></el-icon>{{ $t('system.role.dataScope') }}</el-button>
             <el-button link type="danger" v-hasPermi="['system:role:remove']" @click="handleDelete(row)"><el-icon><Delete /></el-icon>{{ $t('common.delete') }}</el-button>
           </template>
@@ -90,9 +91,6 @@
             <el-radio :value="1">{{ $t('common.disabled') }}</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item :label="$t('system.role.menuPerms')" prop="menuIds">
-          <el-tree ref="menuTreeRef" :data="menuTree" show-checkbox node-key="id" :props="{ label: 'label', children: 'children' }" default-expand-all />
-        </el-form-item>
         <el-form-item :label="$t('system.role.remark')" prop="remark">
           <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="$t('common.inputPlaceholder')" />
         </el-form-item>
@@ -128,13 +126,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { roleApi, menuApi } from '@/api/system'
+import { roleApi } from '@/api/system'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const dataScopeLabelKeys: Record<number, string> = {
   1: 'system.role.scopeAllShort',
@@ -158,7 +157,6 @@ const roleList = ref<any[]>([])
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const formRef = ref<FormInstance>()
-const menuTreeRef = ref<any>()
 const submitLoading = ref(false)
 const form = reactive<any>({
   id: undefined,
@@ -167,7 +165,6 @@ const form = reactive<any>({
   roleSort: 0,
   status: 0,
   dataScope: 1,
-  menuIds: [],
   remark: ''
 })
 
@@ -176,8 +173,6 @@ const rules = reactive<FormRules>({
   roleKey: [{ required: true, message: () => t('system.role.roleKeyRequired'), trigger: 'blur' }],
   dataScope: [{ required: true, message: () => t('system.role.dataScopeRequired'), trigger: 'change' }]
 })
-
-const menuTree = ref<any[]>([])
 
 const dataScopeVisible = ref(false)
 const dataScopeForm = reactive<any>({
@@ -188,7 +183,6 @@ const dataScopeForm = reactive<any>({
 
 onMounted(() => {
   getList()
-  loadMenuTree()
 })
 
 async function getList() {
@@ -199,15 +193,6 @@ async function getList() {
     total.value = res.data?.total || 0
   } finally {
     loading.value = false
-  }
-}
-
-async function loadMenuTree() {
-  try {
-    const res: any = await menuApi.treeselect()
-    menuTree.value = res.data || []
-  } catch (_e) {
-    menuTree.value = []
   }
 }
 
@@ -232,20 +217,17 @@ function handleAdd() {
 async function handleEdit(row: any) {
   resetForm()
   dialogTitle.value = t('common.edit')
-  let checkedKeys: number[] = []
   try {
     const res: any = await roleApi.detail(row.id)
     Object.assign(form, res.data)
-    const menuRes: any = await menuApi.roleMenuTreeselect(row.id)
-    checkedKeys = normalizeRoleMenuCheckedKeys(menuRes.data)
   } catch (_e) {
     return
   }
   dialogVisible.value = true
-  await nextTick()
-  window.setTimeout(() => {
-    menuTreeRef.value?.setCheckedKeys(checkedKeys)
-  }, 100)
+}
+
+function handlePermission(row: any) {
+  router.push({ path: '/system/permission', query: { roleId: row.id } })
 }
 
 function handleDelete(row: any) {
@@ -279,10 +261,7 @@ async function submitForm() {
   await formRef.value.validate()
   submitLoading.value = true
   try {
-    const checkedKeys = menuTreeRef.value?.getCheckedKeys() || []
-    const halfCheckedKeys = menuTreeRef.value?.getHalfCheckedKeys?.() || []
-    const menuIds = Array.from(new Set([...checkedKeys, ...halfCheckedKeys]))
-    const data = { ...form, menuIds }
+    const data = { ...form }
     if (form.id) {
       await roleApi.update(data)
     } else {
@@ -303,61 +282,7 @@ function resetForm() {
   form.roleSort = 0
   form.status = 0
   form.dataScope = 1
-  form.menuIds = []
   form.remark = ''
-  setTimeout(() => {
-    menuTreeRef.value?.setCheckedKeys([])
-  }, 100)
-}
-
-function collectTreeIds(nodes: any[]) {
-  const ids: number[] = []
-  const walk = (items: any[]) => {
-    items.forEach((item) => {
-      if (item?.id !== undefined && item?.id !== null) {
-        ids.push(item.id)
-      }
-      if (Array.isArray(item?.children) && item.children.length) {
-        walk(item.children)
-      }
-    })
-  }
-  walk(nodes)
-  return ids
-}
-
-function normalizeRoleMenuCheckedKeys(data: any) {
-  if (Array.isArray(data)) {
-    return collectTreeIds(data)
-  }
-
-  if (Array.isArray(data?.menus)) {
-    menuTree.value = data.menus
-  }
-
-  if (Array.isArray(data?.checkedKeys)) {
-    return data.checkedKeys
-  }
-
-  if (Array.isArray(data?.menuIds)) {
-    return getLeafCheckedKeys(data.menuIds, menuTree.value)
-  }
-
-  return []
-}
-
-function getLeafCheckedKeys(menuIds: number[], tree: any[]) {
-  const parentIds = new Set<number>()
-  const walk = (nodes: any[]) => {
-    nodes.forEach((node) => {
-      if (Array.isArray(node.children) && node.children.length) {
-        parentIds.add(Number(node.id))
-        walk(node.children)
-      }
-    })
-  }
-  walk(tree)
-  return menuIds.filter((id) => !parentIds.has(Number(id)))
 }
 
 function getDataScopeLabel(scope: number) {

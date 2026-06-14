@@ -337,6 +337,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'role', name: 'SystemRole', component: () => import('@/views/system/role.vue'), meta: { title: '角色管理' } },
       { path: 'permission', name: 'SystemPermission', component: () => import('@/views/system/permission-setting.vue'), meta: { title: '权限设置', icon: 'Lock' } },
       { path: 'menu', name: 'SystemMenu', component: () => import('@/views/system/menu.vue'), meta: { title: '菜单管理' } },
+      { path: 'workflow-designer', name: 'WorkflowDesigner', component: () => import('@/views/workflow/designer.vue'), meta: { title: '流程管理', icon: 'SetUp' } },
       { path: 'login-log', name: 'LoginLog', component: () => import('@/views/system/login-log.vue'), meta: { title: '登录日志' } },
       { path: 'oper-log', name: 'OperLog', component: () => import('@/views/system/oper-log.vue'), meta: { title: '操作日志' } },
       { path: 'notification', name: 'Notification', component: () => import('@/views/system/notification.vue'), meta: { title: '消息中心' } },

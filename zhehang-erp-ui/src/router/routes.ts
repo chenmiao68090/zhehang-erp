@@ -36,7 +36,9 @@ export const constantRoutes: RouteRecordRaw[] = [
   { path: '/leads/pool-admin', redirect: '/customer/pool-admin', meta: { hidden: true } },
   { path: '/leads/collision-manage', redirect: '/customer/collision-manage', meta: { hidden: true } },
   { path: '/scrm/private-domain', redirect: '/leads/private-domain', meta: { hidden: true } },
-  { path: '/supply/channel-cost', redirect: '/leads/online-roi', meta: { hidden: true } },
+  { path: '/leads/online-roi', redirect: '/supply/channel-cost', meta: { hidden: true } },
+  { path: '/tax', redirect: '/finance/tax-calendar', meta: { hidden: true } },
+  { path: '/tax/calendar', redirect: '/finance/tax-calendar', meta: { hidden: true } },
   { path: '/org/dept', redirect: '/hrm/dept', meta: { hidden: true } },
   { path: '/org/post', redirect: '/hrm/post', meta: { hidden: true } },
   { path: '/org/employee', redirect: '/hrm/employee', meta: { hidden: true } },
@@ -107,30 +109,10 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '私域运营', icon: 'ChatLineRound', hidden: true } /* 453KB localStorage演示,独立大功能但全假→隐藏,待私域后端落地 */
       },
       {
-        path: 'online-roi',
-        name: 'OnlineRoi',
-        component: () => import('@/views/supply/channel-cost.vue'),
-        meta: { title: '网销投产比', icon: 'TrendCharts' }
-      },
-      {
         path: 'campaign',
         name: 'MktCampaign',
         component: () => import('@/views/marketing/campaign.vue'),
         meta: { title: '营销活动', icon: 'Histogram' }
-      }
-    ]
-  },
-  {
-    path: '/tax',
-    component: Layout,
-    redirect: '/tax/calendar',
-    meta: { title: '财税交付', icon: 'Calendar', roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq'] },
-    children: [
-      {
-        path: 'calendar',
-        name: 'TaxCalendar',
-        component: () => import('@/views/tax/calendar.vue'),
-        meta: { title: '报税日历', icon: 'Calendar' }
       }
     ]
   },
@@ -247,7 +229,8 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'channel-partner', name: 'SupplyChannelPartner', component: () => import('@/views/supply/channel-partner.vue'), meta: { title: '同行渠道' } },
       { path: 'vendor', name: 'SupplyVendor', component: () => import('@/views/supply/vendor.vue'), meta: { title: '地址供应商' } },
       { path: 'receipt', name: 'SupplyReceipt', component: () => import('@/views/supply/receipt.vue'), meta: { title: '地址资源池' } },
-      { path: 'purchase', name: 'SupplyPurchase', component: () => import('@/views/supply/purchase.vue'), meta: { title: '资源补充单' } }
+      { path: 'purchase', name: 'SupplyPurchase', component: () => import('@/views/supply/purchase.vue'), meta: { title: '资源补充单' } },
+      { path: 'channel-cost', name: 'ChannelCost', component: () => import('@/views/supply/channel-cost.vue'), meta: { title: '网销投产比', icon: 'TrendCharts' } }
     ]
   },
   {
@@ -261,6 +244,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'petty-cash', redirect: '/finance/expense-center', meta: { hidden: true } },
       { path: 'expense', redirect: '/finance/expense-center', meta: { hidden: true } },
       { path: 'reimburse', redirect: '/finance/expense-center', meta: { hidden: true } },
+      { path: 'tax-calendar', name: 'TaxCalendar', component: () => import('@/views/tax/calendar.vue'), meta: { title: '报税日历', icon: 'Calendar' } },
       { path: 'salary', name: 'FinSalary', component: () => import('@/views/finance/salary.vue'), meta: { title: '薪酬管理', icon: 'Coin' } },
       { path: 'cost', name: 'FinCost', component: () => import('@/views/finance/cost.vue'), meta: { title: '管理成本', icon: 'PieChart' } }
     ]

@@ -75,39 +75,50 @@ export interface AiSummary {
 
 const BASE = '/dashboard/cockpit'
 
+/**
+ * 时间筛选参数。
+ * - period: today/week/month/quarter/year，默认 month
+ * - startDate/endDate: 自定义区间 (yyyy-MM-dd)，同时传入时后端优先用区间
+ */
+export interface CockpitParams {
+  period?: string
+  startDate?: string
+  endDate?: string
+}
+
 /** KPI 指标 */
-export function getCockpitKpi() {
-  return get<{ data: CockpitKpi }>(BASE + '/kpi')
+export function getCockpitKpi(params?: CockpitParams) {
+  return get<{ data: CockpitKpi }>(BASE + '/kpi', params)
 }
 
 /** 营收趋势 */
-export function getRevenueTrend() {
-  return get<{ data: RevenueTrend[] }>(BASE + '/revenue-trend')
+export function getRevenueTrend(params?: CockpitParams) {
+  return get<{ data: RevenueTrend[] }>(BASE + '/revenue-trend', params)
 }
 
 /** 客户来源分布 */
-export function getCustomerSource() {
-  return get<{ data: CustomerSource[] }>(BASE + '/customer-source')
+export function getCustomerSource(params?: CockpitParams) {
+  return get<{ data: CustomerSource[] }>(BASE + '/customer-source', params)
 }
 
 /** 业绩排行 */
-export function getSalesRank() {
-  return get<{ data: SalesRank[] }>(BASE + '/sales-rank')
+export function getSalesRank(params?: CockpitParams) {
+  return get<{ data: SalesRank[] }>(BASE + '/sales-rank', params)
 }
 
 /** 最新动态 */
-export function getRecentEvents() {
-  return get<{ data: RecentEvent[] }>(BASE + '/recent-events')
+export function getRecentEvents(params?: CockpitParams) {
+  return get<{ data: RecentEvent[] }>(BASE + '/recent-events', params)
 }
 
 /** 区域分布 */
-export function getRegionDistribution() {
-  return get<{ data: RegionDistribution[] }>(BASE + '/region-distribution')
+export function getRegionDistribution(params?: CockpitParams) {
+  return get<{ data: RegionDistribution[] }>(BASE + '/region-distribution', params)
 }
 
 /** 预警卡片 */
-export function getAlerts() {
-  return get<{ data: AlertData }>(BASE + '/alerts')
+export function getAlerts(params?: CockpitParams) {
+  return get<{ data: AlertData }>(BASE + '/alerts', params)
 }
 
 /** AI 经营分析摘要 */

@@ -460,7 +460,7 @@ import {
   getSalesRank, getRecentEvents, getRegionDistribution,
   getAlerts, getAiSummary, getRevenueDrillDown, getRegionDrillDown
 } from '@/api/cockpit'
-import type { CockpitKpi, RecentEvent, AlertData, CustomerSource, SalesRank, RegionDistribution } from '@/api/cockpit'
+import type { CockpitKpi, RecentEvent, AlertData, CustomerSource, SalesRank, RegionDistribution, CockpitParams } from '@/api/cockpit'
 import { sendChat } from '@/api/ai'
 
 const { t } = useI18n()
@@ -677,6 +677,29 @@ function onTimeRangeChange() {
   refreshAll()
 }
 
+/** 把日期格式化为后端期望的 yyyy-MM-dd */
+function fmtDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * 根据当前时间筛选构造请求参数。
+ * - 自定义且选了起止日期：传 startDate/endDate（后端优先用区间）
+ * - 其它：传 period（today/week/month/quarter/year）
+ */
+function buildPeriodParams(): CockpitParams {
+  if (timeRange.value === 'custom' && customDateRange.value && customDateRange.value.length === 2) {
+    return {
+      startDate: fmtDate(customDateRange.value[0]),
+      endDate: fmtDate(customDateRange.value[1])
+    }
+  }
+  return { period: timeRange.value }
+}
+
 // Fullscreen chart dialog
 const fullscreenVisible = ref(false)
 const fullscreenTitle = ref('')
@@ -781,53 +804,6 @@ let clockTimer: ReturnType<typeof setInterval> | null = null
 // Theme colors
 const COLORS = ['#F26522', '#FF8C42', '#FFB347', '#3B82F6', '#10B981', '#8B5CF6', '#06B6D4']
 
-const defaultCustomerSources: CustomerSource[] = [
-  { source: '抖音信息流', count: 286 },
-  { source: '百度搜索', count: 238 },
-  { source: '电销拓客', count: 216 },
-  { source: '同行转介绍', count: 168 },
-  { source: '企查工商库', count: 142 },
-  { source: '老客户复购', count: 126 },
-  { source: '自然咨询', count: 110 }
-]
-
-const defaultSalesRank: SalesRank[] = [
-  { rank: 1, employeeName: '张星', department: '网销一组', amount: 2860000, growthRate: 18.5 },
-  { rank: 2, employeeName: '李娜', department: '电销一组', amount: 2450000, growthRate: 12.3 },
-  { rank: 3, employeeName: '王明', department: '渠道销售组', amount: 2180000, growthRate: 22.1 },
-  { rank: 4, employeeName: '赵静', department: '网销二组', amount: 1960000, growthRate: -5.2 },
-  { rank: 5, employeeName: '刘强', department: '企业服务组', amount: 1850000, growthRate: 8.7 },
-  { rank: 6, employeeName: '陈芳', department: '客户成功组', amount: 1720000, growthRate: 15.4 },
-  { rank: 7, employeeName: '周海', department: '渠道销售组', amount: 1580000, growthRate: 3.2 },
-  { rank: 8, employeeName: '杨雪', department: '网销一组', amount: 1460000, growthRate: -2.1 },
-  { rank: 9, employeeName: '吴磊', department: '电销二组', amount: 1320000, growthRate: 9.8 },
-  { rank: 10, employeeName: '孙亮', department: '企业服务组', amount: 1180000, growthRate: 6.5 }
-]
-
-const defaultEvents: RecentEvent[] = [
-  { type: 'sign', content: '与杭州松柏科技签约代理记账+税务顾问年度服务，金额￥12.8万', time: '2分钟前', operator: '张星' },
-  { type: 'receipt', content: '收到同行渠道「杭企伙伴」挂靠地址批量订单回款￥45.6万', time: '15分钟前', operator: '李娜' },
-  { type: 'follow', content: '跟进滨江新注册企业工商注册+银行开户需求，客户意向积极', time: '30分钟前', operator: '王明' },
-  { type: 'lead', content: '新线索：浙江两杉生物科技自动带出工商信息并进入电销队列', time: '1小时前', operator: '系统' },
-  { type: 'sign', content: '与杭州华锋智康签订税务异常解除专项服务￥8.6万', time: '1.5小时前', operator: '赵静' },
-  { type: 'receipt', content: '收到金华美达商贸代理记账续费回款￥3.28万', time: '2小时前', operator: '刘强' },
-  { type: 'alert', content: '渠道「杭企伙伴」应收超过账期 9 天，建议冻结新增订单', time: '3小时前', operator: '系统' },
-  { type: 'follow', content: '完成西湖区挂靠地址资源补充沟通，预计新增 20 套', time: '4小时前', operator: '陈芳' }
-]
-
-const defaultRegionDistribution: RegionDistribution[] = [
-  { province: '西湖区', count: 186 },
-  { province: '滨江区', count: 165 },
-  { province: '上城区', count: 142 },
-  { province: '拱墅区', count: 128 },
-  { province: '萧山区', count: 116 },
-  { province: '余杭区', count: 98 },
-  { province: '钱塘区', count: 86 },
-  { province: '临平区', count: 72 },
-  { province: '宁波', count: 65 },
-  { province: '嘉兴', count: 52 }
-]
-
 function updateClock() {
   const d = new Date()
   currentTime.value = d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -853,14 +829,14 @@ function renderMarkdown(md: string): string {
 // Data loaders
 async function loadKpi() {
   try {
-    const res: any = await getCockpitKpi()
+    const res: any = await getCockpitKpi(buildPeriodParams())
     kpiData.value = res.data
   } catch { /* fallback */ }
 }
 
 async function loadRevenueTrend() {
   try {
-    const res: any = await getRevenueTrend()
+    const res: any = await getRevenueTrend(buildPeriodParams())
     const data = res.data || []
     const el = getEl(revenueTrendRef.value)
     if (!revenueTrendChart && el) {
@@ -936,11 +912,9 @@ function exitRevenueDrill() {
 
 async function loadCustomerSource() {
   try {
-    const res: any = await getCustomerSource()
-    let data: CustomerSource[] = res.data || []
-    if (!data.length || data.some(item => ['网络推广', '展会活动', '自主拜访'].includes(item.source))) {
-      data = defaultCustomerSources
-    }
+    const res: any = await getCustomerSource(buildPeriodParams())
+    // 真实后端数据，随时间筛选变化；区间内无新增客户则为空数组，按真实情况展示空图
+    const data: CustomerSource[] = res.data || []
     const el = getEl(customerSourceRef.value)
     if (!customerSourceChart && el) {
       customerSourceChart = echarts.init(el)
@@ -960,11 +934,9 @@ async function loadCustomerSource() {
 
 async function loadSalesRank() {
   try {
-    const res: any = await getSalesRank()
-    let source: SalesRank[] = res.data || []
-    if (!source.length || source.some(item => item.department.includes('销售一部') || item.department.includes('销售三部'))) {
-      source = defaultSalesRank
-    }
+    const res: any = await getSalesRank(buildPeriodParams())
+    // 真实后端数据(按签约人聚合实付额)，随时间筛选变化；横向柱图需倒序使第一名在顶部
+    const source: SalesRank[] = res.data || []
     const data = [...source].reverse()
     const el = getEl(salesRankRef.value)
     if (!salesRankChart && el) {
@@ -990,23 +962,17 @@ async function loadSalesRank() {
 
 async function loadEvents() {
   try {
-    const res: any = await getRecentEvents()
-    const data: RecentEvent[] = res.data || []
-    if (!data.length || data.some(item => /设备采购|机械商机|采购意向/.test(item.content))) {
-      events.value = defaultEvents
-    } else {
-      events.value = data
-    }
+    const res: any = await getRecentEvents(buildPeriodParams())
+    // 真实后端数据(区间内最近任务/事件)，随时间筛选变化
+    events.value = res.data || []
   } catch { /* fallback */ }
 }
 
 async function loadRegionMap() {
   try {
-    const res: any = await getRegionDistribution()
-    let data: RegionDistribution[] = res.data || []
-    if (!data.length || data.some(item => ['浙江', '江苏', '广东', '上海'].includes(item.province))) {
-      data = defaultRegionDistribution
-    }
+    const res: any = await getRegionDistribution(buildPeriodParams())
+    // 真实后端数据(按线索注册区域分组)，随时间筛选变化
+    const data: RegionDistribution[] = res.data || []
     const el = getEl(regionMapRef.value)
     if (!regionMapChart && el) {
       regionMapChart = echarts.init(el)
@@ -1078,7 +1044,7 @@ function exitRegionDrill() {
 
 async function loadAlerts() {
   try {
-    const res: any = await getAlerts()
+    const res: any = await getAlerts(buildPeriodParams())
     Object.assign(alerts, res.data || {})
   } catch { /* fallback */ }
 }

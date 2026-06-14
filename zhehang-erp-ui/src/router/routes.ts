@@ -31,7 +31,6 @@ export const constantRoutes: RouteRecordRaw[] = [
   { path: '/finance/report', redirect: '/dashboard/cockpit', meta: { hidden: true } },
   { path: '/workflow/todo', redirect: '/task-center/once', meta: { hidden: true } },
   { path: '/collaboration/notification', redirect: '/system/notification', meta: { hidden: true } },
-  { path: '/leads/enterprise-master', redirect: '/customer/enterprise-master', meta: { hidden: true } },
   { path: '/leads/company-pool', redirect: '/customer/company-pool', meta: { hidden: true } },
   { path: '/leads/personal-pool', redirect: '/customer/personal-pool', meta: { hidden: true } },
   { path: '/leads/service-renewal', redirect: '/customer/service-renewal', meta: { hidden: true } },
@@ -145,15 +144,9 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/customer',
     component: Layout,
-    redirect: '/customer/enterprise-master',
+    redirect: '/customer/lead',
     meta: { title: '客户中心', icon: 'User', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
-      {
-        path: 'enterprise-master',
-        name: 'EnterpriseMaster',
-        component: () => import('@/views/leads/enterprise-master.vue'),
-        meta: { title: '企业主体库', icon: 'OfficeBuilding', hidden: true } /* localStorage mock,功能被「企业号码查询」(真 /company)覆盖→隐藏 */
-      },
       {
         // 真实接线的线索管理(调后端 /crm/lead/*):公海/我的/今天该打谁/回收预警/工商入池
         path: 'lead',
@@ -253,16 +246,6 @@ export const asyncRoutes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/business',
-    component: Layout,
-    redirect: '/business/index',
-    // 业务管理 index 为写死静态看板,与首页/驾驶舱功能重复且无真实数据→整体隐藏,后续如需可接真实经营聚合接口
-    meta: { title: '业务管理', icon: 'Briefcase', hidden: true, roles: ['admin', 'boss', 'manager'] },
-    children: [
-      { path: 'index', name: 'BusinessIndex', component: () => import('@/views/business/index.vue'), meta: { title: '业务管理', icon: 'Briefcase' } }
-    ]
-  },
-  {
     path: '/supply',
     component: Layout,
     redirect: '/supply/channel-partner',
@@ -285,8 +268,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'expense', name: 'FinExpense', component: () => import('@/views/finance/expense.vue'), meta: { title: '业务支出管理', icon: 'CreditCard', hidden: true } /* 无后端,写死"待开发"空壳→隐藏 */ },
       { path: 'reimburse', name: 'FinReimburse', component: () => import('@/views/finance/reimburse.vue'), meta: { title: '报销管理', icon: 'Tickets' } },
       { path: 'salary', name: 'FinSalary', component: () => import('@/views/finance/salary.vue'), meta: { title: '薪酬管理', icon: 'Coin' } },
-      { path: 'cost', name: 'FinCost', component: () => import('@/views/finance/cost.vue'), meta: { title: '管理成本', icon: 'PieChart', hidden: true } /* 无后端,写死"待开发"空壳→隐藏 */ },
-      { path: 'performance', name: 'FinPerformance', component: () => import('@/views/finance/performance.vue'), meta: { title: '绩效提成', icon: 'TrendCharts', hidden: true } /* 与服务交付「提成结算」(/commission 完整审批流)重叠;统一以提成结算为唯一入口,本页(连另一套 /sales/commission 表、只读)隐藏避免口径打架 */ }
+      { path: 'cost', name: 'FinCost', component: () => import('@/views/finance/cost.vue'), meta: { title: '管理成本', icon: 'PieChart', hidden: true } /* 无后端,写死"待开发"空壳→隐藏 */ }
     ]
   },
   {

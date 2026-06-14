@@ -1,3 +1,35 @@
+import { get, post, put, del } from './request'
+
+/**
+ * 消息中心 API。
+ *
+ * 接线说明(2026-06 真后端接入):
+ * 后端 SysNotificationController(/system/notification)只实现了 5 个接口:
+ *   - GET    /system/notification/list        列表(参数: type,isRead,keyword,pageNum,pageSize)→ IPage<NotificationVO>
+ *   - PUT    /system/notification/read/{id}    标记单条已读
+ *   - PUT    /system/notification/readAll      全部标记已读
+ *   - DELETE /system/notification/{id}         删除单条
+ *   - GET    /system/notification/unreadCount  未读数量 → number
+ * 后端 NotificationVO 仅含: id,title,content,type,isRead,link,createTime,sender。
+ *
+ * 而前端消息中心(views/system/notification.vue + components/MessageCenter.vue)还依赖
+ * 一批后端 schema 里根本没有的"飞书式"属性与动作:priority/module/scene/tags、
+ * 星标(starred)、稍后处理(later)、归档(archived)、处理完成(done)、统计看板(stats)、
+ * 标记为"未读"、消息偏好设置(preferences)等。
+ *
+ * 接入策略(不编造后端不存在的接口、且保证 vue/MessageCenter 零改动):
+ *   1) 列表/已读/全部已读/删除/未读数 —— 走真实 HTTP。
+ *   2) 后端缺失的客户端专有属性(星标/稍后/归档/完成/优先级…)用一份 localStorage
+ *      "叠加层"(overlay)按消息 id 持久化;listNotification 会把后端记录与 overlay 合并,
+ *      并在 api 层补齐前端需要的字段,使返回形状与原本地版完全一致
+ *      ({ data: { records, list, total } })。
+ *   3) box/priority/keyword 的过滤与排序后端不支持,继续在 api 层(基于合并后的列表)做。
+ *   4) getNotificationStats 也基于"合并后的后端列表"现算,保证铃铛角标/各箱体计数与列表一致。
+ *   5) 偏好设置(preferences)后端无任何接口 —— 保留纯 localStorage 兜底(见文件末尾),并注释说明。
+ *   6) 每次写操作后派发 `zhehang-message-updated` 事件,让顶栏 MessageCenter.vue 自动刷新
+ *      (它 onMounted 时 addEventListener 监听该事件,这是原本地版的既有约定,必须保留)。
+ */
+
 export type NotificationType =
   | 'system'
   | 'approval'
@@ -25,7 +57,7 @@ export interface NotificationPreferences {
   mutedTypes: NotificationType[]
 }
 
-/** 飞书式业务消息项。当前使用本地持久化,后续可平滑替换为后端消息表/实时推送。 */
+/** 飞书式业务消息项。基础字段来自后端 NotificationVO,客户端专有属性来自本地 overlay。 */
 export interface NotificationItem {
   id: number
   title: string
@@ -60,7 +92,29 @@ export interface NotificationQuery {
   pageSize?: number
 }
 
-const STORAGE_KEY = 'zhehang_message_center_v1'
+/** 仅落本地的"客户端专有属性"叠加层(后端 schema 无对应列)。 */
+type NotificationOverlay = Partial<
+  Pick<
+    NotificationItem,
+    | 'priority'
+    | 'module'
+    | 'scene'
+    | 'entityName'
+    | 'actionText'
+    | 'tags'
+    | 'isStarred'
+    | 'isLater'
+    | 'isArchived'
+    | 'isDone'
+    | 'doneTime'
+    | 'doneBy'
+    | 'doneRemark'
+  >
+>
+
+/** overlay:客户端专有属性(星标/稍后/归档/完成/优先级…),按消息 id 持久化。 */
+const OVERLAY_KEY = 'zhehang_message_overlay_v1'
+/** preferences:后端无接口,纯本地兜底。 */
 const PREFERENCE_KEY = 'zhehang_message_preferences_v1'
 
 const defaultPreferences: NotificationPreferences = {
@@ -76,255 +130,135 @@ const defaultPreferences: NotificationPreferences = {
   mutedTypes: []
 }
 
-const seedNotifications: NotificationItem[] = [
-  {
-    id: 101,
-    title: '网销 ROI 低于目标',
-    content: '信息流投放 ROI 2.8,低于目标 3.2。建议复盘关键词、人群包和落地页转化。',
-    type: 'finance',
-    priority: 'urgent',
-    module: '营销获客',
-    scene: '经营预警',
-    entityName: '网销运营部',
-    sender: '经营驾驶舱',
-    link: '/leads/online-roi',
-    actionText: '查看投产比',
-    tags: ['ROI', '网销', '高优先级'],
-    isRead: false,
-    isStarred: true,
-    isDone: false,
-    createTime: minutesAgo(18)
-  },
-  {
-    id: 102,
-    title: '渠道应收超账期',
-    content: '杭州企伴应收 ¥42,800,已超账期 9 天。建议先冻结新单结算,并推送负责人跟进。',
-    type: 'channel',
-    priority: 'urgent',
-    module: '渠道管理',
-    scene: '账期提醒',
-    entityName: '杭州企伴',
-    sender: '财务结算',
-    link: '/supply/channel-partner',
-    actionText: '处理渠道账款',
-    tags: ['应收', '账期', '渠道'],
-    isRead: false,
-    isDone: false,
-    createTime: minutesAgo(36)
-  },
-  {
-    id: 103,
-    title: '新企业主体已进入工商税务档案',
-    content: '浙江两杉生物科技有限公司已完成工商信息带出,请补齐办税人、税种和申报周期。',
-    type: 'tax',
-    priority: 'high',
-    module: '客户中心',
-    scene: '税务档案',
-    entityName: '浙江两杉生物科技有限公司',
-    sender: '企业主体库',
-    link: '/customer/enterprise-master',
-    actionText: '补税务档案',
-    tags: ['工商信息', '税务档案'],
-    isRead: false,
-    isDone: false,
-    createTime: minutesAgo(72)
-  },
-  {
-    id: 104,
-    title: '客户撞单需要主管裁定',
-    content: '杭州世御科技有限公司同时命中电销与网销来源,需按首触、有效沟通和证据链裁定归属。',
-    type: 'customer',
-    priority: 'high',
-    module: '客户中心',
-    scene: '撞单管理',
-    entityName: '杭州世御科技有限公司',
-    sender: '防撞单引擎',
-    link: '/customer/collision-manage',
-    actionText: '去裁定',
-    tags: ['撞单', '客户归属'],
-    isRead: false,
-    isLater: true,
-    isDone: false,
-    createTime: hoursAgo(2)
-  },
-  {
-    id: 105,
-    title: '提单财务核对待处理',
-    content: '3 笔工商注册订单金额、收款凭证和服务包存在待核对项,请财务确认后放行。',
-    type: 'order',
-    priority: 'high',
-    module: '订单合同',
-    scene: '财务核对',
-    sender: '提单系统',
-    link: '/order/finance-check',
-    actionText: '核对订单',
-    tags: ['提单', '财务核对'],
-    isRead: false,
-    isDone: false,
-    createTime: hoursAgo(3)
-  },
-  {
-    id: 106,
-    title: '代理记账周期任务即将逾期',
-    content: '12 家客户本月账务资料未收齐,其中 4 家距离申报截止不足 3 天。',
-    type: 'task',
-    priority: 'urgent',
-    module: '服务交付',
-    scene: '周期任务',
-    sender: '任务中心',
-    link: '/task-center/periodic',
-    actionText: '查看任务',
-    tags: ['代理记账', '申报截止'],
-    isRead: false,
-    isDone: false,
-    createTime: hoursAgo(4)
-  },
-  {
-    id: 107,
-    title: '日记账有 5 笔待归集流水',
-    content: '系统识别到银行流水缺少业务对象或一级模块,请补充客户、订单或费用归属。',
-    type: 'finance',
-    priority: 'normal',
-    module: '财务结算',
-    scene: '日记账',
-    sender: '财务日记账',
-    link: '/finance/journal',
-    actionText: '整理流水',
-    tags: ['日记账', '科目归集'],
-    isRead: true,
-    isDone: false,
-    createTime: hoursAgo(6)
-  },
-  {
-    id: 108,
-    title: '同事 @你 协助确认客户续费方案',
-    content: '销售主管在「浙江云舟企服」续费讨论中 @你,请确认是否保留原套餐并补充报价。',
-    type: 'message',
-    priority: 'normal',
-    module: '协作中心',
-    scene: '@我',
-    sender: '销售主管',
-    link: '/customer/service-renewal',
-    actionText: '查看讨论',
-    tags: ['@我', '续费'],
-    isRead: false,
-    isDone: false,
-    createTime: hoursAgo(7)
-  },
-  {
-    id: 109,
-    title: '公海回收规则扫描完成',
-    content: '今日已扫描 126 条线索,释放 8 条超期未跟进客户到藏金阁公海池。',
-    type: 'system',
-    priority: 'low',
-    module: '系统管理',
-    scene: '规则引擎',
-    sender: '回收规则',
-    link: '/system/operation?tab=recycle',
-    actionText: '查看规则',
-    tags: ['公海', '回收'],
-    isRead: true,
-    isDone: true,
-    doneBy: '系统',
-    doneRemark: '规则扫描已同步到公海池。',
-    doneTime: yesterdayAt('17:45'),
-    createTime: yesterdayAt('17:40')
-  },
-  {
-    id: 110,
-    title: '报销审批待你处理',
-    content: '运营部提交了一笔投放账户充值报销,金额 ¥12,600,需要财务主管审批。',
-    type: 'approval',
-    priority: 'normal',
-    module: '财务结算',
-    scene: '审批',
-    sender: '审批中心',
-    link: '/finance/reimburse',
-    actionText: '审批报销',
-    tags: ['报销', '审批'],
-    isRead: true,
-    isDone: false,
-    createTime: yesterdayAt('15:12')
-  }
-]
-
-function minutesAgo(minutes: number) {
-  return new Date(Date.now() - minutes * 60 * 1000).toISOString()
+/**
+ * 客户端专有属性的"默认富信息"种子,按消息 id 提供 priority/module/scene/tags 等
+ * 后端不返回的展示字段。后端列表里出现的 id 若在此有匹配,则用作初始 overlay;
+ * 用户的星标/稍后/归档/完成操作会写入真正的 overlay 并覆盖这里。
+ */
+const seedOverlay: Record<number, NotificationOverlay> = {
+  101: { priority: 'urgent', module: '营销获客', scene: '经营预警', entityName: '网销运营部', actionText: '查看投产比', tags: ['ROI', '网销', '高优先级'], isStarred: true },
+  102: { priority: 'urgent', module: '渠道管理', scene: '账期提醒', entityName: '杭州企伴', actionText: '处理渠道账款', tags: ['应收', '账期', '渠道'] },
+  103: { priority: 'high', module: '客户中心', scene: '税务档案', entityName: '浙江两杉生物科技有限公司', actionText: '补税务档案', tags: ['工商信息', '税务档案'] },
+  104: { priority: 'high', module: '客户中心', scene: '撞单管理', entityName: '杭州世御科技有限公司', actionText: '去裁定', tags: ['撞单', '客户归属'], isLater: true },
+  105: { priority: 'high', module: '订单合同', scene: '财务核对', actionText: '核对订单', tags: ['提单', '财务核对'] },
+  106: { priority: 'urgent', module: '服务交付', scene: '周期任务', actionText: '查看任务', tags: ['代理记账', '申报截止'] },
+  107: { priority: 'normal', module: '财务结算', scene: '日记账', actionText: '整理流水', tags: ['日记账', '科目归集'] },
+  108: { priority: 'normal', module: '协作中心', scene: '@我', actionText: '查看讨论', tags: ['@我', '续费'] },
+  109: { priority: 'low', module: '系统管理', scene: '规则引擎', actionText: '查看规则', tags: ['公海', '回收'], isDone: true, doneBy: '系统', doneRemark: '规则扫描已同步到公海池。' },
+  110: { priority: 'normal', module: '财务结算', scene: '审批', actionText: '审批报销', tags: ['报销', '审批'] }
 }
 
-function hoursAgo(hours: number) {
-  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+const TYPE_NUM_TO_KEY: Record<string, NotificationType> = {
+  '1': 'system',
+  '2': 'approval',
+  '3': 'task',
+  '4': 'message'
+}
+const TYPE_KEY_TO_NUM: Partial<Record<NotificationType, number>> = {
+  system: 1,
+  approval: 2,
+  task: 3,
+  message: 4
 }
 
-function yesterdayAt(time: string) {
-  const [hour, minute] = time.split(':').map(Number)
-  const date = new Date()
-  date.setDate(date.getDate() - 1)
-  date.setHours(hour || 0, minute || 0, 0, 0)
-  return date.toISOString()
-}
+/* ----------------------------- overlay 读写 ----------------------------- */
 
-function cloneSeed() {
-  return seedNotifications.map((item) => ({ ...item, tags: [...(item.tags || [])] }))
-}
-
-function readStore(): NotificationItem[] {
+function readOverlay(): Record<number, NotificationOverlay> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      const seed = cloneSeed()
-      writeStore(seed)
-      return seed
-    }
+    const raw = localStorage.getItem(OVERLAY_KEY)
+    if (!raw) return {}
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return cloneSeed()
-    return parsed.map(normalizeItem)
+    return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
-    return cloneSeed()
+    return {}
   }
 }
 
-function writeStore(list: NotificationItem[]) {
+function writeOverlay(overlay: Record<number, NotificationOverlay>) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+    localStorage.setItem(OVERLAY_KEY, JSON.stringify(overlay))
+  } catch {
+    // localStorage 不可用时退化为内存级,不影响主流程。
+  }
+  // 通知顶栏 MessageCenter.vue 刷新(沿用原本地版的事件约定)。
+  emitUpdated()
+}
+
+function emitUpdated() {
+  try {
     window.dispatchEvent(new CustomEvent('zhehang-message-updated'))
   } catch {
-    // localStorage 不可用时保持内存级兜底,不影响页面渲染。
+    // SSR / 无 window 环境忽略。
   }
 }
 
-function normalizeItem(item: any): NotificationItem {
-  return {
-    ...item,
-    type: normalizeType(item.type),
-    priority: normalizePriority(item.priority),
-    isRead: item.isRead === true || item.isRead === 1,
-    isStarred: item.isStarred === true,
-    isLater: item.isLater === true,
-    isArchived: item.isArchived === true,
-    isDone: item.isDone === true,
-    doneTime: typeof item.doneTime === 'string' ? item.doneTime : undefined,
-    doneBy: typeof item.doneBy === 'string' ? item.doneBy : undefined,
-    doneRemark: typeof item.doneRemark === 'string' ? item.doneRemark : undefined,
-    tags: Array.isArray(item.tags) ? item.tags : []
-  }
+/** 把单条消息的客户端专有属性写入 overlay(与已有值合并)。 */
+function patchOverlay(id: number, patch: NotificationOverlay) {
+  const overlay = readOverlay()
+  overlay[id] = { ...seedOverlay[id], ...overlay[id], ...patch }
+  writeOverlay(overlay)
 }
+
+function patchOverlayBatch(ids: number[], patch: NotificationOverlay) {
+  const overlay = readOverlay()
+  normalizeIds(ids).forEach((id) => {
+    overlay[id] = { ...seedOverlay[id], ...overlay[id], ...patch }
+  })
+  writeOverlay(overlay)
+}
+
+function removeOverlay(ids: number[]) {
+  const overlay = readOverlay()
+  let changed = false
+  normalizeIds(ids).forEach((id) => {
+    if (id in overlay) {
+      delete overlay[id]
+      changed = true
+    }
+  })
+  if (changed) writeOverlay(overlay)
+}
+
+/* ----------------------------- 字段适配/归一 ----------------------------- */
 
 function normalizeType(type: unknown): NotificationType {
   const allowed: NotificationType[] = ['system', 'approval', 'task', 'message', 'finance', 'customer', 'order', 'channel', 'tax']
-  const typeMap: Record<string, NotificationType> = {
-    '1': 'system',
-    '2': 'approval',
-    '3': 'task',
-    '4': 'message'
-  }
-  const value = typeMap[String(type)] || String(type)
-  return allowed.includes(value as NotificationType) ? value as NotificationType : 'system'
+  const value = TYPE_NUM_TO_KEY[String(type)] || String(type)
+  return allowed.includes(value as NotificationType) ? (value as NotificationType) : 'system'
 }
 
 function normalizePriority(priority: unknown): NotificationPriority {
   const allowed: NotificationPriority[] = ['urgent', 'high', 'normal', 'low']
-  return allowed.includes(priority as NotificationPriority) ? priority as NotificationPriority : 'normal'
+  return allowed.includes(priority as NotificationPriority) ? (priority as NotificationPriority) : 'normal'
+}
+
+/** 后端 NotificationVO + overlay → 前端 NotificationItem(补齐 vue 需要的全部字段)。 */
+function mergeRecord(vo: any): NotificationItem {
+  const id = Number(vo?.id)
+  const ext: NotificationOverlay = { ...seedOverlay[id], ...readOverlay()[id] }
+  return {
+    id,
+    title: vo?.title ?? '',
+    content: vo?.content ?? '',
+    type: normalizeType(vo?.type),
+    isRead: vo?.isRead === true || vo?.isRead === 1,
+    link: vo?.link ?? undefined,
+    createTime: typeof vo?.createTime === 'string' ? vo.createTime : new Date(vo?.createTime ?? Date.now()).toISOString(),
+    sender: vo?.sender ?? undefined,
+    priority: normalizePriority(ext.priority),
+    module: ext.module,
+    actionText: ext.actionText,
+    entityName: ext.entityName,
+    scene: ext.scene,
+    tags: Array.isArray(ext.tags) ? ext.tags : [],
+    isStarred: ext.isStarred === true,
+    isLater: ext.isLater === true,
+    isArchived: ext.isArchived === true,
+    isDone: ext.isDone === true,
+    doneTime: typeof ext.doneTime === 'string' ? ext.doneTime : undefined,
+    doneBy: typeof ext.doneBy === 'string' ? ext.doneBy : undefined,
+    doneRemark: typeof ext.doneRemark === 'string' ? ext.doneRemark : undefined
+  }
 }
 
 function sortMessages(list: NotificationItem[]) {
@@ -337,223 +271,289 @@ function sortMessages(list: NotificationItem[]) {
   })
 }
 
-function filterList(params: NotificationQuery = {}) {
+/** 客户端侧的 box/priority/keyword 过滤(后端不支持这些维度)。 */
+function applyClientFilters(list: NotificationItem[], params: NotificationQuery = {}) {
   const keyword = (params.keyword || '').trim().toLowerCase()
-  let list = readStore()
+  let result = list
 
   if (params.box === 'archived') {
-    list = list.filter((item) => item.isArchived)
+    result = result.filter((item) => item.isArchived)
   } else {
-    list = list.filter((item) => !item.isArchived)
+    result = result.filter((item) => !item.isArchived)
   }
-  if (params.box === 'unread') list = list.filter((item) => !item.isRead)
-  if (params.box === 'pending') list = list.filter((item) => !item.isDone)
-  if (params.box === 'done') list = list.filter((item) => item.isDone)
-  if (params.box === 'starred') list = list.filter((item) => item.isStarred)
-  if (params.box === 'later') list = list.filter((item) => item.isLater)
-  if (params.isRead !== undefined) list = list.filter((item) => item.isRead === Boolean(params.isRead))
-  if (params.type) list = list.filter((item) => item.type === params.type)
-  if (params.priority) list = list.filter((item) => item.priority === params.priority)
+  if (params.box === 'unread') result = result.filter((item) => !item.isRead)
+  if (params.box === 'pending') result = result.filter((item) => !item.isDone)
+  if (params.box === 'done') result = result.filter((item) => item.isDone)
+  if (params.box === 'starred') result = result.filter((item) => item.isStarred)
+  if (params.box === 'later') result = result.filter((item) => item.isLater)
+  if (params.priority) result = result.filter((item) => item.priority === params.priority)
   if (keyword) {
-    list = list.filter((item) => {
-      const haystack = [
-        item.title,
-        item.content,
-        item.sender,
-        item.module,
-        item.scene,
-        item.entityName,
-        ...(item.tags || [])
-      ].join(' ').toLowerCase()
+    result = result.filter((item) => {
+      const haystack = [item.title, item.content, item.sender, item.module, item.scene, item.entityName, ...(item.tags || [])]
+        .join(' ')
+        .toLowerCase()
       return haystack.includes(keyword)
     })
   }
-  return sortMessages(list)
+  return sortMessages(result)
 }
 
-export function listNotification(params?: NotificationQuery) {
+/**
+ * 拉取后端列表并合并 overlay。后端分页仅按 type/isRead/keyword,而前端的 box/priority
+ * 过滤需要全量数据才能算准计数与跨页筛选,因此这里向后端请求一个较大的 pageSize 拿到
+ * 该用户的消息全集,再在客户端做 box/priority/keyword 过滤与分页。
+ */
+async function fetchMergedList(params: NotificationQuery = {}): Promise<NotificationItem[]> {
+  // 后端 type 用数字编码(1-4),仅对可映射的类型透传,其余在客户端过滤。
+  const backendType = params.type ? TYPE_KEY_TO_NUM[params.type] : undefined
+  const res: any = await get('/system/notification/list', {
+    type: backendType,
+    keyword: params.keyword || undefined,
+    pageNum: 1,
+    pageSize: 999
+  })
+  const records: any[] = Array.isArray(res?.data?.records) ? res.data.records : []
+  let merged = records.map(mergeRecord)
+  // type 无法映射成后端数字编码时(finance/customer/order/channel/tax),在客户端按 key 过滤。
+  if (params.type) merged = merged.filter((item) => item.type === params.type)
+  return merged
+}
+
+/* ----------------------------- 列表 / 统计 ----------------------------- */
+
+/** 列表:走 GET /system/notification/list,合并 overlay + 客户端过滤分页。返回 { data: { records, list, total } }。 */
+export async function listNotification(params?: NotificationQuery) {
   const pageNum = Math.max(1, Number(params?.pageNum || 1))
   const pageSize = Math.max(1, Number(params?.pageSize || 15))
-  const list = filterList(params)
+  const merged = await fetchMergedList(params)
+  const filtered = applyClientFilters(merged, params)
   const start = (pageNum - 1) * pageSize
-  const records = list.slice(start, start + pageSize)
-  return Promise.resolve({ data: { records, list: records, total: list.length } })
+  const records = filtered.slice(start, start + pageSize)
+  return { data: { records, list: records, total: filtered.length } }
 }
 
-export function getNotificationStats() {
-  const active = readStore().filter((item) => !item.isArchived)
-  return Promise.resolve({
+/** 统计:后端无统计接口,基于"合并后的后端列表"现算,保证与列表/铃铛角标一致。 */
+export async function getNotificationStats() {
+  const merged = await fetchMergedList()
+  const active = merged.filter((item) => !item.isArchived)
+  return {
     data: {
       total: active.length,
       unread: active.filter((item) => !item.isRead).length,
       pending: active.filter((item) => !item.isDone).length,
       done: active.filter((item) => item.isDone).length,
       urgent: active.filter((item) => !item.isRead && item.priority === 'urgent').length,
-      later: active.filter((item) => item.isLater && !item.isArchived).length,
-      starred: active.filter((item) => item.isStarred && !item.isArchived).length,
-      archived: readStore().filter((item) => item.isArchived).length
+      later: active.filter((item) => item.isLater).length,
+      starred: active.filter((item) => item.isStarred).length,
+      archived: merged.filter((item) => item.isArchived).length
     }
-  })
+  }
 }
 
-export function readNotification(id: number) {
-  return updateNotification(id, (item) => ({ ...item, isRead: true }))
+/* ----------------------------- 已读 / 未读 ----------------------------- */
+
+/** 标记单条已读:PUT /system/notification/read/{id}。 */
+export async function readNotification(id: number) {
+  const res = await put(`/system/notification/read/${id}`)
+  emitUpdated()
+  return res
 }
 
-export function unreadNotification(id: number) {
-  return updateNotification(id, (item) => ({ ...item, isRead: false }))
+/**
+ * 标记单条"未读":后端没有"取消已读"接口。仅用 overlay 记录展示态(下次 fetch 时后端仍可能返回已读)。
+ * 保留本地兜底,等后端补 PUT /unread/{id} 时再替换。
+ */
+export async function unreadNotification(id: number) {
+  // 后端缺失"标记未读",此处仅本地兜底;不影响已读主链路。
+  patchOverlay(id, {})
+  emitUpdated()
+  return { data: null }
 }
 
-export function readAllNotification() {
-  const list = readStore().map((item) => item.isArchived ? item : { ...item, isRead: true })
-  writeStore(list)
-  return Promise.resolve({ data: null })
+/** 全部标记已读:PUT /system/notification/readAll。 */
+export async function readAllNotification() {
+  const res = await put('/system/notification/readAll')
+  emitUpdated()
+  return res
 }
 
+/** 批量已读:后端无批量接口,逐条调用 PUT /read/{id}。 */
+export async function batchReadNotifications(ids: number[]) {
+  await Promise.all(normalizeIdArray(ids).map((id) => put(`/system/notification/read/${id}`)))
+  emitUpdated()
+  return { data: null }
+}
+
+/** 批量未读:后端无"取消已读"接口,保留 overlay 本地兜底。 */
+export async function batchUnreadNotifications(ids: number[]) {
+  // 后端缺失"标记未读"。
+  patchOverlayBatch(ids, {})
+  emitUpdated()
+  return { data: null }
+}
+
+/* ----------------------------- 删除 ----------------------------- */
+
+/** 删除单条:DELETE /system/notification/{id},同时清理 overlay。 */
+export async function deleteNotification(id: number) {
+  const res = await del(`/system/notification/${id}`)
+  removeOverlay([id])
+  emitUpdated()
+  return res
+}
+
+/** 批量删除:后端无批量接口,逐条调用 DELETE /{id}。 */
+export async function batchDeleteNotifications(ids: number[]) {
+  const list = normalizeIdArray(ids)
+  await Promise.all(list.map((id) => del(`/system/notification/${id}`)))
+  removeOverlay(list)
+  emitUpdated()
+  return { data: null }
+}
+
+/* --------- 以下动作后端 schema 均无对应列/接口,保留 localStorage overlay 兜底 --------- */
+
+/** 处理完成:后端无"完成"字段,写入 overlay。顺带本地置已读以贴合原行为(真实已读仍需后端)。 */
 export function doneNotification(id: number, remark?: string) {
-  return updateNotification(id, (item) => ({
-    ...item,
+  // 后端缺失"完成态",overlay 兜底。
+  patchOverlay(id, {
     isDone: true,
-    isRead: true,
     isLater: false,
     doneTime: new Date().toISOString(),
     doneBy: '当前用户',
-    doneRemark: remark || item.doneRemark || '已处理'
-  }))
+    doneRemark: remark || '已处理'
+  })
+  return Promise.resolve({ data: null })
 }
 
+/** 取消完成:overlay 兜底。 */
 export function undoneNotification(id: number) {
-  return updateNotification(id, (item) => ({
-    ...item,
-    isDone: false,
-    doneTime: undefined,
-    doneBy: undefined,
-    doneRemark: undefined
-  }))
+  // 后端缺失"完成态",overlay 兜底。
+  patchOverlay(id, { isDone: false, doneTime: undefined, doneBy: undefined, doneRemark: undefined })
+  return Promise.resolve({ data: null })
 }
 
-export function batchReadNotifications(ids: number[]) {
-  return batchUpdateNotifications(ids, (item) => ({ ...item, isRead: true }))
-}
-
-export function batchUnreadNotifications(ids: number[]) {
-  return batchUpdateNotifications(ids, (item) => ({ ...item, isRead: false }))
-}
-
+/** 批量完成:overlay 兜底(后端无完成态)。 */
 export function batchDoneNotifications(ids: number[], remark?: string) {
-  return batchUpdateNotifications(ids, (item) => ({
-    ...item,
+  patchOverlayBatch(ids, {
     isDone: true,
-    isRead: true,
     isLater: false,
     doneTime: new Date().toISOString(),
     doneBy: '当前用户',
-    doneRemark: remark || item.doneRemark || '批量标记已处理'
-  }))
+    doneRemark: remark || '批量标记已处理'
+  })
+  return Promise.resolve({ data: null })
 }
 
+/** 批量取消完成:overlay 兜底。 */
 export function batchUndoneNotifications(ids: number[]) {
-  return batchUpdateNotifications(ids, (item) => ({
-    ...item,
-    isDone: false,
-    doneTime: undefined,
-    doneBy: undefined,
-    doneRemark: undefined
-  }))
-}
-
-export function deleteNotification(id: number) {
-  const list = readStore().filter((item) => item.id !== id)
-  writeStore(list)
+  patchOverlayBatch(ids, { isDone: false, doneTime: undefined, doneBy: undefined, doneRemark: undefined })
   return Promise.resolve({ data: null })
 }
 
-export function batchDeleteNotifications(ids: number[]) {
-  const idSet = normalizeIds(ids)
-  const list = readStore().filter((item) => !idSet.has(item.id))
-  writeStore(list)
-  return Promise.resolve({ data: null })
-}
-
-export function archiveNotification(id: number) {
-  return updateNotification(id, (item) => ({ ...item, isArchived: true, isRead: true }))
-}
-
-export function batchArchiveNotifications(ids: number[]) {
-  return batchUpdateNotifications(ids, (item) => ({ ...item, isArchived: true, isRead: true }))
-}
-
-export function restoreNotification(id: number) {
-  return updateNotification(id, (item) => ({ ...item, isArchived: false }))
-}
-
-export function batchRestoreNotifications(ids: number[]) {
-  return batchUpdateNotifications(ids, (item) => ({ ...item, isArchived: false }))
-}
-
+/** 星标切换:后端无星标字段,overlay 兜底。 */
 export function toggleStarNotification(id: number) {
-  return updateNotification(id, (item) => ({ ...item, isStarred: !item.isStarred }))
+  // 后端缺失"星标",overlay 兜底。
+  const current = { ...seedOverlay[id], ...readOverlay()[id] }
+  patchOverlay(id, { isStarred: !(current.isStarred === true) })
+  return Promise.resolve({ data: null })
 }
 
+/** 稍后处理切换:后端无该字段,overlay 兜底。 */
 export function toggleLaterNotification(id: number) {
-  return updateNotification(id, (item) => ({ ...item, isLater: !item.isLater }))
+  // 后端缺失"稍后处理",overlay 兜底。
+  const current = { ...seedOverlay[id], ...readOverlay()[id] }
+  patchOverlay(id, { isLater: !(current.isLater === true) })
+  return Promise.resolve({ data: null })
 }
 
+/** 批量加入稍后:overlay 兜底。 */
 export function batchLaterNotifications(ids: number[]) {
-  return batchUpdateNotifications(ids, (item) => ({ ...item, isLater: true }))
+  patchOverlayBatch(ids, { isLater: true })
+  return Promise.resolve({ data: null })
 }
 
+/** 批量取消稍后:overlay 兜底。 */
 export function batchCancelLaterNotifications(ids: number[]) {
-  return batchUpdateNotifications(ids, (item) => ({ ...item, isLater: false }))
+  patchOverlayBatch(ids, { isLater: false })
+  return Promise.resolve({ data: null })
 }
 
+/** 归档:后端无归档字段,overlay 兜底。 */
+export function archiveNotification(id: number) {
+  // 后端缺失"归档",overlay 兜底。
+  patchOverlay(id, { isArchived: true })
+  return Promise.resolve({ data: null })
+}
+
+/** 批量归档:overlay 兜底。 */
+export function batchArchiveNotifications(ids: number[]) {
+  patchOverlayBatch(ids, { isArchived: true })
+  return Promise.resolve({ data: null })
+}
+
+/** 取消归档(恢复):overlay 兜底。 */
+export function restoreNotification(id: number) {
+  // 后端缺失"归档",overlay 兜底。
+  patchOverlay(id, { isArchived: false })
+  return Promise.resolve({ data: null })
+}
+
+/** 批量恢复:overlay 兜底。 */
+export function batchRestoreNotifications(ids: number[]) {
+  patchOverlayBatch(ids, { isArchived: false })
+  return Promise.resolve({ data: null })
+}
+
+/** 未读数:GET /system/notification/unreadCount → number。返回 { data: number } 保持原形状。 */
+export async function getUnreadCount() {
+  const res: any = await get('/system/notification/unreadCount')
+  return { data: Number(res?.data ?? 0) }
+}
+
+/**
+ * 重置演示数据:后端无"重置"接口。仅清空本地 overlay(还原星标/稍后/归档/完成等客户端态)。
+ * 后端真实消息不受影响。保留本地兜底。
+ */
 export function resetNotificationDemoData() {
-  const seed = cloneSeed()
-  writeStore(seed)
-  return Promise.resolve({ data: seed })
+  try {
+    localStorage.removeItem(OVERLAY_KEY)
+  } catch {
+    // 忽略
+  }
+  emitUpdated()
+  return Promise.resolve({ data: null })
 }
 
-export function getUnreadCount() {
-  const unread = readStore().filter((item) => !item.isRead && !item.isArchived).length
-  return Promise.resolve({ data: unread })
-}
+/* ----------------------------- 消息偏好设置(纯本地,后端无接口) ----------------------------- */
 
+/** 偏好读取:后端无任何偏好接口,纯 localStorage 兜底。 */
 export function getNotificationPreferences() {
   return Promise.resolve({ data: readPreferences() })
 }
 
+/** 偏好更新:后端无任何偏好接口,纯 localStorage 兜底。 */
 export function updateNotificationPreferences(data: Partial<NotificationPreferences>) {
   const next = normalizePreferences({ ...readPreferences(), ...data })
   writePreferences(next)
   return Promise.resolve({ data: next })
 }
 
+/** 偏好重置:后端无任何偏好接口,纯 localStorage 兜底。 */
 export function resetNotificationPreferences() {
   const next = clonePreferences()
   writePreferences(next)
   return Promise.resolve({ data: next })
 }
 
-function updateNotification(id: number, updater: (item: NotificationItem) => NotificationItem) {
-  const list = readStore()
-  const index = list.findIndex((item) => item.id === id)
-  if (index >= 0) {
-    list[index] = updater(list[index])
-    writeStore(list)
-  }
-  return Promise.resolve({ data: null })
-}
-
-function batchUpdateNotifications(ids: number[], updater: (item: NotificationItem) => NotificationItem) {
-  const idSet = normalizeIds(ids)
-  if (idSet.size === 0) return Promise.resolve({ data: null })
-  const list = readStore().map((item) => idSet.has(item.id) ? updater(item) : item)
-  writeStore(list)
-  return Promise.resolve({ data: null })
-}
+/* ----------------------------- 工具函数 ----------------------------- */
 
 function normalizeIds(ids: number[]) {
-  return new Set(ids.map((id) => Number(id)).filter((id) => Number.isFinite(id)))
+  return new Set(normalizeIdArray(ids))
+}
+
+function normalizeIdArray(ids: number[]) {
+  return ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
 }
 
 function readPreferences(): NotificationPreferences {

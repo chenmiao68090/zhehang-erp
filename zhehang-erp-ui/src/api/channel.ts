@@ -711,3 +711,106 @@ export const channelCostApi = {
     return list.find(c => c.id === id) || null
   }
 }
+
+// ---------- 同行渠道：后端实体 BizChannelPartner(channel/domain) <-> 视图形状 ----------
+// 后端 /channel-partner/*（BizChannelPartnerController），regions 后端存 JSON 字符串、前端用 string[]。
+// 写请求按白名单 toBackendPartner 构造（后端 FAIL_ON_UNKNOWN_PROPERTIES，整包发送会 400）。
+
+export interface ChannelPartner {
+  id: number
+  code: string
+  name: string
+  type: 'peer' | 'park' | 'agency' | 'business'
+  contactName: string
+  contactPhone: string
+  ownerName: string
+  regions: string[]
+  basePrice: number
+  settleMode: string
+  creditLimit: number
+  receivable: number
+  monthOrders: number
+  monthRevenue: number
+  level: 'A' | 'B' | 'C'
+  status: 'active' | 'watch' | 'paused'
+  remark: string
+}
+
+function adaptPartner (p: RawSupplier): ChannelPartner {
+  return {
+    id: Number(p.id),
+    code: p.partnerNo || '',
+    name: p.name || '',
+    type: (p.partnerType || 'peer') as ChannelPartner['type'],
+    contactName: p.contactName || '',
+    contactPhone: p.contactPhone || '',
+    ownerName: p.ownerName || '',
+    regions: parseRegions(p.regions),
+    basePrice: num(p.basePrice),
+    settleMode: p.settleMode || '单笔结清',
+    creditLimit: num(p.creditLimit),
+    receivable: num(p.receivable),
+    monthOrders: Number(p.monthOrders || 0),
+    monthRevenue: num(p.monthRevenue),
+    level: (p.partnerLevel || 'B') as ChannelPartner['level'],
+    status: (p.status || 'active') as ChannelPartner['status'],
+    remark: p.remark || ''
+  }
+}
+
+/** 视图表单 -> 后端实体白名单（只发后端存在字段，避免 FAIL_ON_UNKNOWN_PROPERTIES 400） */
+function toBackendPartner (data: Partial<ChannelPartner> & { id?: number }) {
+  const body: Record<string, any> = {}
+  if (data.id) body.id = data.id
+  if (data.code !== undefined) body.partnerNo = data.code || undefined
+  if (data.name !== undefined) body.name = data.name
+  if (data.type !== undefined) body.partnerType = data.type
+  if (data.contactName !== undefined) body.contactName = data.contactName
+  if (data.contactPhone !== undefined) body.contactPhone = data.contactPhone
+  if (data.ownerName !== undefined) body.ownerName = data.ownerName
+  if (data.regions !== undefined) body.regions = JSON.stringify(data.regions || [])
+  if (data.basePrice !== undefined) body.basePrice = data.basePrice
+  if (data.settleMode !== undefined) body.settleMode = data.settleMode
+  if (data.creditLimit !== undefined) body.creditLimit = data.creditLimit
+  if (data.receivable !== undefined) body.receivable = data.receivable
+  if (data.monthOrders !== undefined) body.monthOrders = data.monthOrders
+  if (data.monthRevenue !== undefined) body.monthRevenue = data.monthRevenue
+  if (data.level !== undefined) body.partnerLevel = data.level
+  if (data.status !== undefined) body.status = data.status
+  if (data.remark !== undefined) body.remark = data.remark
+  return body
+}
+
+export const channelPartnerApi = {
+  async list (params: { page?: number; pageSize?: number; keyword?: string; type?: string; level?: string; status?: string } = {}): Promise<{ list: ChannelPartner[]; total: number }> {
+    const res = await get('/channel-partner/list', {
+      pageNum: params.page || 1,
+      pageSize: params.pageSize || 100,
+      keyword: params.keyword || undefined,
+      partnerType: params.type || undefined,
+      partnerLevel: params.level || undefined,
+      status: params.status || undefined
+    })
+    const page = toPage<RawSupplier>(unwrap(res))
+    return { list: page.list.map(adaptPartner), total: page.total }
+  },
+  async detail (id: number): Promise<ChannelPartner | null> {
+    const raw = unwrap<RawSupplier | null>(await get(`/channel-partner/${id}`))
+    return raw ? adaptPartner(raw) : null
+  },
+  async create (data: Partial<ChannelPartner>): Promise<number> {
+    return unwrap<number>(await post('/channel-partner', toBackendPartner(data)))
+  },
+  async update (data: Partial<ChannelPartner> & { id: number }): Promise<number> {
+    return unwrap<number>(await put('/channel-partner', toBackendPartner(data)))
+  },
+  /** 状态切换：复用 update 只发 {id,status}（MyBatis-Plus updateById 对 null 字段不更新），避免 query 传参坑 */
+  async changeStatus (id: number, status: string): Promise<{ success: boolean }> {
+    await put('/channel-partner', toBackendPartner({ id, status: status as ChannelPartner['status'] }))
+    return { success: true }
+  },
+  async delete (id: number): Promise<{ success: boolean }> {
+    await del(`/channel-partner/${id}`)
+    return { success: true }
+  }
+}

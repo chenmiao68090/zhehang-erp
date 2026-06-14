@@ -589,9 +589,130 @@ function viewCustomer(item: any) {
   ElMessage.success(`查看客户：${item.customer}`)
 }
 
+// ============== 数据装载工具 ==============
+const SOURCE_TEXT: Record<number, string> = { 1: '网站', 2: '电话', 3: '推荐', 4: '广告' }
+const STATUS_TEXT: Record<number, string> = { 1: '新建', 2: '跟进中', 3: '已转化', 4: '无效' }
+
+/** 计算保护期剩余天数（protectionExpireDate 为 yyyy-MM-dd） */
+function daysUntil(dateStr?: string): number {
+  if (!dateStr) return 0
+  const target = new Date(`${dateStr}T00:00:00`).getTime()
+  const today = new Date(new Date().toDateString()).getTime()
+  return Math.round((target - today) / 86400000)
+}
+
+/** 将剩余天数映射为预警灯：<=1 天红灯，否则黄灯 */
+function warnLevel(daysLeft: number): 'red' | 'yellow' {
+  return daysLeft <= 1 ? 'red' : 'yellow'
+}
+
+/** 将下次跟进时间映射为紧急度：逾期 high / 今天 mid / 其他 low */
+function calcUrgency(nextFollow?: string): 'high' | 'mid' | 'low' {
+  if (!nextFollow) return 'high' // 从未设置/从未跟进，最紧急
+  const d = daysUntil(nextFollow)
+  if (d < 0) return 'high'
+  if (d === 0) return 'mid'
+  return 'low'
+}
+
+function fmtDate(s?: string): string {
+  return s ? s.slice(0, 16).replace('T', ' ') : '-'
+}
+
+/** 个人工作台：转化汇总、我的客户数、今日待跟进、回收预警 */
+async function loadPersonal() {
+  // 转化率汇总（数据范围内：电销看自己 / 主管看部门）
+  try {
+    const res: any = await leadApi.conversionStats()
+    const s = res?.data || {}
+    personal.value.dealCount = Number(s.converted) || 0
+    personal.value.kpi.dealNow = Number(s.converted) || 0
+    personal.value.kpi.followNow = Number(s.converting) || 0
+    personal.value.kpi.conversion = Number(s.conversionRate) || 0
+    // 目标暂无后端配置：以「总线索」为成交目标分母、转化中为跟进目标分母，保证进度条可渲染
+    personal.value.kpi.dealGoal = Number(s.total) || 0
+    personal.value.kpi.followGoal = (Number(s.converting) || 0) + (Number(s.newLeads) || 0)
+  } catch { /* 静默：保持占位 */ }
+
+  // 我的客户数（数据范围内客户总数）
+  try {
+    const res: any = await customerApi.list({ pageNum: 1, pageSize: 1 })
+    personal.value.holding = Number(res?.data?.total) || 0
+    personal.value.kpi.receive = personal.value.holding
+  } catch { /* ignore */ }
+
+  // 今日待跟进列表
+  try {
+    const res: any = await leadApi.todoFollow({ pageNum: 1, pageSize: 20 })
+    const records: any[] = res?.data?.records || []
+    personal.value.todayFollow = Number(res?.data?.total) || 0
+    personal.value.todoCount = Number(res?.data?.total) || 0
+    todayFollowList.value = records.map((r) => ({
+      id: r.id,
+      customer: r.company || r.name,
+      grade: r.customerLevel || 'C',
+      plan: r.lastFollowContent || '待制定跟进计划',
+      lastFollow: fmtDate(r.lastFollowTime),
+      status: r.nextFollowTime && daysUntil(r.nextFollowTime) < 0 ? '逾期' : '待跟进',
+      urgency: calcUrgency(r.nextFollowTime)
+    }))
+  } catch { /* ignore */ }
+
+  // 回收预警列表
+  try {
+    const res: any = await leadApi.recycleWarning({ pageNum: 1, pageSize: 20 })
+    const records: any[] = res?.data?.records || []
+    personal.value.warning = Number(res?.data?.total) || 0
+    warningList.value = records.map((r) => {
+      const daysLeft = daysUntil(r.protectionExpireDate)
+      return {
+        id: r.id,
+        customer: r.company || r.name,
+        level: warnLevel(daysLeft),
+        daysLeft: Math.max(daysLeft, 0)
+      }
+    })
+  } catch { /* ignore */ }
+}
+
+/** 管理层看板：用现有 CRM 接口能拿到的真实聚合（转化汇总 + 商机漏斗 + 客户/线索总数）填充指标卡。
+ * 团队对比 / 个人排行 / 公海池明细 / 渠道转化暂无对应后端接口，保持空表占位。 */
+async function loadManager() {
+  const metrics: any[] = []
+  try {
+    const res: any = await leadApi.conversionStats()
+    const s = res?.data || {}
+    metrics.push(
+      { label: '线索总数', value: Number(s.total) || 0, unit: '', trend: '', delta: '' },
+      { label: '新建线索', value: Number(s.newLeads) || 0, unit: '', trend: '', delta: '' },
+      { label: '跟进中', value: Number(s.converting) || 0, unit: '', trend: '', delta: '' },
+      { label: '已转化', value: Number(s.converted) || 0, unit: '', trend: 'up', delta: '' },
+      { label: '无效线索', value: Number(s.invalid) || 0, unit: '', trend: '', delta: '' },
+      { label: '转化率', value: Number(s.conversionRate) || 0, unit: '%', trend: 'up', delta: '' }
+    )
+  } catch { /* ignore */ }
+
+  // 公海运营指标：用线索阶段分布(真实)填充，其余无对应接口保持占位
+  poolMetrics.value = metrics.slice(0, 5)
+  // 销售效能指标：商机漏斗各阶段数量(真实聚合)
+  try {
+    const res: any = await opportunityApi.funnel()
+    const funnel: any[] = res?.data || []
+    salesMetrics.value = funnel.map((f) => ({
+      label: f.stageName,
+      value: Number(f.count) || 0,
+      unit: '',
+      trend: '',
+      delta: ''
+    }))
+  } catch {
+    salesMetrics.value = metrics // 漏斗取不到时退回转化指标，避免空白
+  }
+}
+
 onMounted(() => {
-  // 预留接入 API：leadApi/customerApi/followApi/opportunityApi
-  void leadApi; void customerApi; void followApi; void opportunityApi
+  loadPersonal()
+  loadManager()
 })
 </script>
 

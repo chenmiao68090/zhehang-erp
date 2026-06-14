@@ -69,7 +69,7 @@
         <div v-for="kpi in strategicKpis" :key="kpi.key" class="strategic-kpi-card">
           <div class="strategic-kpi-header">
             <span class="strategic-kpi-label">{{ kpi.label }}</span>
-            <el-tag :type="kpi.status" size="small">{{ kpi.statusText }}</el-tag>
+            <el-tag :type="kpi.status" size="small" effect="plain">{{ kpi.statusText }}</el-tag>
           </div>
           <div class="strategic-kpi-value">
             <span class="strategic-number">{{ formatNumber(kpi.value) }}</span>
@@ -89,7 +89,10 @@
               </span>
             </div>
             <div class="compare-item">
-              <span class="compare-label">目标达成</span>
+              <span class="compare-label">
+                目标达成
+                <el-tag v-if="kpi.targetExample" size="small" type="info" effect="plain" class="example-tag">示例</el-tag>
+              </span>
               <span class="compare-value">{{ kpi.targetRate.toFixed(0) }}%</span>
             </div>
           </div>
@@ -114,7 +117,10 @@
     <div v-if="dashboardMode === 'operation'" class="operation-view">
       <div class="operation-left">
         <div class="operation-alerts">
-          <h3><el-icon><Bell /></el-icon> 实时告警 <el-badge :value="criticalCount" type="danger" /></h3>
+          <h3>
+            <el-icon><Bell /></el-icon> 实时告警 <el-badge :value="criticalCount" type="danger" />
+            <el-tag size="small" type="info" effect="plain" class="example-tag">示例</el-tag>
+          </h3>
           <div class="alert-list-op">
             <div v-for="alert in alertItems.filter(a => a.level === 'critical' || a.level === 'warning')" :key="alert.id"
               class="alert-item-op" :class="'alert-' + alert.level">
@@ -127,7 +133,10 @@
           </div>
         </div>
         <div class="operation-todo">
-          <h3><el-icon><List /></el-icon> 待办事项</h3>
+          <h3>
+            <el-icon><List /></el-icon> 待办事项
+            <el-tag size="small" type="info" effect="plain" class="example-tag">示例</el-tag>
+          </h3>
           <div class="todo-list">
             <div v-for="(todo, idx) in todoItems" :key="idx" class="todo-item">
               <el-checkbox :model-value="todo.done" size="small" />
@@ -260,6 +269,9 @@
                 <span class="alert-count critical">紧急 {{ criticalCount }}</span>
                 <span class="alert-count warning">警告 {{ warningCount }}</span>
                 <span class="alert-count info">关注 {{ infoCount }}</span>
+                <el-tooltip content="预警明细暂为示例数据，后端预警明细接口接入后将替换为真实数据" placement="top">
+                  <el-tag size="small" type="info" effect="plain" class="example-tag">示例数据</el-tag>
+                </el-tooltip>
               </div>
               <div class="alert-list">
                 <div
@@ -389,6 +401,7 @@
             <div class="welcome-icon"><el-icon :size="32"><DataAnalysis /></el-icon></div>
             <h4>AI 分析助手</h4>
             <p>您可以用自然语言提问，例如：</p>
+            <p class="ai-welcome-note">AI 分析能力建设中，未配置模型时将返回引导性提示。</p>
             <div class="welcome-suggestions">
               <span class="suggestion-chip" @click="askAi('本月哪个获客渠道ROI最低？')">本月哪个获客渠道ROI最低？</span>
               <span class="suggestion-chip" @click="askAi('分析同行渠道应收风险')">分析同行渠道应收风险</span>
@@ -402,13 +415,6 @@
             </div>
             <div class="msg-bubble">
               <div class="msg-content" v-html="msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content"></div>
-              <div v-if="msg.sql" class="msg-sql">
-                <div class="sql-header" @click="msg.showSql = !msg.showSql">
-                  <el-icon :size="12"><Connection /></el-icon> 查询逻辑
-                  <el-icon :size="10"><ArrowDown v-if="!msg.showSql" /><ArrowUp v-else /></el-icon>
-                </div>
-                <div v-if="msg.showSql" class="sql-code">{{ msg.sql }}</div>
-              </div>
               <span class="msg-time">{{ msg.time }}</span>
             </div>
           </div>
@@ -447,7 +453,7 @@ import {
   Refresh, RefreshLeft, CaretTop, CaretBottom, DataAnalysis, Rank, FullScreen,
   User as UserIcon, Money, TrendCharts, Briefcase, List as ListIcon, Connection,
   Bell, Minus, Monitor, Clock, List, Back,
-  ArrowLeft, ArrowRight, ArrowDown, ArrowUp, Warning, Promotion, Document
+  ArrowLeft, ArrowRight, Warning, Promotion, Document
 } from '@element-plus/icons-vue'
 import {
   getCockpitKpi, getRevenueTrend, getCustomerSource,
@@ -455,6 +461,7 @@ import {
   getAlerts, getAiSummary, getRevenueDrillDown, getRegionDrillDown
 } from '@/api/cockpit'
 import type { CockpitKpi, RecentEvent, AlertData, CustomerSource, SalesRank, RegionDistribution } from '@/api/cockpit'
+import { sendChat } from '@/api/ai'
 
 const { t } = useI18n()
 
@@ -520,6 +527,9 @@ interface AlertItem {
   module: string
 }
 
+// 示例数据：后端 /dashboard/cockpit/alerts 仅返回各类预警的汇总计数（逾期应收/风险客户/到期合同等），
+// 暂无"预警明细列表"接口（标题/描述/等级/偏离度/触发时间/来源模块）。故以下明细为示例，
+// 界面上对该面板标注"示例"，待后端提供明细接口后替换为真实数据。
 const alertItems = ref<AlertItem[]>([
   { id: '1', title: '同行渠道应收超账期', description: '杭企伙伴等渠道客户超过账期仍有未回款订单', level: 'critical', value: 4, threshold: 2, deviation: 100, trend: 'up', triggerTime: '10分钟前', module: '渠道管理' },
   { id: '2', title: '网销ROI低于目标', description: '信息流投放 ROI 低于 3.2，线索成本连续 3 日上升', level: 'critical', value: 2.8, threshold: 3.2, deviation: 13, trend: 'down', triggerTime: '18分钟前', module: '营销获客' },
@@ -558,13 +568,12 @@ interface AiMessage {
   role: 'user' | 'assistant'
   content: string
   time: string
-  sql?: string
-  showSql?: boolean
 }
 
 const aiMessages = ref<AiMessage[]>([])
 const aiInput = ref('')
 const aiMessagesRef = ref<HTMLDivElement>()
+const aiConversationId = ref('')
 
 function sendAiMessage() {
   const text = aiInput.value.trim()
@@ -572,37 +581,39 @@ function sendAiMessage() {
   askAi(text)
 }
 
+function scrollAiToBottom() {
+  nextTick(() => {
+    if (aiMessagesRef.value) {
+      aiMessagesRef.value.scrollTop = aiMessagesRef.value.scrollHeight
+    }
+  })
+}
+
 async function askAi(question: string) {
   const now = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   aiMessages.value.push({ role: 'user', content: question, time: now })
   aiInput.value = ''
   aiLoading.value = true
+  scrollAiToBottom()
 
-  // 滚动到底部
-  nextTick(() => {
-    if (aiMessagesRef.value) {
-      aiMessagesRef.value.scrollTop = aiMessagesRef.value.scrollHeight
-    }
-  })
+  // 调用真实 AI 接口 /ai/chat；后端不可用或未配置模型时会返回兜底文案
+  let reply = ''
+  try {
+    const res: any = await sendChat({ message: question, conversationId: aiConversationId.value || undefined })
+    reply = res.data?.reply || ''
+    if (res.data?.conversationId) aiConversationId.value = res.data.conversationId
+  } catch {
+    reply = 'AI 分析服务暂时不可用，请稍后再试。'
+  }
 
-  // 模拟AI响应（实际应调用API）
-  await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000))
-
-  const response = generateAiResponse(question)
   aiMessages.value.push({
     role: 'assistant',
-    content: response.content,
-    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-    sql: response.sql,
-    showSql: false
+    content: reply || '（未返回内容）',
+    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   })
 
   aiLoading.value = false
-  nextTick(() => {
-    if (aiMessagesRef.value) {
-      aiMessagesRef.value.scrollTop = aiMessagesRef.value.scrollHeight
-    }
-  })
+  scrollAiToBottom()
 }
 
 function aiQuickAction(action: string) {
@@ -612,35 +623,6 @@ function aiQuickAction(action: string) {
     predict: '请分析当前业务趋势，预测下个季度的关键指标走向'
   }
   askAi(questions[action] || '请分析当前数据')
-}
-
-function generateAiResponse(question: string): { content: string; sql?: string } {
-  if (question.includes('ROI') || question.includes('获客') || question.includes('渠道')) {
-    return {
-      content: `### 获客与渠道分析\n\n本月获客效率分化明显：\n\n- **抖音信息流**：ROI 2.8，低于目标 3.2，主要问题是无效咨询占比上升\n- **百度搜索**：ROI 3.6，工商注册和税务异常关键词转化稳定\n- **同行转介绍**：成交率最高，但应收账期风险上升\n\n**根因分析**：\n1. 网销表单里“公司名称”填写率高，但工商信息自动补全后的有效跟进还不够快\n2. 低客单价线索占比增加，拉低整体 ROI\n3. 同行渠道月结单增加，回款动作没有同步前置\n\n**建议**：把低 ROI 关键词降预算，把高意向线索自动进入电销优先队列；同行渠道新增订单前先校验应收余额和账期。`,
-      sql: `SELECT channel_name, spend_amount, deal_amount,\n  ROUND(deal_amount / NULLIF(spend_amount, 0), 2) AS roi,\n  valid_leads, signed_orders\nFROM marketing_channel_daily\nWHERE stat_month = CURRENT_MONTH\nORDER BY roi ASC`
-    }
-  } else if (question.includes('诊断') || question.includes('异常')) {
-    return {
-      content: `### 智能诊断报告\n\n当前系统检测到以下异常：\n\n**紧急**\n- 同行渠道应收超账期：4 家渠道超过约定账期\n- 网销 ROI 低于目标：信息流渠道 ROI 2.8，连续 3 日低于目标\n\n**警告**\n- 代理记账续费临期：18 户客户 30 天内到期，仍未完成回访\n- 地址资源低库存：西湖区、滨江区低于安全库存\n- 工商注册材料卡点：9 单缺客户材料，存在延期风险\n\n**正常指标**\n- 新增线索量正常，电销跟进响应在可控范围\n- 本月回款完成率 64%，需加速但未失控\n\n**综合评估**：经营主链路没有断点，但“获客 ROI、渠道应收、地址资源、交付材料”四个位置要当天闭环。`,
-      sql: `SELECT alert_type, current_value, threshold_value, owner_dept, owner_user\nFROM business_risk_monitor\nWHERE alert_status = 'open'\nORDER BY alert_level DESC, created_at DESC`
-    }
-  } else if (question.includes('报告')) {
-    return {
-      content: `### 经营分析报告\n\n**报告期间**：${new Date().toLocaleDateString('zh-CN')}\n\n---\n\n**一、核心指标概览**\n- 本月签约额：完成目标的 87%，代理记账和工商注册贡献主要增量\n- 本月回款：完成目标的 64%，同行渠道月结单拖慢回款节奏\n- 新增线索：网销、电销合计增长正常，但信息流 ROI 低于目标\n- 地址资源：热门区域库存偏紧，需提前补充\n\n**二、关键发现**\n1. 线索量不是主要问题，问题集中在有效线索筛选和跟进优先级\n2. 同行渠道成交效率高，但必须绑定额度、账期和冻结规则\n3. 工商信息自动补全可以提高录入效率，应作为线索入库和客户建档的基础能力\n\n**三、改进建议**\n1. **当天处理**：冻结超账期渠道的新单权限，明确付款计划\n2. **本周处理**：把低 ROI 投放渠道调预算，建立线索质量评分\n3. **持续处理**：把地址资源库存预警接到订单创建前置校验\n\n**四、下月展望**\n预计签约额可继续增长，但必须同步提升回款率和交付准时率，否则增长会挤压现金流。`,
-      sql: undefined
-    }
-  } else if (question.includes('趋势') || question.includes('预测')) {
-    return {
-      content: `### 趋势预测分析\n\n基于近 6 个月签约、回款、线索和交付数据，预测如下：\n\n**签约预测（下月）**\n- 乐观场景：增长 12%-15%，前提是工商注册线索继续稳定\n- 基准场景：增长 6%-8%，当前概率最高\n- 保守场景：增长 0%-3%，主要受 ROI 和地址资源影响\n\n**回款预测**\n- 月结同行渠道占比上升会拉长回款周期\n- 若超账期渠道不冻结，新签增长可能无法同步转化为现金流\n\n**关键驱动因素**\n1. 公司名称自动带出工商信息后，线索录入和分配效率会提高\n2. 地址资源库存决定挂靠地址业务承接能力\n3. 代理记账续费率决定稳定现金流底盘\n\n**建议关注指标**\n- 日度：线索成本、有效线索率、首呼响应时长\n- 周度：签约额、回款率、渠道应收余额\n- 月度：续费率、交付准时率、地址资源周转`,
-      sql: `SELECT stat_month, signed_amount, receipt_amount, roi,\n  AVG(signed_amount) OVER (ORDER BY stat_month ROWS 3 PRECEDING) AS signed_ma3\nFROM operation_monthly_metrics\nORDER BY stat_month DESC\nLIMIT 12`
-    }
-  } else {
-    return {
-      content: `### 数据分析结果\n\n针对您的问题“${question}”，分析如下：\n\n当前经营数据提示：\n- 线索量和签约额保持增长，但 ROI 与回款质量需要同步看\n- 同行渠道、地址资源和财税交付之间存在强勾稽关系\n- 客户建档时应优先补全工商信息，后续合同、开票、交付、回款才能顺畅联动\n\n建议优先按“线索来源 -> 客户建档 -> 合同订单 -> 交付任务 -> 回款核销 -> 续费复购”的链路继续下钻。`,
-      sql: undefined
-    }
-  }
 }
 
 // Dashboard mode switch
@@ -660,18 +642,22 @@ function onModeChange(mode: DashboardMode) {
 }
 
 // Strategic mode KPI computed
+// 说明：value 与 yoyRate 取自后端真实 KPI；momRate 暂用真实增长率估算；
+// targetRate / status / statusText（目标达成率与达标状态）后端暂无目标配置接口，为示例值，
+// 故界面上对"目标达成"标注"示例"，避免冒充真实达成率。
 const strategicKpis = computed(() => {
   const d = kpiData.value
   if (!d) return []
   return [
-    { key: 'revenue', label: '本月签约额', value: (d.totalRevenue / 10000).toFixed(0), unit: '万元', yoyRate: d.revenueGrowthRate, momRate: d.receiptGrowthRate * 0.8, targetRate: 87, status: 'warning' as const, statusText: '接近目标' },
-    { key: 'customers', label: '服务客户数', value: d.totalCustomers, unit: '家', yoyRate: d.customerGrowthRate, momRate: d.newCustomerGrowthRate, targetRate: 102, status: 'success' as const, statusText: '已达标' },
-    { key: 'receipt', label: '本月回款', value: (d.monthReceipt / 10000).toFixed(0), unit: '万元', yoyRate: d.receiptGrowthRate, momRate: d.receiptGrowthRate * 1.1, targetRate: 73, status: 'danger' as const, statusText: '需关注' },
-    { key: 'contracts', label: '待签订单', value: d.pendingContracts, unit: '份', yoyRate: d.pendingContractsRate, momRate: d.pendingContractsRate * 0.6, targetRate: 95, status: 'success' as const, statusText: '正常' }
+    { key: 'revenue', label: '本月签约额', value: (d.totalRevenue / 10000).toFixed(0), unit: '万元', yoyRate: d.revenueGrowthRate, momRate: d.receiptGrowthRate * 0.8, targetRate: 87, status: 'warning' as const, statusText: '接近目标', targetExample: true },
+    { key: 'customers', label: '服务客户数', value: d.totalCustomers, unit: '家', yoyRate: d.customerGrowthRate, momRate: d.newCustomerGrowthRate, targetRate: 102, status: 'success' as const, statusText: '已达标', targetExample: true },
+    { key: 'receipt', label: '本月回款', value: (d.monthReceipt / 10000).toFixed(0), unit: '万元', yoyRate: d.receiptGrowthRate, momRate: d.receiptGrowthRate * 1.1, targetRate: 73, status: 'danger' as const, statusText: '需关注', targetExample: true },
+    { key: 'contracts', label: '待签订单', value: d.pendingContracts, unit: '份', yoyRate: d.pendingContractsRate, momRate: d.pendingContractsRate * 0.6, targetRate: 95, status: 'success' as const, statusText: '正常', targetExample: true }
   ]
 })
 
 // Operation mode todo items
+// 示例数据：驾驶舱暂未接入待办/工作流接口，界面已对该区块标注"示例"。
 const todoItems = ref([
   { text: '冻结超账期同行渠道新增订单权限', done: false, priority: 'high' as const },
   { text: '复盘抖音信息流低 ROI 投放计划', done: false, priority: 'high' as const },
@@ -1603,6 +1589,14 @@ onUnmounted(() => {
   .welcome-icon { color: #F26522; margin-bottom: 12px; }
   h4 { color: #e2e8f0; font-size: 16px; margin: 0 0 8px; }
   p { color: #64748b; font-size: 13px; margin: 0 0 16px; }
+  .ai-welcome-note { color: #F59E0B; font-size: 12px; margin: -8px 0 14px; }
+}
+
+// 示例数据标签（用于标注尚未接入真实接口的局部区块）
+.example-tag {
+  margin-left: 8px;
+  vertical-align: middle;
+  font-weight: 400;
 }
 
 .welcome-suggestions {
@@ -1816,6 +1810,14 @@ onUnmounted(() => {
 .compare-label {
   font-size: 11px;
   color: #64748b;
+  white-space: nowrap;
+  .example-tag {
+    margin-left: 4px;
+    height: 16px;
+    padding: 0 4px;
+    line-height: 14px;
+    font-size: 10px;
+  }
 }
 .compare-value {
   font-size: 14px;

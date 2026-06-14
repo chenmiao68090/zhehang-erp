@@ -79,6 +79,19 @@
       </div>
     </section>
 
+    <!-- 合同到期预警(吸收原"劳动合同管理"页):在职员工中合同已过期 / 90 天内到期统计 -->
+    <el-alert
+      v-if="contractAlert.expired || contractAlert.expiring"
+      type="warning"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 16px"
+    >
+      <template #title>
+        劳动合同提醒:{{ contractAlert.expired }} 人合同已过期、{{ contractAlert.expiring }} 人 90 天内到期,请及时续签。
+      </template>
+    </el-alert>
+
     <!-- 数据表格 -->
     <el-table :data="tableData" v-loading="loading" stripe border @row-click="handleRowClick">
       <el-table-column prop="empCode" :label="$t('org.empCode')" width="120" />
@@ -449,6 +462,8 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
+// 合同到期预警汇总(吸收原"劳动合同管理"页),独立于列表分页
+const contractAlert = ref({ expiring: 0, expired: 0 })
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
@@ -1104,6 +1119,26 @@ const loadData = async () => {
   }
 }
 
+// 合同到期预警:独立全量统计在职员工合同到期情况(不随列表分页),吸收原"劳动合同管理"页核心价值
+const loadContractAlert = async () => {
+  try {
+    const res: any = await employeeApi.list({ pageNum: 1, pageSize: 500 })
+    const rows: any[] = res?.data?.records || []
+    const now = Date.now()
+    let expiring = 0
+    let expired = 0
+    rows.forEach((e) => {
+      if (e.status === 3 || !e.contractEnd) return  // 离职 / 未登记合同跳过
+      const end = new Date(String(e.contractEnd).slice(0, 10)).getTime()
+      if (Number.isNaN(end)) return
+      const days = Math.floor((end - now) / 86400000)
+      if (days < 0) expired++
+      else if (days <= 90) expiring++
+    })
+    contractAlert.value = { expiring, expired }
+  } catch (e) { /* ignore */ }
+}
+
 const loadDeptTree = async () => {
   try {
     const res = await deptApi.tree()
@@ -1186,6 +1221,7 @@ const submitForm = async () => {
 
 onMounted(() => {
   loadData()
+  loadContractAlert()
   loadDeptTree()
   loadPostList()
 })

@@ -263,7 +263,7 @@
           <div class="stat-card s-blue">
             <div class="sc-label">本月已续</div>
             <div class="sc-value">{{ stats.monthRenewed }}<span class="unit">个</span></div>
-            <div class="sc-foot">完成度 {{ Math.round(stats.monthRenewed / stats.monthDue * 100) }}%</div>
+            <div class="sc-foot">完成度 {{ stats.monthDue ? Math.round(stats.monthRenewed / stats.monthDue * 100) : 0 }}%</div>
           </div>
         </section>
 
@@ -448,10 +448,8 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Plus } from '@element-plus/icons-vue'
 import { serviceOrderApi, type ServiceOrder } from '@/api/crm'
 
-// 接口存在但当前使用 Mock 数据保证页面可独立演示
-void serviceOrderApi
-
 const activeTab = ref('warning')
+const loading = ref(false)
 
 // ====== 基础选项 ======
 const serviceTypes: string[] = []
@@ -475,53 +473,58 @@ const dateAdd = (days: number) => {
   return d.toISOString().slice(0, 10)
 }
 
-// ====== Mock：服务订单（30 条，覆盖各状态/类型）======
-type MockOrder = ServiceOrder & { daysLeft: number }
-const orderList = ref<MockOrder[]>([])
+// ====== 服务订单（真实后端数据）======
+// daysLeft 由 endDate 与今天的差值计算得出(后端无该字段)
+type OrderRow = ServiceOrder & { daysLeft: number }
+const orderList = ref<OrderRow[]>([])
 
-function buildOrders(): MockOrder[] {
-  return []
+// 计算距今剩余天数
+function diffDays(endDate?: string): number {
+  if (!endDate) return 9999
+  const end = new Date(endDate + 'T00:00:00')
+  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  return Math.round((end.getTime() - base.getTime()) / 86400000)
 }
 
-function pickStatus(daysLeft: number): ServiceOrder['status'] {
-  if (daysLeft <= 7) return 'expiring'
-  if (daysLeft <= 30) return 'expiring'
-  return 'active'
+// 后端 status 为 Integer(0正常 1已到期 2续费中 3已续费),统一映射为前端字符串状态
+function mapStatus(raw: ServiceOrder['status'] | number | undefined, daysLeft: number): ServiceOrder['status'] {
+  // 已经是字符串(后端若直接返回字符串则透传)
+  if (typeof raw === 'string') return raw
+  switch (raw) {
+    case 1: return 'expired'
+    case 2: return 'expiring'
+    case 3: return 'renewed'
+    case 0:
+    default:
+      // 正常状态:按剩余天数细分为"即将到期/服务中",已过期归为已到期
+      if (daysLeft < 0) return 'expired'
+      if (daysLeft <= 30) return 'expiring'
+      return 'active'
+  }
 }
-function pickRenewal(daysLeft: number): ServiceOrder['renewalStatus'] {
-  if (daysLeft <= 1) return 'pending'
-  if (daysLeft <= 7) return 'negotiating'
-  if (daysLeft <= 15) return 'negotiating'
-  return 'pending'
-}
-function makeOrder(
-  id: number,
-  startOffset: number,
-  endOffset: number,
-  status: ServiceOrder['status'],
-  renewal: ServiceOrder['renewalStatus']
-): MockOrder {
-  const sType = serviceTypes[id % serviceTypes.length]
-  const monthly = [580, 880, 1280, 1680, 2380, 3680, 5680][id % 7]
-  const months = 12
+
+// 把后端原始记录规整成页面使用的行结构
+function normalizeOrder(o: ServiceOrder): OrderRow {
+  const daysLeft = diffDays(o.endDate)
   return {
-    id,
-    customerId: id,
-    customerName: customerOptions[id % customerOptions.length] + (id > 8 ? `（${id}）` : ''),
-    serviceType: sType,
-    contractNo: `FS-${2025}-${String(id).padStart(4, '0')}`,
-    startDate: dateAdd(startOffset),
-    endDate: dateAdd(endOffset),
-    amount: monthly,
-    totalAmount: monthly * months,
-    status,
-    renewalStatus: renewal,
-    providerType: 'self',
-    handlerId: id,
-    handlerName: handlers[id % handlers.length],
-    remark: '',
-    createTime: dateAdd(startOffset),
-    daysLeft: endOffset
+    ...o,
+    daysLeft,
+    status: mapStatus(o.status, daysLeft)
+  }
+}
+
+// 拉取服务订单列表(后端分页,这里取较大 pageSize 以便前端做预警/统计聚合)
+async function loadOrders() {
+  loading.value = true
+  try {
+    const res = await serviceOrderApi.list({ pageNum: 1, pageSize: 500 })
+    const records = res.data?.records ?? []
+    orderList.value = records.map(normalizeOrder)
+  } catch {
+    orderList.value = []
+  } finally {
+    loading.value = false
+    applyOrderFilter()
   }
 }
 
@@ -549,7 +552,7 @@ const orderFilter = reactive({
   status: '',
   dateRange: [] as string[]
 })
-const orderTable = ref<MockOrder[]>([])
+const orderTable = ref<OrderRow[]>([])
 function applyOrderFilter() {
   orderTable.value = orderList.value.filter(o => {
     if (orderFilter.customerName && !o.customerName.includes(orderFilter.customerName)) return false
@@ -604,10 +607,10 @@ const renewalTagType = (s?: string): 'info' | 'warning' | 'success' | 'danger' =
 }
 
 // ====== 操作（Mock）======
-function contactCustomer(row: MockOrder) {
+function contactCustomer(row: OrderRow) {
   ElMessage.success(`已发起联系：${row.customerName}`)
 }
-function updateRenewalStatus(row: MockOrder) {
+function updateRenewalStatus(row: OrderRow) {
   ElMessageBox.prompt('请选择新的续费状态（pending/negotiating/confirmed/lost）', '更新续费状态', {
     inputValue: row.renewalStatus
   }).then(({ value }) => {
@@ -615,13 +618,13 @@ function updateRenewalStatus(row: MockOrder) {
     ElMessage.success('已更新')
   }).catch(() => {})
 }
-function createRenewalOrder(row: MockOrder) {
+function createRenewalOrder(row: OrderRow) {
   ElMessageBox.confirm(`为「${row.customerName}」创建续费单？`, '提示', { type: 'success' })
     .then(() => ElMessage.success('续费单已创建'))
     .catch(() => {})
 }
-function renewOrder(row: MockOrder) { createRenewalOrder(row) }
-function terminateOrder(row: MockOrder) {
+function renewOrder(row: OrderRow) { createRenewalOrder(row) }
+function terminateOrder(row: OrderRow) {
   ElMessageBox.confirm(`确定终止「${row.customerName}」的服务？`, '提示', { type: 'warning' })
     .then(() => {
       row.status = 'terminated'
@@ -651,7 +654,7 @@ const orderRules: FormRules = {
   startDate: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
   endDate: [{ required: true, message: '请选择到期日期', trigger: 'change' }]
 }
-function openOrderDialog(row?: MockOrder) {
+function openOrderDialog(row?: OrderRow) {
   orderDialog.visible = true
   if (row) {
     orderDialog.id = row.id
@@ -724,11 +727,20 @@ async function submitPlan() {
 }
 
 // ====== 续费统计 ======
-const stats = reactive({
-  renewalRate: 75,
-  lossRate: 18,
-  monthDue: 28,
-  monthRenewed: 21
+// 续费统计:基于真实服务订单(orderList)聚合,不再写死
+const stats = computed(() => {
+  const now = new Date()
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const monthOrders = orderList.value.filter(o => (o.endDate || '').startsWith(ym))
+  const renewedTotal = orderList.value.filter(o => o.status === 'renewed' || o.renewalStatus === 'confirmed').length
+  const lost = orderList.value.filter(o => o.renewalStatus === 'lost').length
+  const denom = renewedTotal + lost
+  return {
+    renewalRate: denom ? Math.round((renewedTotal / denom) * 100) : 0,
+    lossRate: denom ? Math.round((lost / denom) * 100) : 0,
+    monthDue: monthOrders.length,
+    monthRenewed: monthOrders.filter(o => o.status === 'renewed' || o.renewalStatus === 'confirmed').length
+  }
 })
 
 interface TrendItem { month: string; due: number; renewed: number; rate: number; newAmount: number }
@@ -764,8 +776,7 @@ const pieGradient = computed(() => {
 })
 
 onMounted(() => {
-  orderList.value = buildOrders()
-  applyOrderFilter()
+  loadOrders()
 })
 </script>
 

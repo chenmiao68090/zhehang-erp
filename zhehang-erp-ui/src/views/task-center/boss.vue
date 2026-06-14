@@ -126,6 +126,7 @@
 
     <!-- 进度汇报 Dialog -->
     <el-dialog v-model="dlg.report" title="向老板汇报进度" width="540px">
+      <el-alert title="进度汇报为本地暂存,刷新后重置(后端汇报接口规划中)" type="info" show-icon :closable="false" style="margin-bottom: 12px" />
       <el-form :model="reportForm" label-width="90px">
         <el-form-item label="任务">
           <span class="readonly-text">{{ current?.taskName }}</span>

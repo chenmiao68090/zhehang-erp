@@ -309,11 +309,13 @@ export const collisionApi = {
 
 // ===== 服务订单 =====
 export const serviceOrderApi = {
-  list: (params: { customerId?: number; status?: string; page?: number; size?: number }) => get<{ list: ServiceOrder[]; total: number }>('/crm/service-order/list', params),
+  // 后端 list 参数为 pageNum/pageSize/customerId/serviceType/status(Integer:0正常 1已到期 2续费中 3已续费),返回 IPage(records/total)
+  list: (params: { customerId?: number; serviceType?: string; status?: number; pageNum?: number; pageSize?: number }) => get<{ records: ServiceOrder[]; total: number }>('/crm/service-order/list', params),
   create: (data: Partial<ServiceOrder>) => post('/crm/service-order', data),
   update: (data: Partial<ServiceOrder>) => put('/crm/service-order', data),
   remove: (id: number) => del(`/crm/service-order/${id}`),
-  getExpiringList: (params: { days: number; page?: number; size?: number }) => get<{ list: ServiceOrder[]; total: number }>('/crm/service-order/expiring', params),
+  // 后端 expiring 仅接收 days,直接返回 List(非分页)
+  getExpiringList: (params: { days: number }) => get<ServiceOrder[]>('/crm/service-order/expiring', params),
   triggerRemind: () => post('/crm/service-order/remind')
 }
 

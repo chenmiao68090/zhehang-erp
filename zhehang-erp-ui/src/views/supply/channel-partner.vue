@@ -262,9 +262,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import BusinessDetailDrawer from '@/components/common/BusinessDetailDrawer.vue'
+import { channelPartnerApi } from '@/api/channel'
 
 type ChannelStatus = 'active' | 'watch' | 'paused'
 type ChannelType = 'peer' | 'park' | 'agency' | 'business'
@@ -300,43 +301,20 @@ interface ChannelPartner {
 
 const regionOptions = ['上城区', '拱墅区', '西湖区', '滨江区', '萧山区', '余杭区', '临平区', '钱塘区']
 
-const partners = ref<ChannelPartner[]>([
-  {
-    id: 1, code: 'CH24001', name: '杭州企服同行联盟', type: 'peer', contactName: '陈经理', contactPhone: '186****2301',
-    ownerName: '林晓彤', regions: ['上城区', '拱墅区', '西湖区'], basePrice: 3600, settleMode: '月结 30 天',
-    creditLimit: 80000, receivable: 52000, monthOrders: 18, monthRevenue: 68400, level: 'A', status: 'active',
-    remark: '主做同行转介绍，价格敏感但订单稳定。低于协议价需销售主管确认。',
-    orders: [
-      { orderNo: 'QD20260601', district: '上城区', customer: '杭州某科技有限公司', amount: 3800, status: '已交付' },
-      { orderNo: 'QD20260606', district: '拱墅区', customer: '杭州某商贸有限公司', amount: 3600, status: '交付中' }
-    ]
-  },
-  {
-    id: 2, code: 'CH24002', name: '浙北园区招商服务部', type: 'park', contactName: '周总', contactPhone: '189****7821',
-    ownerName: '李承宇', regions: ['临平区', '余杭区', '钱塘区'], basePrice: 3200, settleMode: '单笔结清',
-    creditLimit: 30000, receivable: 6800, monthOrders: 9, monthRevenue: 30200, level: 'B', status: 'active',
-    remark: '园区资源较强，适合批量客群，注意合同附件和实际地址一致性。',
-    orders: [
-      { orderNo: 'QD20260608', district: '临平区', customer: '杭州某咨询有限公司', amount: 3300, status: '已交付' }
-    ]
-  },
-  {
-    id: 3, code: 'CH24003', name: '绍兴财税代理合作社', type: 'agency', contactName: '王会计', contactPhone: '177****9110',
-    ownerName: '陈雨桐', regions: ['滨江区', '萧山区'], basePrice: 3900, settleMode: '月结 15 天',
-    creditLimit: 50000, receivable: 45500, monthOrders: 11, monthRevenue: 42900, level: 'B', status: 'watch',
-    remark: '应收接近额度，继续新增订单前需要先回款或老板审批。',
-    orders: [
-      { orderNo: 'QD20260603', district: '滨江区', customer: '绍兴某网络科技有限公司', amount: 4100, status: '待回款' }
-    ]
-  },
-  {
-    id: 4, code: 'CH24004', name: '宁波企创商务咨询', type: 'business', contactName: '沈经理', contactPhone: '180****3307',
-    ownerName: '林晓彤', regions: ['钱塘区', '萧山区'], basePrice: 3500, settleMode: '预付',
-    creditLimit: 0, receivable: 0, monthOrders: 4, monthRevenue: 14800, level: 'C', status: 'paused',
-    remark: '资料提交不稳定，暂停账期，只接受预付。',
-    orders: []
+const partners = ref<ChannelPartner[]>([])
+const loading = ref(false)
+
+// 真后端 /channel-partner/list。近期开单(orders)后端暂无对应数据,统一置空(详情页该区显示空表)
+async function load () {
+  loading.value = true
+  try {
+    const { list } = await channelPartnerApi.list({ page: 1, pageSize: 200 })
+    partners.value = list.map(p => ({ ...p, orders: [] })) as ChannelPartner[]
+  } finally {
+    loading.value = false
   }
-])
+}
+onMounted(load)
 
 const query = reactive({ keyword: '', type: '', level: '', status: '' })
 const formVisible = ref(false)
@@ -402,28 +380,20 @@ function openEdit (row: ChannelPartner) {
   Object.assign(form, { ...row, regions: [...row.regions] })
   formVisible.value = true
 }
-function submitForm () {
+async function submitForm () {
   if (!form.name) { ElMessage.warning('请填写渠道名称'); return }
   if (!form.regions.length) { ElMessage.warning('请选择可售区域'); return }
-  if (form.id) {
-    const idx = partners.value.findIndex(p => p.id === form.id)
-    if (idx >= 0) partners.value[idx] = { ...partners.value[idx], ...form, regions: [...form.regions] }
-    ElMessage.success('已更新同行渠道')
-  } else {
-    const id = Math.max(...partners.value.map(p => p.id), 0) + 1
-    partners.value.unshift({
-      ...form,
-      id,
-      code: `CH${String(24000 + id).padStart(5, '0')}`,
-      receivable: 0,
-      monthOrders: 0,
-      monthRevenue: 0,
-      status: 'active',
-      orders: []
-    } as ChannelPartner)
-    ElMessage.success('已新增同行渠道')
-  }
-  formVisible.value = false
+  try {
+    if (form.id) {
+      await channelPartnerApi.update({ ...form, id: form.id })
+      ElMessage.success('已更新同行渠道')
+    } else {
+      await channelPartnerApi.create({ ...form })
+      ElMessage.success('已新增同行渠道')
+    }
+    formVisible.value = false
+    await load()
+  } catch { /* 拦截器已统一提示 */ }
 }
 function openDetail (row: ChannelPartner) {
   detail.value = row
@@ -431,8 +401,9 @@ function openDetail (row: ChannelPartner) {
 }
 async function changeStatus (row: ChannelPartner, status: ChannelStatus) {
   await ElMessageBox.confirm(`确定${status === 'active' ? '恢复' : '暂停'}「${row.name}」?`, '提示', { type: 'warning' })
-  row.status = status
+  await channelPartnerApi.changeStatus(row.id, status)
   ElMessage.success('操作成功')
+  await load()
 }
 </script>
 

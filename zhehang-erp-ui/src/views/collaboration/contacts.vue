@@ -34,16 +34,11 @@
     <section class="search-bar">
       <el-input
         v-model="search"
-        placeholder="搜索姓名、岗位、手机号或邮箱"
+        placeholder="搜索姓名、岗位、手机号、邮箱或工号"
         :prefix-icon="Search"
         clearable
         size="large"
       />
-      <div class="filter-group">
-        <el-button :icon="Filter">筛选</el-button>
-        <el-button :icon="Download">导出</el-button>
-        <el-button type="primary" :icon="UserFilled">新增联系人</el-button>
-      </div>
     </section>
 
     <!-- 主体工作区 -->
@@ -61,16 +56,16 @@
         </div>
       </div>
 
-      <div class="contact-workspace">
+      <div class="contact-workspace" v-loading="loading">
         <!-- 左侧：组织树 -->
         <aside class="org-tree">
           <div class="tree-head">
             <span class="tree-title">浙杭集团</span>
-            <span class="tree-sub">8 部门 · 142 人</span>
+            <span class="tree-sub">{{ deptCount }} 部门 · {{ members.length }} 人</span>
           </div>
           <el-tree
             :data="treeData"
-            :default-expanded-keys="['root', 'sales']"
+            :default-expanded-keys="['root']"
             :highlight-current="true"
             node-key="id"
             @node-click="handleNodeClick"
@@ -94,7 +89,7 @@
             <el-radio-group v-model="sortKey" size="small">
               <el-radio-button label="name">姓名排序</el-radio-button>
               <el-radio-button label="post">岗位排序</el-radio-button>
-              <el-radio-button label="entry">入职排序</el-radio-button>
+              <el-radio-button label="entry">工号排序</el-radio-button>
             </el-radio-group>
           </div>
 
@@ -110,19 +105,18 @@
                   </div>
                   <div class="m-post">{{ m.post }}</div>
                 </div>
-                <span class="m-badge" v-if="m.level">{{ m.level }}</span>
+                <span class="m-badge" v-if="m.empCode">{{ m.empCode }}</span>
               </div>
               <div class="card-info">
                 <div class="info-row"><el-icon><Phone /></el-icon> {{ m.phone }}</div>
                 <div class="info-row"><el-icon><Message /></el-icon> {{ m.email }}</div>
                 <div class="info-row"><el-icon><OfficeBuilding /></el-icon> {{ m.dept }}</div>
               </div>
-              <div class="card-actions">
-                <el-button text :icon="ChatDotRound">发消息</el-button>
-                <el-button text :icon="VideoCamera">视频</el-button>
-                <el-button text :icon="Star">收藏</el-button>
+              <div class="card-foot">
+                <el-tag size="small" :type="statusTag(m.statusCode)" effect="plain">{{ statusText(m.statusCode) }}</el-tag>
               </div>
             </div>
+            <el-empty v-if="!filteredMembers.length" description="该部门暂无成员" />
           </div>
 
           <!-- 表格视图 -->
@@ -133,7 +127,7 @@
                   <div class="member-avatar sm" :style="{ background: row.color }">{{ row.avatar }}</div>
                   <div>
                     <div class="m-name">{{ row.name }}</div>
-                    <div class="m-sub">{{ row.englishName }}</div>
+                    <div class="m-sub">{{ row.empCode }}</div>
                   </div>
                 </div>
               </template>
@@ -144,19 +138,9 @@
             <el-table-column prop="email" label="电子邮箱" />
             <el-table-column label="状态" width="120">
               <template #default="{ row }">
-                <el-tag
-                  size="small"
-                  :type="row.status === 'on' ? 'success' : row.status === 'busy' ? 'warning' : 'info'"
-                  effect="plain"
-                >
-                  {{ row.status === 'on' ? '在线' : row.status === 'busy' ? '忙碌' : '离线' }}
+                <el-tag size="small" :type="statusTag(row.statusCode)" effect="plain">
+                  {{ statusText(row.statusCode) }}
                 </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
-              <template #default>
-                <el-button text type="primary">发消息</el-button>
-                <el-button text>详情</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -167,105 +151,124 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import {
-  Search, Filter, Download, UserFilled, Grid, Menu,
-  Phone, Message, OfficeBuilding, ChatDotRound, VideoCamera, Star
-} from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { Search, Grid, Menu, Phone, Message, OfficeBuilding } from '@element-plus/icons-vue'
+import { deptApi, employeeApi } from '@/api/org'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '员工总数', value: '142' },
-  { label: '一级部门', value: '8' },
-  { label: '今日在线', value: '96' },
-  { label: '本月新增', value: '6' }
-]
-
 const search = ref('')
 const view = ref<'card' | 'table'>('card')
 const sortKey = ref('name')
-const activeDept = ref('销售中心')
+const activeDept = ref('全公司')
+const loading = ref(false)
 
-const treeData = [
-  {
-    id: 'root', label: '浙杭集团', count: 142,
-    children: [
-      { id: 'exec', label: '总裁办', count: 6 },
-      {
-        id: 'sales', label: '销售中心', count: 38,
-        children: [
-          { id: 'sales-east', label: '华东事业部', count: 14 },
-          { id: 'sales-south', label: '华南事业部', count: 12 },
-          { id: 'sales-key', label: '大客户部', count: 12 }
-        ]
-      },
-      {
-        id: 'product', label: '产品研发中心', count: 32,
-        children: [
-          { id: 'fe', label: '前端组', count: 9 },
-          { id: 'be', label: '后端组', count: 14 },
-          { id: 'qa', label: '测试组', count: 9 }
-        ]
-      },
-      { id: 'finance', label: '财务部', count: 14 },
-      { id: 'hr', label: '人力资源部', count: 12 },
-      { id: 'resource', label: '渠道资源部', count: 18 },
-      { id: 'market', label: '市场品牌部', count: 14 },
-      { id: 'admin', label: '行政后勤部', count: 8 }
-    ]
-  }
+// 头像底色调色板(按 index 轮换,后端无头像字段)
+const COLORS = [
+  'linear-gradient(135deg,#5B7CFA,#324BB3)',
+  'linear-gradient(135deg,#F26522,#A8401A)',
+  'linear-gradient(135deg,#9C5FB6,#5E3779)',
+  'linear-gradient(135deg,#3CB371,#1F6B45)',
+  'linear-gradient(135deg,#D4AF37,#8B6F1F)',
+  'linear-gradient(135deg,#C44569,#7B2A45)',
+  'linear-gradient(135deg,#1F6BA8,#0F4675)'
 ]
 
-function handleNodeClick(data: any) {
-  if (data.label !== '浙杭集团') activeDept.value = data.label
-  else activeDept.value = '全公司'
-}
+// 员工状态 1在职 2试用 3离职 → 复用卡片小圆点 css(on/busy/off)
+const STATUS_DOT: Record<number, 'on' | 'busy' | 'off'> = { 1: 'on', 2: 'busy', 3: 'off' }
+const STATUS_TEXT: Record<number, string> = { 1: '在职', 2: '试用', 3: '离职' }
+const statusText = (c: number) => STATUS_TEXT[c] || '未知'
+const statusTag = (c: number) => (c === 1 ? 'success' : c === 2 ? 'warning' : 'info')
 
 interface Member {
-  id: string; name: string; englishName: string; avatar: string; color: string;
+  id: string; name: string; empCode: string; avatar: string; color: string;
   post: string; dept: string; phone: string; email: string;
-  status: 'on' | 'busy' | 'off'; level?: string;
+  statusCode: number; status: 'on' | 'busy' | 'off';
 }
 
-const members: Member[] = [
-  { id: 'm1', name: '陈雨桐', englishName: 'Chen Yutong', avatar: '陈', color: 'linear-gradient(135deg,#5B7CFA,#324BB3)',
-    post: '销售总监', dept: '销售中心', phone: '188-0001-0001', email: 'chen.yt@zhehang.com', status: 'on', level: 'M3' },
-  { id: 'm2', name: '李承宇', englishName: 'Li Chengyu', avatar: '李', color: 'linear-gradient(135deg,#F26522,#A8401A)',
-    post: '高级销售经理', dept: '华东事业部', phone: '188-0001-0002', email: 'li.cy@zhehang.com', status: 'on', level: 'M2' },
-  { id: 'm3', name: '王梓豪', englishName: 'Wang Zihao', avatar: '王', color: 'linear-gradient(135deg,#9C5FB6,#5E3779)',
-    post: '客户经理', dept: '大客户部', phone: '188-0001-0003', email: 'wang.zh@zhehang.com', status: 'busy' },
-  { id: 'm4', name: '苏静仪', englishName: 'Su Jingyi', avatar: '苏', color: 'linear-gradient(135deg,#E9967A,#A85F45)',
-    post: '销售助理', dept: '华南事业部', phone: '188-0001-0004', email: 'su.jy@zhehang.com', status: 'on' },
-  { id: 'm5', name: '林晓彤', englishName: 'Lin Xiaotong', avatar: '林', color: 'linear-gradient(135deg,#3CB371,#1F6B45)',
-    post: '渠道经理', dept: '华东事业部', phone: '188-0001-0005', email: 'lin.xt@zhehang.com', status: 'off', level: 'M1' },
-  { id: 'm6', name: '赵宇航', englishName: 'Zhao Yuhang', avatar: '赵', color: 'linear-gradient(135deg,#D4AF37,#8B6F1F)',
-    post: '区域销售总监', dept: '华南事业部', phone: '188-0001-0006', email: 'zhao.yh@zhehang.com', status: 'on', level: 'M3' },
-  { id: 'm7', name: '孙诗涵', englishName: 'Sun Shihan', avatar: '孙', color: 'linear-gradient(135deg,#C44569,#7B2A45)',
-    post: '运营专员', dept: '大客户部', phone: '188-0001-0007', email: 'sun.sh@zhehang.com', status: 'on' },
-  { id: 'm8', name: '周明哲', englishName: 'Zhou Mingzhe', avatar: '周', color: 'linear-gradient(135deg,#1F6BA8,#0F4675)',
-    post: '客户成功', dept: '销售中心', phone: '188-0001-0008', email: 'zhou.mz@zhehang.com', status: 'busy' }
-]
+const members = ref<Member[]>([])
+const treeData = ref<any[]>([])
+
+const deptCount = computed(() => treeData.value[0]?.children?.length || 0)
+
+const metrics = computed(() => {
+  const total = members.value.length
+  const onJob = members.value.filter(m => m.statusCode === 1).length
+  const probation = members.value.filter(m => m.statusCode === 2).length
+  return [
+    { label: '员工总数', value: String(total) },
+    { label: '一级部门', value: String(deptCount.value) },
+    { label: '在职', value: String(onJob) },
+    { label: '试用', value: String(probation) }
+  ]
+})
+
+// 后端部门树 → el-tree 数据;count=该部门(按 deptName 直配)及子部门员工数
+function toTreeNode(dept: any): any {
+  const directCount = members.value.filter(m => m.dept === dept.deptName).length
+  const children = (dept.children || []).map(toTreeNode)
+  const childSum = children.reduce((s: number, c: any) => s + (c.count || 0), 0)
+  return {
+    id: dept.id, label: dept.deptName, count: directCount + childSum,
+    children: children.length ? children : undefined
+  }
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    // 员工:真后端 /org/employee/list(分页拉大页),拦截器返回完整 R 包体 → res.data.records
+    const empRes: any = await employeeApi.list({ pageNum: 1, pageSize: 500 })
+    const rows: any[] = empRes?.data?.records || []
+    members.value = rows.map((e, i) => ({
+      id: String(e.id ?? i),
+      name: e.name || '-',
+      empCode: e.empCode || '',
+      avatar: (e.name || '?').charAt(0),
+      color: COLORS[i % COLORS.length],
+      post: e.postName || '-',
+      dept: e.deptName || '未分配',
+      phone: e.phone || '-',
+      email: e.email || '-',
+      statusCode: e.status,
+      status: STATUS_DOT[e.status] || 'off'
+    }))
+    // 部门树:真后端 /org/dept/tree(res.data)
+    const deptRes: any = await deptApi.tree()
+    const depts: any[] = deptRes?.data || []
+    treeData.value = [{ id: 'root', label: '浙杭集团', count: members.value.length, children: depts.map(toTreeNode) }]
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleNodeClick(data: any) {
+  activeDept.value = data.label === '浙杭集团' ? '全公司' : data.label
+}
 
 const filteredMembers = computed(() => {
-  let list = members
+  let list = members.value
+  if (activeDept.value && activeDept.value !== '全公司') {
+    list = list.filter(m => m.dept === activeDept.value)
+  }
   if (search.value) {
+    const kw = search.value
     list = list.filter(m =>
-      m.name.includes(search.value) ||
-      m.post.includes(search.value) ||
-      m.phone.includes(search.value) ||
-      m.email.includes(search.value)
+      m.name.includes(kw) || m.post.includes(kw) || m.phone.includes(kw) ||
+      m.email.includes(kw) || m.empCode.includes(kw)
     )
   }
   return [...list].sort((a, b) => {
     if (sortKey.value === 'post') return a.post.localeCompare(b.post)
-    if (sortKey.value === 'entry') return a.id.localeCompare(b.id)
+    if (sortKey.value === 'entry') return a.empCode.localeCompare(b.empCode)
     return a.name.localeCompare(b.name)
   })
 })
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>
@@ -282,7 +285,6 @@ const filteredMembers = computed(() => {
   padding: 14px 18px;
 
   :deep(.el-input) { flex: 1; max-width: 480px; }
-  .filter-group { display: flex; gap: 8px; margin-left: auto; }
 }
 
 .view-switch {
@@ -473,7 +475,7 @@ const filteredMembers = computed(() => {
 
   .info-row { display: flex; align-items: center; gap: 6px; }
 }
-.card-actions {
+.card-foot {
   display: flex; gap: 4px;
   padding-top: 10px;
 }
@@ -485,7 +487,6 @@ const filteredMembers = computed(() => {
   .org-tree { max-height: 280px; }
   .search-bar { flex-direction: column; align-items: stretch;
     :deep(.el-input) { max-width: 100%; }
-    .filter-group { margin-left: 0; }
   }
 }
 </style>

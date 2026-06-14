@@ -1,5 +1,6 @@
 <template>
   <div class="private-domain-page">
+    <el-alert title="演示原型" description="本页数据为前端本地演示(localStorage),未接入后端持久化,刷新或换设备后会重置。正式数据请以已落地的真实模块为准。" type="warning" show-icon :closable="false" style="margin-bottom: 16px" />
     <header class="pd-head">
       <div>
         <div class="eyebrow">LEADS · PRIVATE DOMAIN</div>

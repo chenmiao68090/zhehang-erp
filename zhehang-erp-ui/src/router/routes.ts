@@ -74,7 +74,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: 'marketing-stats',
         name: 'MarketingStats',
         component: () => import('@/views/report/marketing-stats.vue'),
-        meta: { title: '营销统计', icon: 'TrendCharts' }
+        meta: { title: '营销统计', icon: 'TrendCharts', hidden: true } /* localStorage 假漏斗,与营销获客真实页重复→隐藏,待接后端 growth 聚合 */
       }
     ]
   },
@@ -152,7 +152,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: 'enterprise-master',
         name: 'EnterpriseMaster',
         component: () => import('@/views/leads/enterprise-master.vue'),
-        meta: { title: '企业主体库', icon: 'OfficeBuilding' }
+        meta: { title: '企业主体库', icon: 'OfficeBuilding', hidden: true } /* localStorage mock,功能被「企业号码查询」(真 /company)覆盖→隐藏 */
       },
       {
         // 真实接线的线索管理(调后端 /crm/lead/*):公海/我的/今天该打谁/回收预警/工商入池
@@ -236,24 +236,28 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/task-center',
     component: Layout,
-    redirect: '/task-center/once',
+    redirect: '/task-center/task',
     meta: { title: '服务交付', icon: 'List', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
-      { path: 'once', name: 'TaskOnce', component: () => import('@/views/task-center/once.vue'), meta: { title: '一次性任务', icon: 'DocumentChecked' } },
-      { path: 'periodic', name: 'TaskPeriodic', component: () => import('@/views/task-center/periodic.vue'), meta: { title: '周期性任务', icon: 'Timer' } },
-      { path: 'department', name: 'TaskDepartment', component: () => import('@/views/task-center/department.vue'), meta: { title: '项目部任务', icon: 'Suitcase' } },
-      { path: 'boss', name: 'TaskBoss', component: () => import('@/views/task-center/boss.vue'), meta: { title: '老板安排任务', icon: 'Star' } },
+      // 任务管理:一次性/周期性/老板安排三类(同表 biz_task 按 A/B/D 前缀)合并为一页三标签,消除重叠菜单
+      { path: 'task', name: 'TaskCenter', component: () => import('@/views/task-center/index.vue'), meta: { title: '任务管理', icon: 'List' } },
       { path: 'handover', name: 'TaskHandover', component: () => import('@/views/task-center/handover.vue'), meta: { title: '客户交接', icon: 'Switch' } },
       { path: 'commission', name: 'TaskCommission', component: () => import('@/views/task-center/commission.vue'), meta: { title: '提成结算', icon: 'Money' } },
       { path: 'sales-performance', name: 'SalesPerformance', component: () => import('@/views/sales/performance.vue'), meta: { title: '销售业绩', icon: 'TrendCharts' } },
-      { path: 'satisfaction', name: 'TaskSatisfaction', component: () => import('@/views/task-center/satisfaction.vue'), meta: { title: '满意度回访', icon: 'Star' } }
+      { path: 'satisfaction', name: 'TaskSatisfaction', component: () => import('@/views/task-center/satisfaction.vue'), meta: { title: '满意度回访', icon: 'Star' } },
+      // 旧菜单合并后的兼容重定向(hidden):一次性/周期/老板/项目部 → 任务管理
+      { path: 'once', redirect: '/task-center/task', meta: { hidden: true } },
+      { path: 'periodic', redirect: '/task-center/task', meta: { hidden: true } },
+      { path: 'boss', redirect: '/task-center/task', meta: { hidden: true } },
+      { path: 'department', redirect: '/task-center/task', meta: { hidden: true } }
     ]
   },
   {
     path: '/business',
     component: Layout,
     redirect: '/business/index',
-    meta: { title: '业务管理', icon: 'Briefcase', roles: ['admin', 'boss', 'manager'] },
+    // 业务管理 index 为写死静态看板,与首页/驾驶舱功能重复且无真实数据→整体隐藏,后续如需可接真实经营聚合接口
+    meta: { title: '业务管理', icon: 'Briefcase', hidden: true, roles: ['admin', 'boss', 'manager'] },
     children: [
       { path: 'index', name: 'BusinessIndex', component: () => import('@/views/business/index.vue'), meta: { title: '业务管理', icon: 'Briefcase' } }
     ]
@@ -277,12 +281,12 @@ export const asyncRoutes: RouteRecordRaw[] = [
     meta: { title: '财务结算', icon: 'Wallet', roles: ['admin', 'boss', 'finance', 'finance_hq'] },
     children: [
       { path: 'journal', name: 'FinJournal', component: () => import('@/views/finance/journal.vue'), meta: { title: '日记账', icon: 'Notebook' } },
-      { path: 'petty-cash', name: 'FinPettyCash', component: () => import('@/views/finance/petty-cash.vue'), meta: { title: '备用金管理', icon: 'Money' } },
-      { path: 'expense', name: 'FinExpense', component: () => import('@/views/finance/expense.vue'), meta: { title: '业务支出管理', icon: 'CreditCard' } },
+      { path: 'petty-cash', name: 'FinPettyCash', component: () => import('@/views/finance/petty-cash.vue'), meta: { title: '备用金管理', icon: 'Money', hidden: true } /* 无后端,写死"待开发"空壳→隐藏 */ },
+      { path: 'expense', name: 'FinExpense', component: () => import('@/views/finance/expense.vue'), meta: { title: '业务支出管理', icon: 'CreditCard', hidden: true } /* 无后端,写死"待开发"空壳→隐藏 */ },
       { path: 'reimburse', name: 'FinReimburse', component: () => import('@/views/finance/reimburse.vue'), meta: { title: '报销管理', icon: 'Tickets' } },
       { path: 'salary', name: 'FinSalary', component: () => import('@/views/finance/salary.vue'), meta: { title: '薪酬管理', icon: 'Coin' } },
-      { path: 'cost', name: 'FinCost', component: () => import('@/views/finance/cost.vue'), meta: { title: '管理成本', icon: 'PieChart' } },
-      { path: 'performance', name: 'FinPerformance', component: () => import('@/views/finance/performance.vue'), meta: { title: '绩效提成', icon: 'TrendCharts' } }
+      { path: 'cost', name: 'FinCost', component: () => import('@/views/finance/cost.vue'), meta: { title: '管理成本', icon: 'PieChart', hidden: true } /* 无后端,写死"待开发"空壳→隐藏 */ },
+      { path: 'performance', name: 'FinPerformance', component: () => import('@/views/finance/performance.vue'), meta: { title: '绩效提成', icon: 'TrendCharts', hidden: true } /* 与服务交付「提成结算」(/commission 完整审批流)重叠;统一以提成结算为唯一入口,本页(连另一套 /sales/commission 表、只读)隐藏避免口径打架 */ }
     ]
   },
   {
@@ -290,21 +294,24 @@ export const asyncRoutes: RouteRecordRaw[] = [
     component: Layout,
     meta: { title: '人力组织', icon: 'Avatar', roles: ['admin', 'boss', 'manager', 'dept_manager', 'hr'] },
     children: [
-      { path: 'structure', name: 'OrgStructure', component: () => import('@/views/org/structure.vue'), meta: { title: '组织架构图' } },
-      { path: 'dept', name: 'OrgDept', component: () => import('@/views/org/dept.vue'), meta: { title: '部门管理' } },
-      { path: 'post', name: 'OrgPost', component: () => import('@/views/org/post.vue'), meta: { title: '岗位管理' } },
-      { path: 'employee', name: 'OrgEmployee', component: () => import('@/views/org/employee.vue'), meta: { title: '员工管理' } },
-      { path: 'recruit', name: 'HrmRecruit', component: () => import('@/views/hrm/recruit.vue'), meta: { title: '招聘管理' } },
-      { path: 'interview', name: 'HrmInterview', component: () => import('@/views/hrm/interview.vue'), meta: { title: '面试管理' } },
-      { path: 'attendance', name: 'HrmAttendance', component: () => import('@/views/hrm/attendance.vue'), meta: { title: '考勤管理' } },
-      { path: 'contract', name: 'HrmContract', component: () => import('@/views/hrm/contract.vue'), meta: { title: '劳动合同管理' } },
-      { path: 'archive', name: 'HrmArchive', component: () => import('@/views/hrm/archive.vue'), meta: { title: '人员档案管理' } }
+      // 人力组织精简为 4 个工作台(原 9 页):组织架构(架构图+部门+岗位三标签)/员工管理(含档案+合同)/招聘管理(内嵌候选人面试)/考勤管理
+      { path: 'organization', name: 'OrgOrganization', component: () => import('@/views/org/organization.vue'), meta: { title: '组织架构', icon: 'OfficeBuilding' } },
+      { path: 'employee', name: 'OrgEmployee', component: () => import('@/views/org/employee.vue'), meta: { title: '员工管理', icon: 'User' } },
+      { path: 'recruit', name: 'HrmRecruit', component: () => import('@/views/hrm/recruit.vue'), meta: { title: '招聘管理', icon: 'Promotion' } },
+      { path: 'attendance', name: 'HrmAttendance', component: () => import('@/views/hrm/attendance.vue'), meta: { title: '考勤管理', icon: 'Calendar' } },
+      // 旧菜单合并后的兼容重定向(hidden,不在菜单显示),保护用户旧书签:架构图/部门/岗位→组织架构;面试→招聘;合同/档案→员工
+      { path: 'structure', redirect: '/hrm/organization', meta: { hidden: true } },
+      { path: 'dept', redirect: '/hrm/organization', meta: { hidden: true } },
+      { path: 'post', redirect: '/hrm/organization', meta: { hidden: true } },
+      { path: 'interview', redirect: '/hrm/recruit', meta: { hidden: true } },
+      { path: 'contract', redirect: '/hrm/employee', meta: { hidden: true } },
+      { path: 'archive', redirect: '/hrm/employee', meta: { hidden: true } }
     ]
   },
   {
     path: '/file',
     component: Layout,
-    meta: { title: '培训中心', icon: 'FolderOpened', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales', 'finance', 'finance_hq', 'hr', 'staff'] },
+    meta: { title: '知识文库', icon: 'Collection', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales', 'finance', 'finance_hq', 'hr', 'staff'] },
     children: [
       { path: 'manager', name: 'FileManager', component: () => import('@/views/file/manager.vue'), meta: { title: '文件管理' } },
       { path: 'kb', name: 'FileKb', component: () => import('@/views/file/kb.vue'), meta: { title: '知识库' } },
@@ -315,7 +322,8 @@ export const asyncRoutes: RouteRecordRaw[] = [
     path: '/call-center',
     component: Layout,
     redirect: '/call-center/monitor',
-    meta: { title: '呼叫中心', icon: 'Phone', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
+    // 呼叫中心 8 页全部为前端内存 mock(刷新即丢)、后端无 call-center 模块→整体隐藏(规划中),待对接真实呼叫中心(如阿里云/腾讯云呼叫中心)后去掉 hidden 即恢复
+    meta: { title: '呼叫中心', icon: 'Phone', hidden: true, roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
       { path: 'monitor', name: 'CallCenterMonitor', component: () => import('@/views/call-center/monitor.vue'), meta: { title: '实时监控', icon: 'Monitor' } },
       { path: 'call-record', name: 'CallCenterRecord', component: () => import('@/views/call-center/call-record.vue'), meta: { title: '通话记录', icon: 'Document' } },
@@ -330,13 +338,13 @@ export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/collaboration',
     component: Layout,
-    redirect: '/collaboration/chat',
+    redirect: '/collaboration/contacts',
     meta: { title: '协作中心', icon: 'ChatLineSquare', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales', 'finance', 'finance_hq', 'hr', 'staff'] },
     children: [
-      { path: 'chat', name: 'CollabChat', component: () => import('@/views/collaboration/chat.vue'), meta: { title: '即时消息', icon: 'ChatDotRound' } },
+      // 通讯录已接真组织/员工数据,设为默认入口。即时消息/视频会议后端能力未就绪→隐藏(规划中);协作文档与「知识文库·文件管理」重复→移除
       { path: 'contacts', name: 'CollabContacts', component: () => import('@/views/collaboration/contacts.vue'), meta: { title: '通讯录', icon: 'Notebook' } },
-      { path: 'meeting', name: 'CollabMeeting', component: () => import('@/views/collaboration/meeting.vue'), meta: { title: '视频会议', icon: 'VideoCameraFilled' } },
-      { path: 'docs', name: 'CollabDocs', component: () => import('@/views/collaboration/docs.vue'), meta: { title: '协作文档', icon: 'Document' } }
+      { path: 'chat', name: 'CollabChat', component: () => import('@/views/collaboration/chat.vue'), meta: { title: '即时消息(规划中)', icon: 'ChatDotRound', hidden: true } },
+      { path: 'meeting', name: 'CollabMeeting', component: () => import('@/views/collaboration/meeting.vue'), meta: { title: '视频会议(规划中)', icon: 'VideoCameraFilled', hidden: true } }
     ]
   },
   {

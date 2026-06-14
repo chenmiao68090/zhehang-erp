@@ -93,25 +93,25 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: 'market-intelligence',
         name: 'MarketIntelligence',
         component: () => import('@/views/leads/market-intelligence.vue'),
-        meta: { title: '拓客情报', icon: 'Aim' }
+        meta: { title: '拓客情报', icon: 'Aim', hidden: true } /* localStorage演示,无后端→隐藏(精简营销获客至真实页);获客情报后端就绪后去hidden恢复 */
       },
       {
         path: 'call-workbench',
         name: 'CallWorkbench',
         component: () => import('@/views/leads/call-workbench.vue'),
-        meta: { title: '电销工作台', icon: 'Phone' }
+        meta: { title: '电销工作台', icon: 'Phone', hidden: true } /* localStorage演示,且与呼叫中心外呼重复→隐藏 */
       },
       {
         path: 'online-leads',
         name: 'OnlineLeads',
         component: () => import('@/views/leads/online-leads.vue'),
-        meta: { title: '网销线索', icon: 'Promotion' }
+        meta: { title: '网销线索', icon: 'Promotion', hidden: true } /* localStorage演示,且与客户中心·线索管理(真)重复→隐藏 */
       },
       {
         path: 'private-domain',
         name: 'PrivateDomain',
         component: () => import('@/views/leads/private-domain.vue'),
-        meta: { title: '私域运营', icon: 'ChatLineRound' }
+        meta: { title: '私域运营', icon: 'ChatLineRound', hidden: true } /* 453KB localStorage演示,独立大功能但全假→隐藏,待私域后端落地 */
       },
       {
         path: 'online-roi',

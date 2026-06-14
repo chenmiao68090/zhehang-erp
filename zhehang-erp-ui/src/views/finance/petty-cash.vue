@@ -20,15 +20,6 @@
       </div>
     </header>
 
-    <el-alert
-      type="info"
-      :closable="false"
-      show-icon
-      title="示例数据，对应后端模块待开发"
-      description="“备用金管理”暂无对应后端接口。以下内容为界面示例，接口就绪后接入真实数据。"
-      class="demo-alert"
-    />
-
     <section class="metric-strip">
       <div class="metric-item" v-for="(m, idx) in metrics" :key="idx">
         <div class="metric-index">0{{ idx + 1 }}</div>
@@ -51,24 +42,29 @@
         :alerts="alerts"
         :actions="actions"
       />
+      <el-empty v-if="!loading && records.length === 0" description="暂无数据" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { pettyCashApi } from '@/api/finance'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '备用金总额', value: '¥126,000' },
-  { label: '已借出', value: '¥48,500' },
-  { label: '已归还', value: '¥31,200' },
-  { label: '待审批', value: '6' }
-]
+// 真实接口:FinPettyCashController /finance/petty-cash/list
+const loading = ref(false)
+const metrics = ref<{ label: string; value: string }[]>([
+  { label: '备用金总额', value: '¥0' },
+  { label: '已借出', value: '¥0' },
+  { label: '已归还', value: '¥0' },
+  { label: '待审批', value: '0' }
+])
 
 const columns = [
   { prop: 'code', label: '单号', width: 120 },
@@ -80,12 +76,7 @@ const columns = [
   { prop: 'owner', label: '当前处理', width: 110 }
 ]
 
-const records = [
-  { code: 'PC-240601', applicant: '沈琳', dept: '销售一部', amount: '¥8,000', purpose: '客户拜访差旅周转', status: '财务复核', owner: '财务经理' },
-  { code: 'PC-240598', applicant: '周琪', dept: '供应链部', amount: '¥12,500', purpose: '临时采购垫付', status: '待归还', owner: '申请人' },
-  { code: 'PC-240586', applicant: '宋佳', dept: '行政部', amount: '¥3,200', purpose: '会议物料采购', status: '已结清', owner: '出纳' },
-  { code: 'PC-240571', applicant: '蒋浩', dept: '实施部', amount: '¥24,800', purpose: '外地项目驻场', status: '逾期预警', owner: '部门负责人' }
-]
+const records = ref<Record<string, string | number>[]>([])
 
 const steps = [
   { title: '申领登记', desc: '申请人提交用途、预算和归还日期', status: 'done' as const },
@@ -105,6 +96,58 @@ const actions = [
   { label: '批量复核', type: 'success' as const, icon: 'approve' as const },
   { label: '导出', type: 'info' as const, icon: 'export' as const }
 ]
+
+function money(val: any): string {
+  const n = Number(val ?? 0)
+  return '¥' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+const STATUS_MAP: Record<string, string> = {
+  applied: '申领登记',
+  confirmed: '部门确认',
+  reviewing: '财务复核',
+  returning: '待归还',
+  settled: '已结清',
+  overdue: '逾期预警'
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    const res: any = await pettyCashApi.list({ pageNum: 1, pageSize: 100 })
+    const list: any[] = res?.data?.records || res?.records || []
+    records.value = list.map((it) => ({
+      code: it.cashNo ?? '-',
+      applicant: it.applicant ?? '-',
+      dept: it.dept ?? '-',
+      amount: money(it.amount),
+      purpose: it.purpose ?? '-',
+      status: STATUS_MAP[it.status] ?? '未知',
+      owner: it.ownerRole ?? '-'
+    }))
+
+    const total = list.reduce((s, it) => s + Number(it.amount ?? 0), 0)
+    const lent = list
+      .filter((it) => it.status !== 'settled')
+      .reduce((s, it) => s + Number(it.amount ?? 0), 0)
+    const returned = list.reduce((s, it) => s + Number(it.returnedAmount ?? 0), 0)
+    const pending = list.filter((it) =>
+      ['applied', 'confirmed', 'reviewing'].includes(it.status)
+    ).length
+    metrics.value = [
+      { label: '备用金总额', value: money(total) },
+      { label: '已借出', value: money(lent) },
+      { label: '已归还', value: money(returned) },
+      { label: '待审批', value: String(pending) }
+    ]
+  } catch (e) {
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>

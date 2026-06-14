@@ -108,7 +108,7 @@ async function loadData() {
   loading.value = true
   try {
     const res: any = await reimburseApi.list({ pageNum: 1, pageSize: 100 })
-    const list: any[] = res?.records || []
+    const list: any[] = res?.data?.records || res?.records || []
     records.value = list.map((it) => ({
       reimburseNo: it.reimburseNo ?? '-',
       title: it.title ?? '-',

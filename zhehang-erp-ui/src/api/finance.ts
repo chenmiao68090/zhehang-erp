@@ -67,3 +67,33 @@ export const receivableApi = {
   aging: (params: any) => get('/finance/receivable/aging', params),
   overdue: () => get('/finance/receivable/overdue')
 }
+
+// 备用金管理（真实后端 FinPettyCashController /finance/petty-cash/*）
+export const pettyCashApi = {
+  list: (params: any) => get('/finance/petty-cash/list', params),
+  detail: (id: number) => get(`/finance/petty-cash/${id}`),
+  add: (data: any) => post('/finance/petty-cash', data),
+  update: (data: any) => put('/finance/petty-cash', data),
+  changeStatus: (id: number, status: string) => put('/finance/petty-cash', { id, status }),
+  remove: (id: number) => del(`/finance/petty-cash/${id}`)
+}
+
+// 业务支出管理（真实后端 FinExpenseController /finance/expense/*）
+export const expenseApi = {
+  list: (params: any) => get('/finance/expense/list', params),
+  detail: (id: number) => get(`/finance/expense/${id}`),
+  add: (data: any) => post('/finance/expense', data),
+  update: (data: any) => put('/finance/expense', data),
+  changeStatus: (id: number, status: string) => put('/finance/expense', { id, status }),
+  remove: (id: number) => del(`/finance/expense/${id}`)
+}
+
+// 管理成本（真实后端 FinCostController /finance/cost/*）
+export const costApi = {
+  list: (params: any) => get('/finance/cost/list', params),
+  detail: (id: number) => get(`/finance/cost/${id}`),
+  add: (data: any) => post('/finance/cost', data),
+  update: (data: any) => put('/finance/cost', data),
+  changeStatus: (id: number, status: string) => put('/finance/cost', { id, status }),
+  remove: (id: number) => del(`/finance/cost/${id}`)
+}

@@ -20,15 +20,6 @@
       </div>
     </header>
 
-    <el-alert
-      type="info"
-      :closable="false"
-      show-icon
-      title="示例数据，对应后端模块待开发"
-      description="“公司管理成本支出”暂无对应后端接口（现有 BizChannelCostController 仅为渠道成本，非管理成本）。以下内容为界面示例，接口就绪后接入真实数据。"
-      class="demo-alert"
-    />
-
     <section class="metric-strip">
       <div class="metric-item" v-for="(m, idx) in metrics" :key="idx">
         <div class="metric-index">0{{ idx + 1 }}</div>
@@ -51,24 +42,29 @@
         :alerts="alerts"
         :actions="actions"
       />
+      <el-empty v-if="!loading && records.length === 0" description="暂无数据" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { costApi } from '@/api/finance'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '本月成本', value: '¥542,800' },
-  { label: '环比增长', value: '+6.4%' },
-  { label: '预算使用', value: '71%' },
-  { label: '超支项', value: '3' }
-]
+// 真实接口:FinCostController /finance/cost/list
+const loading = ref(false)
+const metrics = ref<{ label: string; value: string }[]>([
+  { label: '本月成本', value: '¥0' },
+  { label: '环比增长', value: '--' },
+  { label: '预算使用', value: '--' },
+  { label: '超支项', value: '0' }
+])
 
 const columns = [
   { prop: 'category', label: '成本科目', width: 140 },
@@ -80,12 +76,7 @@ const columns = [
   { prop: 'owner', label: '责任人', width: 100 }
 ]
 
-const records = [
-  { category: '办公租赁', ownerDept: '行政部', amount: '¥168,000', budgetRate: '74%', trend: '+2.1%', status: '正常', owner: '行政经理' },
-  { category: '云服务资源', ownerDept: '技术部', amount: '¥72,600', budgetRate: '86%', trend: '+18.4%', status: '预警', owner: '技术负责人' },
-  { category: '招聘渠道', ownerDept: '人事部', amount: '¥38,200', budgetRate: '93%', trend: '+22.8%', status: '超支风险', owner: 'HRD' },
-  { category: '车辆与差旅', ownerDept: '销售部', amount: '¥96,500', budgetRate: '68%', trend: '-4.5%', status: '正常', owner: '销售总监' }
-]
+const records = ref<Record<string, string | number>[]>([])
 
 const steps = [
   { title: '科目建模', desc: '定义成本科目、归属部门和预算规则', status: 'done' as const },
@@ -105,6 +96,66 @@ const actions = [
   { label: '刷新归集', type: 'info' as const, icon: 'refresh' as const },
   { label: '导出分析', type: 'info' as const, icon: 'export' as const }
 ]
+
+function money(val: any): string {
+  const n = Number(val ?? 0)
+  return '¥' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+const STATUS_MAP: Record<string, string> = {
+  normal: '正常',
+  warning: '预警',
+  over_risk: '超支风险'
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    const res: any = await costApi.list({ pageNum: 1, pageSize: 100 })
+    const list: any[] = res?.data?.records || res?.records || []
+    records.value = list.map((it) => {
+      const amount = Number(it.amount ?? 0)
+      const budgetAmount = Number(it.budgetAmount ?? 0)
+      const lastAmount = Number(it.lastAmount ?? 0)
+      return {
+        category: it.category ?? '-',
+        ownerDept: it.ownerDept ?? '-',
+        amount: money(it.amount),
+        budgetRate: budgetAmount ? Math.round((amount / budgetAmount) * 100) + '%' : '--',
+        trend: lastAmount
+          ? (amount - lastAmount >= 0 ? '+' : '') +
+            (((amount - lastAmount) / lastAmount) * 100).toFixed(0) +
+            '%'
+          : '--',
+        status: STATUS_MAP[it.status] ?? '未知',
+        owner: it.ownerRole ?? '-'
+      }
+    })
+
+    const total = list.reduce((s, it) => s + Number(it.amount ?? 0), 0)
+    const lastTotal = list.reduce((s, it) => s + Number(it.lastAmount ?? 0), 0)
+    const budgetTotal = list.reduce((s, it) => s + Number(it.budgetAmount ?? 0), 0)
+    const ring = lastTotal
+      ? (total - lastTotal >= 0 ? '+' : '') +
+        (((total - lastTotal) / lastTotal) * 100).toFixed(1) +
+        '%'
+      : '--'
+    const budgetRate = budgetTotal > 0 ? Math.round((total / budgetTotal) * 100) + '%' : '--'
+    const overCount = list.filter((it) => it.status === 'over_risk').length
+    metrics.value = [
+      { label: '本月成本', value: money(total) },
+      { label: '环比增长', value: ring },
+      { label: '预算使用', value: budgetRate },
+      { label: '超支项', value: String(overCount) }
+    ]
+  } catch (e) {
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>

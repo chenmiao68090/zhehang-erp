@@ -20,15 +20,6 @@
       </div>
     </header>
 
-    <el-alert
-      type="info"
-      :closable="false"
-      show-icon
-      title="示例数据，对应后端模块待开发"
-      description="“业务支出管理”暂无对应后端接口。以下内容为界面示例，接口就绪后接入真实数据。"
-      class="demo-alert"
-    />
-
     <section class="metric-strip">
       <div class="metric-item" v-for="(m, idx) in metrics" :key="idx">
         <div class="metric-index">0{{ idx + 1 }}</div>
@@ -51,24 +42,29 @@
         :alerts="alerts"
         :actions="actions"
       />
+      <el-empty v-if="!loading && records.length === 0" description="暂无数据" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import ModuleWorkbench from '@/components/common/ModuleWorkbench.vue'
+import { expenseApi } from '@/api/finance'
 
 const currentDate = (() => {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })()
 
-const metrics = [
-  { label: '本月支出', value: '¥386,420' },
-  { label: '待审批', value: '14' },
-  { label: '已通过', value: '52' },
-  { label: '预算占用', value: '68%' }
-]
+// 真实接口:FinExpenseController /finance/expense/list
+const loading = ref(false)
+const metrics = ref<{ label: string; value: string }[]>([
+  { label: '本月支出', value: '¥0' },
+  { label: '待审批', value: '0' },
+  { label: '已通过', value: '0' },
+  { label: '预算占用', value: '--' }
+])
 
 const columns = [
   { prop: 'code', label: '单据号', width: 124 },
@@ -80,12 +76,7 @@ const columns = [
   { prop: 'owner', label: '负责人', width: 100 }
 ]
 
-const records = [
-  { code: 'EX-240621', category: '市场投放', project: '华东线索增长计划', amount: '¥86,000', payDate: '06-06', status: '审批中', owner: '市场总监' },
-  { code: 'EX-240617', category: '项目实施', project: '宁波海纳交付', amount: '¥42,800', payDate: '06-04', status: '待付款', owner: '财务' },
-  { code: 'EX-240606', category: '渠道返点', project: '渠道合作激励', amount: '¥118,500', payDate: '06-10', status: '预算复核', owner: '经营办' },
-  { code: 'EX-240598', category: '行政采购', project: '办公设备更新', amount: '¥19,120', payDate: '06-03', status: '已通过', owner: '行政' }
-]
+const records = ref<Record<string, string | number>[]>([])
 
 const steps = [
   { title: '支出立项', desc: '记录预算科目、项目归属和付款对象', status: 'done' as const },
@@ -105,6 +96,67 @@ const actions = [
   { label: '刷新预算', type: 'info' as const, icon: 'refresh' as const },
   { label: '导出明细', type: 'info' as const, icon: 'export' as const }
 ]
+
+function money(val: any): string {
+  const n = Number(val ?? 0)
+  return '¥' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+const STATUS_MAP: Record<string, string> = {
+  approving: '审批中',
+  budget_review: '预算复核',
+  pending_pay: '待付款',
+  approved: '已通过',
+  paid: '已付款',
+  rejected: '已驳回'
+}
+
+const CATEGORY_MAP: Record<string, string> = {
+  marketing: '市场投放',
+  delivery: '项目实施',
+  rebate: '渠道返点',
+  admin: '行政采购',
+  other: '其他'
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    const res: any = await expenseApi.list({ pageNum: 1, pageSize: 100 })
+    const list: any[] = res?.data?.records || res?.records || []
+    records.value = list.map((it) => ({
+      code: it.expenseNo ?? '-',
+      category: CATEGORY_MAP[it.category] ?? '其他',
+      project: it.project ?? '-',
+      amount: money(it.amount),
+      payDate: it.payDate ?? '-',
+      status: STATUS_MAP[it.status] ?? '未知',
+      owner: it.ownerRole ?? '-'
+    }))
+
+    const total = list.reduce((s, it) => s + Number(it.amount ?? 0), 0)
+    const pending = list.filter((it) =>
+      ['approving', 'budget_review'].includes(it.status)
+    ).length
+    const approved = list.filter((it) =>
+      ['approved', 'paid'].includes(it.status)
+    ).length
+    const budgetTotal = list.reduce((s, it) => s + Number(it.budgetAmount ?? 0), 0)
+    const budgetRate = budgetTotal > 0 ? Math.round((total / budgetTotal) * 100) + '%' : '--'
+    metrics.value = [
+      { label: '本月支出', value: money(total) },
+      { label: '待审批', value: String(pending) },
+      { label: '已通过', value: String(approved) },
+      { label: '预算占用', value: budgetRate }
+    ]
+  } catch (e) {
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>

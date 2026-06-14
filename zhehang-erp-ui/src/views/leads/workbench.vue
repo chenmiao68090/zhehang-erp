@@ -92,13 +92,13 @@
               <span class="small">{{ personal.holdingCap }}</span>
             </div>
             <el-progress
-              :percentage="Math.round((personal.holding / personal.holdingCap) * 100)"
+              :percentage="(personal.holdingCap ? Math.round((personal.holding / personal.holdingCap) * 100) : 0)"
               :stroke-width="6"
               color="#D4AF37"
               :show-text="false"
             />
             <div class="ov-foot">
-              持有率 {{ Math.round((personal.holding / personal.holdingCap) * 100) }}%
+              持有率 {{ (personal.holdingCap ? Math.round((personal.holding / personal.holdingCap) * 100) : 0) }}%
             </div>
           </div>
 
@@ -275,7 +275,7 @@
                   <span class="kpi-val">{{ personal.kpi.dealNow }}/{{ personal.kpi.dealGoal }}</span>
                 </div>
                 <el-progress
-                  :percentage="Math.round((personal.kpi.dealNow / personal.kpi.dealGoal) * 100)"
+                  :percentage="(personal.kpi.dealGoal ? Math.round((personal.kpi.dealNow / personal.kpi.dealGoal) * 100) : 0)"
                   :stroke-width="8"
                   color="#D4AF37"
                 />
@@ -286,7 +286,7 @@
                   <span class="kpi-val">{{ personal.kpi.followNow }}/{{ personal.kpi.followGoal }}</span>
                 </div>
                 <el-progress
-                  :percentage="Math.round((personal.kpi.followNow / personal.kpi.followGoal) * 100)"
+                  :percentage="(personal.kpi.followGoal ? Math.round((personal.kpi.followNow / personal.kpi.followGoal) * 100) : 0)"
                   :stroke-width="8"
                   color="#06B6D4"
                 />

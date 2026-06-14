@@ -252,7 +252,7 @@ const positionLabel = computed(() => {
   if (!role) return '员工'
   return ROLE_LABELS[role] || SYSTEM_ROLES.find(r => r.value === role)?.label || role
 })
-const slogan = '专注每一单，服务每一户。'
+const slogan = '遇到对的人，才可以一起走的更远！'
 const tenureDays = ref<string | number>('--')
 
 const currentDateStr = computed(() => {

@@ -35,7 +35,14 @@ export const constantRoutes: RouteRecordRaw[] = [
   { path: '/leads/service-renewal', redirect: '/customer/service-renewal', meta: { hidden: true } },
   { path: '/leads/pool-admin', redirect: '/customer/pool-admin', meta: { hidden: true } },
   { path: '/leads/collision-manage', redirect: '/customer/collision-manage', meta: { hidden: true } },
-  { path: '/scrm/private-domain', redirect: '/leads/private-domain', meta: { hidden: true } },
+  { path: '/leads/workbench', redirect: '/customer/workbench', meta: { hidden: true } },
+  { path: '/leads/campaign', redirect: '/customer/campaign', meta: { hidden: true } },
+  { path: '/leads/market-intelligence', redirect: '/customer/market-intelligence', meta: { hidden: true } },
+  { path: '/leads/call-workbench', redirect: '/customer/call-workbench', meta: { hidden: true } },
+  { path: '/leads/online-leads', redirect: '/customer/online-leads', meta: { hidden: true } },
+  { path: '/leads/private-domain', redirect: '/customer/private-domain', meta: { hidden: true } },
+  { path: '/leads', redirect: '/customer', meta: { hidden: true } },
+  { path: '/scrm/private-domain', redirect: '/customer/private-domain', meta: { hidden: true } },
   { path: '/leads/online-roi', redirect: '/supply/channel-cost', meta: { hidden: true } },
   { path: '/tax', redirect: '/finance/tax-calendar', meta: { hidden: true } },
   { path: '/tax/calendar', redirect: '/finance/tax-calendar', meta: { hidden: true } },
@@ -73,55 +80,18 @@ export const constantRoutes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/leads',
-    component: Layout,
-    redirect: '/leads/workbench',
-    meta: { title: '营销获客', icon: 'Notebook', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
-    children: [
-      {
-        path: 'workbench',
-        name: 'LeadsWorkbench',
-        component: () => import('@/views/leads/workbench.vue'),
-        meta: { title: '运营工作台', icon: 'Monitor' }
-      },
-      {
-        path: 'market-intelligence',
-        name: 'MarketIntelligence',
-        component: () => import('@/views/leads/market-intelligence.vue'),
-        meta: { title: '拓客情报', icon: 'Aim', hidden: true } /* localStorage演示,无后端→隐藏(精简营销获客至真实页);获客情报后端就绪后去hidden恢复 */
-      },
-      {
-        path: 'call-workbench',
-        name: 'CallWorkbench',
-        component: () => import('@/views/leads/call-workbench.vue'),
-        meta: { title: '电销工作台', icon: 'Phone', hidden: true } /* localStorage演示,且与呼叫中心外呼重复→隐藏 */
-      },
-      {
-        path: 'online-leads',
-        name: 'OnlineLeads',
-        component: () => import('@/views/leads/online-leads.vue'),
-        meta: { title: '网销线索', icon: 'Promotion', hidden: true } /* localStorage演示,且与客户中心·线索管理(真)重复→隐藏 */
-      },
-      {
-        path: 'private-domain',
-        name: 'PrivateDomain',
-        component: () => import('@/views/leads/private-domain.vue'),
-        meta: { title: '私域运营', icon: 'ChatLineRound', hidden: true } /* 453KB localStorage演示,独立大功能但全假→隐藏,待私域后端落地 */
-      },
-      {
-        path: 'campaign',
-        name: 'MktCampaign',
-        component: () => import('@/views/marketing/campaign.vue'),
-        meta: { title: '营销活动', icon: 'Histogram' }
-      }
-    ]
-  },
-  {
     path: '/customer',
     component: Layout,
     redirect: '/customer/lead',
     meta: { title: '客户中心', icon: 'User', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
     children: [
+      {
+        // 运营看板(原"运营工作台"):个人工作台+管理层看板(团队对比/业绩排行/公海运营指标);与"线索管理"分工——看板宏观总览,线索逐条处理
+        path: 'workbench',
+        name: 'LeadsWorkbench',
+        component: () => import('@/views/leads/workbench.vue'),
+        meta: { title: '运营看板', icon: 'Monitor' }
+      },
       {
         // 真实接线的线索管理(调后端 /crm/lead/*):公海/我的/今天该打谁/回收预警/工商入池
         path: 'lead',
@@ -165,6 +135,36 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: 'CollisionManage',
         component: () => import('@/views/leads/collision-manage.vue'),
         meta: { title: '撞单管理', icon: 'Warning' }
+      },
+      {
+        path: 'campaign',
+        name: 'MktCampaign',
+        component: () => import('@/views/marketing/campaign.vue'),
+        meta: { title: '营销活动', icon: 'Histogram' }
+      },
+      {
+        path: 'market-intelligence',
+        name: 'MarketIntelligence',
+        component: () => import('@/views/leads/market-intelligence.vue'),
+        meta: { title: '拓客情报', icon: 'Aim', hidden: true } /* localStorage演示,无后端→隐藏;获客情报后端就绪后去hidden恢复 */
+      },
+      {
+        path: 'call-workbench',
+        name: 'CallWorkbench',
+        component: () => import('@/views/leads/call-workbench.vue'),
+        meta: { title: '电销工作台', icon: 'Phone', hidden: true } /* localStorage演示,且与呼叫中心外呼重复→隐藏 */
+      },
+      {
+        path: 'online-leads',
+        name: 'OnlineLeads',
+        component: () => import('@/views/leads/online-leads.vue'),
+        meta: { title: '网销线索', icon: 'Promotion', hidden: true } /* localStorage演示,且与线索管理(真)重复→隐藏 */
+      },
+      {
+        path: 'private-domain',
+        name: 'PrivateDomain',
+        component: () => import('@/views/leads/private-domain.vue'),
+        meta: { title: '私域运营', icon: 'ChatLineRound', hidden: true } /* 453KB localStorage演示,全假→隐藏,待私域后端落地 */
       }
     ]
   },

@@ -11,8 +11,8 @@
       </div>
       <div class="header-main">
         <h1 class="page-title">
-          <span class="title-cn">运营工作台</span>
-          <span class="title-en">Operation Workbench</span>
+          <span class="title-cn">运营看板</span>
+          <span class="title-en">Operation Dashboard</span>
         </h1>
         <p class="page-desc">数据驱动的运营决策与销售执行中心</p>
       </div>

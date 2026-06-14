@@ -242,7 +242,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
       { path: 'once', redirect: '/task-center/task', meta: { hidden: true } },
       { path: 'periodic', redirect: '/task-center/task', meta: { hidden: true } },
       { path: 'boss', redirect: '/task-center/task', meta: { hidden: true } },
-      { path: 'department', redirect: '/task-center/task', meta: { hidden: true } }
+      { path: 'department', redirect: '/task-center/task?tab=department', meta: { hidden: true } }
     ]
   },
   {

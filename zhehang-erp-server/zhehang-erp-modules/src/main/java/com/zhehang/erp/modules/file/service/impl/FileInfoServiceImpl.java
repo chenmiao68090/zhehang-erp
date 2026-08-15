@@ -221,13 +221,9 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
     @Override
     public IPage<FileInfo> getRecycleBin(Integer pageNum, Integer pageSize) {
-        // Query soft-deleted files using a custom query that includes deleted=1
         Page<FileInfo> pageObj = new Page<>(pageNum, pageSize);
-        LambdaQueryWrapper<FileInfo> wrapper = new LambdaQueryWrapper<>();
-        wrapper.orderByDesc(FileInfo::getUpdateTime);
-        // Note: For recycle bin, need to use baseMapper directly with deleted condition
-        // This would need a custom SQL since @TableLogic filters deleted records by default
-        return page(pageObj, wrapper);
+        // 绕过 @TableLogic 自动追加的 deleted=0，用自定义 SQL 查软删除记录，否则回收站永远为空
+        return baseMapper.selectRecycleBin(pageObj);
     }
 
     @Override

@@ -1,0 +1,33 @@
+
+.yum[data-v-b4a50114] { padding: 16px 18px;
+}
+.yum-head[data-v-b4a50114] { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.yum-title[data-v-b4a50114] { margin: 0; font-size: 20px; font-weight: 600; color: var(--el-text-color-primary);
+}
+.yum-sub[data-v-b4a50114] { margin: 5px 0 0; font-size: 13px; color: var(--el-text-color-secondary);
+}
+.yum-alert[data-v-b4a50114] { margin-bottom: 14px;
+}
+.yum-alert[data-v-b4a50114] .el-alert__description { font-size: 12.5px; line-height: 1.7;
+}
+.yum-toolbar[data-v-b4a50114] { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;
+}
+.yum-search[data-v-b4a50114] { width: 200px;
+}
+.yum-stat[data-v-b4a50114] { font-size: 13px; color: var(--el-text-color-secondary); margin-left: auto;
+}
+.emp-name[data-v-b4a50114] { font-weight: 600; color: var(--el-text-color-primary);
+}
+.yum-sub2[data-v-b4a50114] { font-size: 11.5px; color: var(--el-text-color-secondary); margin-top: 1px;
+}
+.yum-result[data-v-b4a50114] { margin-top: 14px; border-radius: 8px;
+}
+.yum-result .ok[data-v-b4a50114] { color: var(--el-color-success);
+}
+.yum-result .bad[data-v-b4a50114] { color: var(--el-color-danger);
+}
+.yum-errs[data-v-b4a50114] { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--el-color-danger);
+}
+.yum-tip[data-v-b4a50114] { margin: 8px 0 0; font-size: 12px; color: var(--el-text-color-secondary);
+}

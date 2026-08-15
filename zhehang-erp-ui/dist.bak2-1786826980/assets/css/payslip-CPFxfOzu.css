@@ -1,0 +1,53 @@
+
+.payslip[data-v-6087266d] { padding: 4px 2px;
+}
+.ps-head[data-v-6087266d] { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.ps-title[data-v-6087266d] { margin: 0 0 4px; font-size: 18px; font-weight: 600;
+}
+.ps-sub[data-v-6087266d] { margin: 0; color: #909399; font-size: 12px; line-height: 1.6;
+}
+.ps-head-actions[data-v-6087266d] { display: flex; gap: 8px; flex-wrap: wrap;
+}
+.ps-overview[data-v-6087266d] { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;
+}
+.ov-card[data-v-6087266d] { border: 1px solid #ebeef5; border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; transition: all .15s; background: #fff;
+}
+.ov-card[data-v-6087266d]:hover { border-color: #409eff; box-shadow: 0 2px 8px rgba(64,158,255,.12);
+}
+.ov-card.active[data-v-6087266d] { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64,158,255,.15);
+}
+.ov-num[data-v-6087266d] { font-size: 22px; font-weight: 700; line-height: 1.2;
+}
+.ov-lbl[data-v-6087266d] { color: #909399; font-size: 12px; margin-top: 2px;
+}
+.ps-filter[data-v-6087266d] { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px;
+}
+.ps-net[data-v-6087266d] { color: #409eff; font-variant-numeric: tabular-nums;
+}
+.ps-pager[data-v-6087266d] { margin-top: 12px; justify-content: flex-end; display: flex;
+}
+.ps-grid[data-v-6087266d] { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 14px;
+}
+.ps-form[data-v-6087266d] .el-form-item { margin-bottom: 12px;
+}
+.ps-tpl[data-v-6087266d] { font-size: 12px; color: #606266; margin: 6px 0 10px; line-height: 1.6;
+}
+.ps-tpl code[data-v-6087266d] { background: #f5f7fa; padding: 2px 4px; border-radius: 3px;
+}
+.ps-preview[data-v-6087266d] { margin-top: 8px; font-size: 12px; color: #67c23a;
+}
+/* 金额列数字等宽,右对齐更整齐 */
+[data-v-6087266d] .el-table td.el-table__cell { font-variant-numeric: tabular-nums;
+}
+/* 窄屏响应式:统计卡两列、编辑表单单/双列 */
+@media (max-width: 1024px) {
+.ps-grid[data-v-6087266d] { grid-template-columns: repeat(2, 1fr);
+}
+}
+@media (max-width: 768px) {
+.ps-overview[data-v-6087266d] { grid-template-columns: repeat(2, 1fr);
+}
+.ps-grid[data-v-6087266d] { grid-template-columns: 1fr;
+}
+}

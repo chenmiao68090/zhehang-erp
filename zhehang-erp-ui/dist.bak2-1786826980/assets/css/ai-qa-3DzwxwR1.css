@@ -1,0 +1,193 @@
+
+.ai-qa[data-v-d199dee1] {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  background: var(--el-bg-color);
+}
+.qa-main[data-v-d199dee1] {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 0;
+}
+/* 欢迎态 */
+.qa-welcome[data-v-d199dee1] {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-top: 8vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.qa-logo[data-v-d199dee1] {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: conic-gradient(from 180deg, #5b8cff, #9b6bff, #ff7eb3, #ffb36b, #5b8cff);
+  box-shadow: 0 8px 24px rgba(91, 108, 255, 0.25);
+  position: relative;
+}
+.qa-logo[data-v-d199dee1]::after {
+  content: '';
+  position: absolute;
+  inset: 22px;
+  border-radius: 50%;
+  background: var(--el-bg-color);
+}
+.qa-title[data-v-d199dee1] {
+  margin: 18px 0 6px;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.qa-sub[data-v-d199dee1] {
+  margin: 0;
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+}
+.qa-examples[data-v-d199dee1] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 28px;
+  width: 100%;
+  max-width: 460px;
+}
+.qa-ex[data-v-d199dee1] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-blank);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.qa-ex[data-v-d199dee1]:hover {
+  border-color: var(--el-color-primary-light-5);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+/* 对话态 */
+.qa-msgs[data-v-d199dee1] {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.qa-msg[data-v-d199dee1] {
+  display: flex;
+  gap: 12px;
+}
+.qa-msg.user[data-v-d199dee1] {
+  flex-direction: row-reverse;
+}
+.qa-avatar[data-v-d199dee1] {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.qa-avatar.user[data-v-d199dee1] {
+  background: var(--el-color-primary);
+}
+.qa-avatar.ai[data-v-d199dee1] {
+  background: linear-gradient(135deg, #7a6bff, #ff7eb3);
+}
+.qa-bubble[data-v-d199dee1] {
+  max-width: 78%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+.qa-msg.user .qa-bubble[data-v-d199dee1] {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-top-right-radius: 4px;
+}
+.qa-msg.ai .qa-bubble[data-v-d199dee1] {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+  border-top-left-radius: 4px;
+}
+.qa-typing[data-v-d199dee1] {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.qa-typing span[data-v-d199dee1] {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--el-text-color-secondary);
+  animation: qa-bounce-d199dee1 1.2s infinite;
+}
+.qa-typing span[data-v-d199dee1]:nth-child(2) { animation-delay: 0.2s;
+}
+.qa-typing span[data-v-d199dee1]:nth-child(3) { animation-delay: 0.4s;
+}
+@keyframes qa-bounce-d199dee1 {
+0%, 60%, 100% { transform: translateY(0); opacity: 0.4;
+}
+30% { transform: translateY(-5px); opacity: 1;
+}
+}
+/* 输入区 */
+.qa-input-wrap[data-v-d199dee1] {
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px 16px 16px;
+}
+.qa-input-box[data-v-d199dee1] {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 16px;
+  background: var(--el-bg-color);
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.qa-input-box[data-v-d199dee1]:focus-within {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-9);
+}
+.qa-input-box[data-v-d199dee1] .el-textarea__inner {
+  border: none;
+  box-shadow: none;
+  padding: 4px 6px;
+  font-size: 15px;
+  background: transparent;
+  resize: none;
+}
+.qa-input-actions[data-v-d199dee1] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.qa-send[data-v-d199dee1] {
+  width: 36px;
+  height: 36px;
+}
+.qa-hint[data-v-d199dee1] {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}

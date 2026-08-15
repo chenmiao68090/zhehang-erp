@@ -1,0 +1,35 @@
+
+.search-card[data-v-87cbfb5c] {
+  margin-bottom: 16px;
+}
+.search-bar[data-v-87cbfb5c] {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pagination-wrap[data-v-87cbfb5c] {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+[data-v-87cbfb5c] .post-dialog {
+  max-width: calc(100vw - 32px);
+}
+[data-v-87cbfb5c] .post-dialog .el-dialog__body {
+  padding: 22px 28px 10px;
+}
+[data-v-87cbfb5c] .post-dialog .el-dialog__footer {
+  padding: 14px 28px 24px;
+}
+.post-form[data-v-87cbfb5c] {
+  max-width: 680px;
+}
+.post-form[data-v-87cbfb5c] .el-input-number {
+  width: 180px;
+}
+.post-form[data-v-87cbfb5c] .el-textarea__inner {
+  min-height: 168px !important;
+  line-height: 1.7;
+}

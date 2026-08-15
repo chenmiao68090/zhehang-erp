@@ -1,0 +1,1 @@
+var o="/logo.svg";export{o as t};

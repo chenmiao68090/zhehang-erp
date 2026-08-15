@@ -1,0 +1,539 @@
+
+/* ===== 编辑弹窗高保真改版 ===== */
+.emp-hd[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 24px;
+}
+.emp-hd-avatar[data-v-1f515b85],
+.emp-hd-avatar-img[data-v-1f515b85] {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex: none;
+}
+.emp-hd-avatar[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e6f1fb;
+  color: #0c447c;
+  font-size: 16px;
+  font-weight: 600;
+}
+.emp-hd-avatar-img[data-v-1f515b85] { object-fit: cover;
+}
+.emp-hd-name[data-v-1f515b85] { display: flex; align-items: center; gap: 8px;
+}
+.emp-hd-name strong[data-v-1f515b85] { font-size: 16px; color: #1f2937;
+}
+.emp-hd-sub[data-v-1f515b85] { margin-top: 2px; font-size: 12px; color: #94a3b8;
+}
+.emp-pill[data-v-1f515b85] {
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.emp-pill.is-green[data-v-1f515b85] { background: #e1f5ee; color: #085041;
+}
+.emp-pill.is-amber[data-v-1f515b85] { background: #faeeda; color: #633806;
+}
+.emp-pill.is-gray[data-v-1f515b85] { background: #f1f5f9; color: #64748b;
+}
+.emp-shell[data-v-1f515b85] {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  border-top: 1px solid #eef2f7;
+}
+.emp-rail[data-v-1f515b85] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 0;
+  border-right: 1px solid #eef2f7;
+  background: #f8fafc;
+}
+.emp-ri[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: none;
+  border-left: 2.5px solid transparent;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.emp-ri .el-icon[data-v-1f515b85] { font-size: 15px;
+}
+.emp-ri[data-v-1f515b85]:hover { color: #334155; background: #f1f5f9;
+}
+.emp-ri.on[data-v-1f515b85] {
+  color: var(--el-color-primary);
+  font-weight: 600;
+  border-left-color: var(--el-color-primary);
+  background: #ffffff;
+}
+.emp-cnt[data-v-1f515b85] {
+  position: relative;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: 16px 20px 8px;
+}
+.emp-sect[data-v-1f515b85] { margin-bottom: 22px;
+}
+.emp-sth[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.emp-sth h4[data-v-1f515b85] { margin: 0; font-size: 14px; font-weight: 600; color: #1f2937;
+}
+.emp-sth small[data-v-1f515b85] { margin-left: auto; font-size: 11.5px; color: #94a3b8;
+}
+.emp-ic[data-v-1f515b85] {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.emp-ic.ic-blue[data-v-1f515b85] { background: #e6f1fb; color: #185fa5;
+}
+.emp-ic.ic-green[data-v-1f515b85] { background: #e1f5ee; color: #0f6e56;
+}
+.emp-ic.ic-coral[data-v-1f515b85] { background: #faece7; color: #993c1d;
+}
+.emp-ic.ic-purple[data-v-1f515b85] { background: #eeedfe; color: #534ab7;
+}
+.emp-ic.ic-gray[data-v-1f515b85] { background: #f1efe8; color: #5f5e5a;
+}
+.emp-ic.ic-pink[data-v-1f515b85] { background: #fbeaf0; color: #993556;
+}
+.emp-perm[data-v-1f515b85] {
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px 14px 2px;
+}
+.emp-hifi[data-v-1f515b85] .el-form-item__label {
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  color: #475569;
+  line-height: 1.4;
+}
+.emp-hifi[data-v-1f515b85] .el-form-item { margin-bottom: 14px;
+}
+
+.search-card[data-v-1f515b85] {
+  margin-bottom: 16px;
+}
+.search-bar[data-v-1f515b85] {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.search-actions[data-v-1f515b85] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.resigned-center-entry[data-v-1f515b85] {
+  border-color: #cbd5e1;
+  color: #334155;
+  background: #f8fafc;
+}
+.resigned-center-entry[data-v-1f515b85]:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: #eff6ff;
+}
+.resign-employee-card[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.resign-avatar[data-v-1f515b85] {
+  display: grid;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  color: #1d4ed8;
+  background: #dbeafe;
+  font-weight: 700;
+}
+.resign-employee-card strong[data-v-1f515b85] { display: block; color: #111827; font-size: 15px;
+}
+.resign-employee-card p[data-v-1f515b85] { margin: 4px 0 0; color: #64748b; font-size: 12px;
+}
+.resign-form[data-v-1f515b85] { margin-top: 18px;
+}
+.resign-confirm-check[data-v-1f515b85] {
+  width: 100%;
+  height: auto;
+  align-items: flex-start;
+  padding: 11px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  white-space: normal;
+}
+.resign-confirm-check[data-v-1f515b85] .el-checkbox__label { color: #991b1b; line-height: 1.6; white-space: normal;
+}
+.employee-import-side span[data-v-1f515b85] {
+  display: block;
+  margin-bottom: 4px;
+  color: #667085;
+  font-size: 12px;
+}
+.employee-import-side b[data-v-1f515b85] {
+  color: #111827;
+  font-size: 20px;
+  font-weight: 750;
+}
+.role-position-text[data-v-1f515b85] {
+  color: #344054;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.employee-account-cell[data-v-1f515b85] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.employee-account-cell strong[data-v-1f515b85] {
+  max-width: 100%;
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-merge-alert[data-v-1f515b85] {
+  margin-bottom: 14px;
+}
+.account-hint[data-v-1f515b85] {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.employee-role-readonly[data-v-1f515b85] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+.field-tip[data-v-1f515b85] {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.profile-file-grid[data-v-1f515b85] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.profile-file-card[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.profile-file-main[data-v-1f515b85] {
+  min-width: 0;
+}
+.profile-file-main strong[data-v-1f515b85] {
+  display: block;
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-file-main span[data-v-1f515b85] {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-file-actions[data-v-1f515b85] {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+}
+.employee-attachment-list[data-v-1f515b85] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.employee-attachment-row[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.employee-attachment-row span[data-v-1f515b85] {
+  overflow: hidden;
+  color: #667085;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.employee-attachment-row b[data-v-1f515b85] {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 650;
+}
+.hr-doc-link[data-v-1f515b85] {
+  overflow: hidden;
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hr-doc-link[data-v-1f515b85]:hover {
+  text-decoration: underline;
+}
+.profile-file-main a[data-v-1f515b85] {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.profile-file-main a[data-v-1f515b85]:hover {
+  text-decoration: underline;
+}
+.employee-import-layout[data-v-1f515b85] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.employee-import-main[data-v-1f515b85] {
+  min-width: 0;
+}
+.employee-import-tip[data-v-1f515b85] {
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid #e6f4ff;
+  border-radius: 8px;
+  background: #f5fbff;
+}
+.employee-import-tip strong[data-v-1f515b85] {
+  display: block;
+  margin-bottom: 4px;
+  color: #1f2937;
+  font-size: 14px;
+}
+.employee-import-tip p[data-v-1f515b85] {
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.employee-import-actions[data-v-1f515b85] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.employee-import-side[data-v-1f515b85] {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.employee-import-side div[data-v-1f515b85] {
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.import-match-cell[data-v-1f515b85] {
+  min-width: 0;
+}
+.import-match-cell strong[data-v-1f515b85],
+.import-match-cell span[data-v-1f515b85] {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-match-cell strong[data-v-1f515b85] {
+  color: #1f2937;
+  font-size: 13px;
+}
+.import-match-cell span[data-v-1f515b85] {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 12px;
+}
+.pagination-wrap[data-v-1f515b85] {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.employee-info-grid[data-v-1f515b85] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.employee-info-grid div[data-v-1f515b85] {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.employee-info-grid .wide[data-v-1f515b85] {
+  grid-column: 1 / -1;
+}
+.employee-info-grid span[data-v-1f515b85] {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.employee-info-grid b[data-v-1f515b85] {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+@media (max-width: 760px) {
+.search-actions[data-v-1f515b85] {
+    justify-content: flex-start;
+}
+.search-actions[data-v-1f515b85] .el-button { margin-left: 0;
+}
+.employee-resign-dialog[data-v-1f515b85] .el-dialog { width: 92vw;
+}
+.employee-import-layout[data-v-1f515b85] {
+    grid-template-columns: 1fr;
+    display: grid;
+}
+.employee-info-grid[data-v-1f515b85] {
+    grid-template-columns: 1fr;
+}
+.profile-file-grid[data-v-1f515b85] {
+    grid-template-columns: 1fr;
+}
+}
+
+/* ===== 员工照片上传 ===== */
+.avatar-uploader[data-v-1f515b85] {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.avatar-box[data-v-1f515b85] {
+  width: 88px;
+  height: 88px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px dashed var(--el-border-color);
+  background: var(--el-fill-color-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease;
+  flex-shrink: 0;
+}
+.avatar-box[data-v-1f515b85]:hover {
+  border-color: var(--el-color-primary);
+}
+.avatar-img[data-v-1f515b85] {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-empty[data-v-1f515b85] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.avatar-empty .plus[data-v-1f515b85] {
+  font-size: 24px;
+  line-height: 1;
+}
+.avatar-tip[data-v-1f515b85] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.avatar-hint[data-v-1f515b85] {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 高保真改版壳:正文去内边距(内部自带布局),头部/底部与正文用浅线分隔 */
+.el-dialog.emp-hifi .el-dialog__body {
+  padding: 0;
+}
+.el-dialog.emp-hifi .el-dialog__header {
+  padding: 14px 20px;
+  margin-right: 0;
+}
+.el-dialog.emp-hifi .el-dialog__footer {
+  border-top: 1px solid #eef2f7;
+  padding: 12px 20px;
+}
+/* 编辑/新增员工弹窗(920px):窄屏(平板/手机)自动收成 92vw,避免固定宽度撑出屏幕 */
+@media (max-width: 980px) {
+.el-dialog.employee-edit-dialog {
+    width: 92vw !important;
+}
+  /* 窄屏收起左侧分组导航,内容区单列滚动 */
+.el-dialog.emp-hifi .emp-rail { display: none;
+}
+.el-dialog.emp-hifi .emp-shell { grid-template-columns: 1fr;
+}
+}
+/* 批量导入弹窗(980px):≤1040px 时同样收成 92vw */
+@media (max-width: 1040px) {
+.el-dialog.employee-import-dialog {
+    width: 92vw !important;
+}
+}

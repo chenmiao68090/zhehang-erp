@@ -1,0 +1,326 @@
+
+.ops-center-page[data-v-3129f397] {
+  min-height: 100%;
+  padding: 24px;
+  background: #f6f8fb;
+  color: #1f2937;
+}
+.ops-hero[data-v-3129f397] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px;
+  border: 1px solid #dbe5f5;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1d4ed8, #6ea8fe);
+  color: #fff;
+}
+.eyebrow[data-v-3129f397] {
+  margin-bottom: 8px;
+  font-size: 12px;
+  letter-spacing: .08em;
+  opacity: .78;
+}
+.ops-hero h1[data-v-3129f397] {
+  margin: 0 0 10px;
+  font-size: 30px;
+  line-height: 1.2;
+}
+.ops-hero p[data-v-3129f397] {
+  margin: 0;
+  max-width: 660px;
+  color: rgba(255, 255, 255, .86);
+}
+.hero-actions[data-v-3129f397] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.date-range[data-v-3129f397] {
+  width: 270px;
+}
+
+/* ===== 统一数据中心模块外壳 ===== */
+.ops-block[data-v-3129f397] {
+  border: 1px solid #e5eaf3;
+  border-radius: 8px;
+  background: #fff;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.block-head[data-v-3129f397] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.block-head h2[data-v-3129f397] {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.block-head p[data-v-3129f397] {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+.block-tools[data-v-3129f397] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ===== 统一卡片网格 ===== */
+.card-grid[data-v-3129f397] {
+  display: grid;
+  gap: 14px;
+}
+.card-grid.cols-5[data-v-3129f397] { grid-template-columns: repeat(5, minmax(150px, 1fr));
+}
+.card-grid.cols-6[data-v-3129f397] { grid-template-columns: repeat(6, minmax(140px, 1fr));
+}
+.card-grid.cols-4[data-v-3129f397] { grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+.card-grid.cols-3[data-v-3129f397] { grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+.card-grid.cols-2[data-v-3129f397] { grid-template-columns: repeat(2, minmax(320px, 1fr));
+}
+
+/* ===== 统一指标卡（核心数据模板） ===== */
+.stat-card[data-v-3129f397] {
+  padding: 18px 20px;
+  border: 1px solid #e5eaf3;
+  border-radius: 8px;
+  background: #fff;
+}
+.stat-label[data-v-3129f397] {
+  display: block;
+  color: #64748b;
+  font-size: 13px;
+}
+.stat-value[data-v-3129f397] {
+  display: block;
+  margin: 8px 0 4px;
+  color: #0f172a;
+  font-size: 26px;
+  line-height: 1.1;
+  word-break: break-all;
+}
+.stat-sub[data-v-3129f397] {
+  color: #64748b;
+  font-size: 12px;
+}
+.stat-card.is-green .stat-value[data-v-3129f397] { color: #16a34a;
+}
+.stat-card.is-red .stat-value[data-v-3129f397] { color: #dc2626;
+}
+.stat-card.is-orange .stat-value[data-v-3129f397] { color: #c2410c;
+}
+.stat-card.is-blue .stat-value[data-v-3129f397] { color: #2563eb;
+}
+
+/* ===== 平台维度小卡（统一模板变体） ===== */
+.platform-card[data-v-3129f397] {
+  padding: 14px 16px;
+  border: 1px solid #e5eaf3;
+  border-radius: 8px;
+  background: #fff;
+}
+.pc-head[data-v-3129f397] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pc-logo[data-v-3129f397] {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+.pc-name[data-v-3129f397] {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.pc-rows[data-v-3129f397] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+.pc-row[data-v-3129f397] {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.pc-row span[data-v-3129f397] {
+  color: #64748b;
+  font-size: 12px;
+}
+.pc-row b[data-v-3129f397] {
+  font-size: 16px;
+  color: #0f172a;
+}
+.pc-row b.ok[data-v-3129f397] { color: #16a34a;
+}
+.pc-row b.danger[data-v-3129f397] { color: #dc2626;
+}
+.pc-empty[data-v-3129f397] {
+  padding: 14px 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* ===== 美团 & 大众点评 板块 ===== */
+.board-card[data-v-3129f397] {
+  padding: 16px;
+  border: 1px solid #e5eaf3;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.board-head[data-v-3129f397] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.board-section-title[data-v-3129f397] {
+  margin: 14px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+.board-section-title[data-v-3129f397]:first-of-type {
+  margin-top: 4px;
+}
+.board-inner .stat-value[data-v-3129f397] {
+  font-size: 20px;
+}
+
+/* ===== 今日投流反馈（4 小卡） ===== */
+.content-grid[data-v-3129f397],
+.bottom-grid[data-v-3129f397] {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.85fr) minmax(520px, 1.15fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.bottom-grid[data-v-3129f397] {
+  grid-template-columns: minmax(320px, 0.45fr) minmax(680px, 1.55fr);
+}
+.content-grid .ops-block[data-v-3129f397],
+.bottom-grid .ops-block[data-v-3129f397] {
+  margin-bottom: 0;
+}
+.today-list[data-v-3129f397] {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.today-list div[data-v-3129f397] {
+  padding: 14px;
+  border: 1px solid #edf1f7;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.today-list span[data-v-3129f397] {
+  display: block;
+  color: #64748b;
+  font-size: 13px;
+}
+.today-list strong[data-v-3129f397] {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: 24px;
+}
+.today-list strong.danger[data-v-3129f397] {
+  color: #dc2626;
+}
+.today-list small[data-v-3129f397] {
+  color: #64748b;
+}
+.up[data-v-3129f397] { color: #16a34a !important;
+}
+.down[data-v-3129f397] { color: #dc2626 !important;
+}
+.mini-table[data-v-3129f397],
+.ops-table[data-v-3129f397] {
+  width: 100%;
+}
+.warn-icon[data-v-3129f397] {
+  color: #f59e0b;
+  font-size: 22px;
+}
+.alert-list[data-v-3129f397] {
+  display: grid;
+  gap: 10px;
+}
+.alert-item[data-v-3129f397] {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  line-height: 1.55;
+}
+.stack-cell[data-v-3129f397] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stack-cell span[data-v-3129f397] {
+  color: #64748b;
+  font-size: 12px;
+}
+.pager[data-v-3129f397] {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+}
+.form-grid[data-v-3129f397] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+}
+@media (max-width: 1280px) {
+.card-grid.cols-5[data-v-3129f397] { grid-template-columns: repeat(3, minmax(150px, 1fr));
+}
+.card-grid.cols-6[data-v-3129f397] { grid-template-columns: repeat(3, minmax(140px, 1fr));
+}
+.card-grid.cols-2[data-v-3129f397] { grid-template-columns: 1fr;
+}
+.content-grid[data-v-3129f397],
+  .bottom-grid[data-v-3129f397] {
+    grid-template-columns: 1fr;
+}
+}
+@media (max-width: 860px) {
+.ops-center-page[data-v-3129f397] {
+    padding: 14px;
+}
+.ops-hero[data-v-3129f397] {
+    flex-direction: column;
+}
+.card-grid.cols-5[data-v-3129f397],
+  .card-grid.cols-6[data-v-3129f397],
+  .card-grid.cols-4[data-v-3129f397],
+  .card-grid.cols-3[data-v-3129f397],
+  .today-list[data-v-3129f397],
+  .form-grid[data-v-3129f397] {
+    grid-template-columns: 1fr;
+}
+.date-range[data-v-3129f397] {
+    width: 100%;
+}
+}

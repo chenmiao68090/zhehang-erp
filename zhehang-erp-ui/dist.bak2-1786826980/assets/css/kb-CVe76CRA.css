@@ -1,0 +1,100 @@
+
+.kb-page[data-v-7ea35c9b] {
+  display: flex;
+  height: calc(100vh - 120px);
+  background: var(--el-bg-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.kb-sidebar[data-v-7ea35c9b] {
+  width: 240px;
+  border-right: 1px solid var(--el-border-color-lighter);
+  padding: 16px;
+  overflow-y: auto;
+}
+.sidebar-header[data-v-7ea35c9b] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.sidebar-title[data-v-7ea35c9b] {
+  font-weight: 600;
+  font-size: 15px;
+}
+.tree-node[data-v-7ea35c9b] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kb-content[data-v-7ea35c9b] {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+  overflow: hidden;
+}
+.kb-toolbar[data-v-7ea35c9b] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.article-list[data-v-7ea35c9b] {
+  flex: 1;
+  overflow-y: auto;
+}
+.article-card[data-v-7ea35c9b] {
+  padding: 16px 20px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.article-card[data-v-7ea35c9b]:hover {
+  border-color: #3370ff;
+  box-shadow: 0 2px 8px rgba(51, 112, 255, 0.1);
+}
+.article-card__header[data-v-7ea35c9b] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.article-title[data-v-7ea35c9b] {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+.article-summary[data-v-7ea35c9b] {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+  margin: 0 0 12px 0;
+  line-height: 1.6;
+}
+.article-card__footer[data-v-7ea35c9b] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.article-tags[data-v-7ea35c9b] {
+  display: flex;
+  gap: 4px;
+}
+.article-stats[data-v-7ea35c9b] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+.article-stats span[data-v-7ea35c9b] {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.article-time[data-v-7ea35c9b] {
+  font-size: 12px;
+}

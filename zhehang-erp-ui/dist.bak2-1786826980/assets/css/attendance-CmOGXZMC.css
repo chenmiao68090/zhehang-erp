@@ -1,0 +1,59 @@
+
+.hrm-attendance[data-v-02c62a95] { padding: 16px;
+}
+.rule-alert[data-v-02c62a95] { margin-bottom: 12px;
+}
+.toolbar-card[data-v-02c62a95] { margin-bottom: 12px;
+}
+.toolbar[data-v-02c62a95] { display: flex; justify-content: space-between; align-items: center;
+}
+.toolbar-left[data-v-02c62a95] { display: flex; align-items: center;
+}
+.stats-row[data-v-02c62a95] { margin-bottom: 12px;
+}
+.stat-card[data-v-02c62a95] { text-align: center; padding: 10px 0; border-radius: 6px;
+}
+.stat-value[data-v-02c62a95] { font-size: 24px; font-weight: 700; line-height: 1.2;
+}
+.stat-suffix[data-v-02c62a95] { font-size: 14px; margin-left: 2px; font-weight: 500;
+}
+.gap-text[data-v-02c62a95] { color: #c0c4cc; font-weight: 500;
+}
+.stat-label[data-v-02c62a95] { font-size: 12px; color: #909399; margin-top: 6px;
+}
+.gap-icon[data-v-02c62a95] { font-size: 12px; color: #c0c4cc; vertical-align: middle; margin-left: 2px; cursor: help;
+}
+.c-blue .stat-value[data-v-02c62a95] { color: #409eff;
+}
+.c-cyan .stat-value[data-v-02c62a95] { color: #17c0c0;
+}
+.c-teal .stat-value[data-v-02c62a95] { color: #13a8a8;
+}
+.c-green .stat-value[data-v-02c62a95] { color: #67c23a;
+}
+.c-orange .stat-value[data-v-02c62a95] { color: #e6a23c;
+}
+.c-red .stat-value[data-v-02c62a95] { color: #f56c6c;
+}
+.c-purple .stat-value[data-v-02c62a95] { color: #909bf5;
+}
+.c-gray .stat-value[data-v-02c62a95] { color: #909399;
+}
+.rate-card[data-v-02c62a95] { margin-bottom: 12px;
+}
+.rate-header[data-v-02c62a95] { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;
+}
+.rate-title[data-v-02c62a95] { font-size: 14px; font-weight: 600; color: #303133;
+}
+.rate-value[data-v-02c62a95] { font-size: 22px; font-weight: 700; color: #3370ff;
+}
+.table-card .card-header[data-v-02c62a95] { display: flex; justify-content: space-between; align-items: center;
+}
+.num-normal[data-v-02c62a95] { color: #67c23a;
+}
+.num-warn[data-v-02c62a95] { color: #e6a23c; font-weight: 600;
+}
+.num-bad[data-v-02c62a95] { color: #f56c6c; font-weight: 600;
+}
+.pagination[data-v-02c62a95] { margin-top: 16px; justify-content: flex-end;
+}

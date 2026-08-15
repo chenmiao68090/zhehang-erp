@@ -1,0 +1,19 @@
+
+.out-region[data-v-757f2e84] { padding: 16px 18px;
+}
+.or-head[data-v-757f2e84] { margin-bottom: 6px;
+}
+.or-title[data-v-757f2e84] { margin: 0; font-size: 20px; font-weight: 600; color: var(--el-text-color-primary);
+}
+.or-sub[data-v-757f2e84] { margin: 5px 0 0; font-size: 13px; color: var(--el-text-color-secondary);
+}
+.or-bar[data-v-757f2e84] { display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+}
+.or-search[data-v-757f2e84] { width: 200px;
+}
+.or-qr[data-v-757f2e84] { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.or-qr-thumb[data-v-757f2e84] { width: 46px; height: 46px; border-radius: 6px; border: 1px solid var(--el-border-color-lighter);
+}
+.or-hint[data-v-757f2e84] { display: block; margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);
+}

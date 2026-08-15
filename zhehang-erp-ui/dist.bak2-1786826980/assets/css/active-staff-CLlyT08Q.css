@@ -1,0 +1,25 @@
+
+.active-staff[data-v-92c12a73] { padding: 4px 2px;
+}
+.as-head[data-v-92c12a73] { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;
+}
+.as-title[data-v-92c12a73] { margin: 0 0 4px; font-size: 18px;
+}
+.as-sub[data-v-92c12a73] { margin: 0; color: #909399; font-size: 12px;
+}
+.as-head-actions[data-v-92c12a73] { display: flex; gap: 8px;
+}
+.as-overview[data-v-92c12a73] { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px;
+}
+.ov-card[data-v-92c12a73] { border: 1px solid #ebeef5; border-radius: 8px; padding: 12px; text-align: center; background: #fff;
+}
+.ov-num[data-v-92c12a73] { font-size: 22px; font-weight: 700;
+}
+.ov-lbl[data-v-92c12a73] { color: #909399; font-size: 12px; margin-top: 2px;
+}
+.as-filter[data-v-92c12a73] { margin-bottom: 12px;
+}
+.as-table-card[data-v-92c12a73] .el-card__body { padding: 12px;
+}
+.as-pager[data-v-92c12a73] { margin-top: 12px; display: flex; justify-content: flex-end;
+}

@@ -1,0 +1,34 @@
+
+.contract-expiring[data-v-2fd9ad06] {
+  padding: 16px;
+}
+.ce-header[data-v-2fd9ad06] {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.ce-title[data-v-2fd9ad06] {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+.ce-desc[data-v-2fd9ad06] {
+  margin: 6px 0 0;
+  color: #909399;
+  font-size: 13px;
+}
+.ce-header-filter[data-v-2fd9ad06] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ce-filter-label[data-v-2fd9ad06] {
+  font-size: 13px;
+  color: #606266;
+}
+.ce-card[data-v-2fd9ad06] {
+  border-radius: 8px;
+}

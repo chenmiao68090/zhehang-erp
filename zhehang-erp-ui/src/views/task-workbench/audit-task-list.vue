@@ -16,16 +16,17 @@
         <h2>{{ title }}</h2>
         <el-tag effect="plain">任务管理</el-tag>
         <el-tag v-if="feigeTaskLocalDemo()" type="warning">LOCAL-DEMO</el-tag>
-        <p>{{ description }}</p>
-      </div>
-      <div class="heading-actions">
-        <el-button v-if="capabilities.bridgeManage" @click="configRef?.open('process')">{{ capabilities.bridgeTriggerSupported ? '流程与生成规则' : '审批流程设置' }}</el-button>
-        <el-button v-if="capabilities.manager" type="primary" @click="createRef?.open()">手工补发</el-button>
-        <el-button :loading="loading" @click="loadRows">刷新</el-button>
+        <p v-if="description">{{ description }}</p>
       </div>
     </div>
 
     <div class="page-card">
+      <div class="card-actions">
+        <el-button v-if="capabilities.bridgeManage" @click="configRef?.open('process')">{{ capabilities.bridgeTriggerSupported ? '流程与生成规则' : '审批流程设置' }}</el-button>
+        <el-button v-if="capabilities.manager" type="primary" @click="createRef?.open()">手工补发</el-button>
+        <el-button :loading="loading" @click="loadRows">刷新</el-button>
+      </div>
+
       <el-tabs v-model="filters.status" class="status-tabs" @tab-change="handleStatusChange">
         <el-tab-pane label="待审核" name="pending" />
         <el-tab-pane label="已审核" name="approved" />
@@ -429,5 +430,4 @@ function errorText(error: any) { return error?.response?.data?.message || error?
 <style scoped lang="scss">
 .plain-action { display: grid; width: 100%; gap: 4px; padding: 0; border: 0; background: transparent; color: #1677ff; text-align: left; cursor: pointer; }
 .plain-action small { color: #94a3b8; }
-.heading-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 </style>

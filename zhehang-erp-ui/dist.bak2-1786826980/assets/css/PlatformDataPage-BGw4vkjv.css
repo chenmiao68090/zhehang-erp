@@ -1,0 +1,93 @@
+
+.pdp[data-v-1e70a434] {
+  padding: 16px 18px;
+}
+.pdp-head[data-v-1e70a434] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.pdp-title[data-v-1e70a434] {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.pdp-sub[data-v-1e70a434] {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.7;
+  max-width: 680px;
+}
+.pdp-sub .el-tag[data-v-1e70a434] {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.pdp-actions[data-v-1e70a434] {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pdp-block[data-v-1e70a434] {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 14px;
+  background: var(--el-bg-color);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.pdp-block-head[data-v-1e70a434] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pdp-block-title[data-v-1e70a434] {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.pdp-block-desc[data-v-1e70a434] {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.pdp-summary[data-v-1e70a434] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pdp-scard[data-v-1e70a434] {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pdp-scard.latest[data-v-1e70a434] {
+  background: var(--el-fill-color-light);
+}
+.pdp-slabel[data-v-1e70a434] {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.pdp-svalue[data-v-1e70a434] {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.pdp-svalue.small[data-v-1e70a434] {
+  font-size: 14px;
+  font-weight: 500;
+}
+.pdp-svalue.money[data-v-1e70a434] {
+  color: var(--el-color-danger);
+}

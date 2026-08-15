@@ -1,0 +1,27 @@
+
+.wv[data-v-c4754f0d] { padding: 16px 18px;
+}
+.wv-head[data-v-c4754f0d] { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.wv-title[data-v-c4754f0d] { margin: 0; font-size: 20px; font-weight: 600; color: var(--el-text-color-primary);
+}
+.wv-sub[data-v-c4754f0d] { margin: 5px 0 0; font-size: 13px; color: var(--el-text-color-secondary);
+}
+.wv-filter[data-v-c4754f0d] { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; align-items: center;
+}
+.f-date[data-v-c4754f0d] { width: 250px;
+}
+.f-sel[data-v-c4754f0d] { width: 130px;
+}
+.wv-stat[data-v-c4754f0d] { font-size: 13px; color: var(--el-text-color-secondary); margin-left: auto;
+}
+.wv-name[data-v-c4754f0d] { font-weight: 600; color: var(--el-text-color-primary);
+}
+.wv-sub2[data-v-c4754f0d] { font-size: 11.5px; color: var(--el-text-color-secondary); margin-top: 1px;
+}
+.wv-na[data-v-c4754f0d] { color: var(--el-text-color-placeholder);
+}
+.wv-audio[data-v-c4754f0d] { height: 32px; max-width: 210px; vertical-align: middle;
+}
+.wv-pager[data-v-c4754f0d] { display: flex; justify-content: flex-end; margin-top: 14px;
+}

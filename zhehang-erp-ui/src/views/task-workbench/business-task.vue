@@ -12,15 +12,16 @@
     <el-alert v-if="errorMessage" class="error-alert" type="error" show-icon :closable="false" :title="errorMessage" />
 
     <div class="page-head">
-      <div class="page-title"><h2>业务任务</h2><el-tag effect="plain">任务管理</el-tag><p>{{ businessIntro }}</p></div>
-      <div class="heading-actions">
+      <div class="page-title"><h2>业务任务</h2><el-tag effect="plain">任务管理</el-tag><p v-if="businessIntro">{{ businessIntro }}</p></div>
+    </div>
+
+    <div class="page-card">
+      <div class="card-actions">
         <el-button v-if="capabilities.bridgeManage && capabilities.bridgeTriggerSupported" @click="configRef?.open('rule')">自动生成规则</el-button>
         <el-button v-if="capabilities.manager" type="primary" @click="createRef?.open()">手工补发</el-button>
         <el-button :loading="loading" @click="loadRows">刷新</el-button>
       </div>
-    </div>
 
-    <div class="page-card">
       <el-tabs v-model="activeStatus" class="business-tabs" @tab-change="handleTabChange">
         <el-tab-pane v-for="tab in tabs" :key="tab.value" :name="tab.value">
           <template #label>
@@ -43,7 +44,7 @@
       </el-form>
 
       <div class="table-wrap">
-        <el-table v-loading="loading" :data="rows" row-key="id" border :empty-text="capabilities.manager ? '当前环节暂无任务，可用右上角手工补发' : '当前环节暂无任务'">
+        <el-table v-loading="loading" :data="rows" row-key="id" border :empty-text="capabilities.manager ? '当前环节暂无任务，可用上方手工补发' : '当前环节暂无任务'">
           <el-table-column prop="orderNo" label="订单编号" width="150" align="center" />
           <el-table-column prop="companyName" label="公司名称" min-width="200" align="center" show-overflow-tooltip>
             <template #default="{ row }">
@@ -353,4 +354,4 @@ function errorText(error: any) { return error?.response?.data?.message || error?
 </script>
 
 <style lang="scss" src="./common.scss"></style>
-<style scoped>.heading-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}</style>
+

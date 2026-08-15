@@ -1,0 +1,19 @@
+
+.my-payslip[data-v-b7365fea] { padding: 4px 2px;
+}
+.mp-head[data-v-b7365fea] { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;
+}
+.mp-title[data-v-b7365fea] { margin: 0 0 4px; font-size: 18px;
+}
+.mp-sub[data-v-b7365fea] { margin: 0; color: #909399; font-size: 12px;
+}
+.mp-head-actions[data-v-b7365fea] { display: flex; gap: 8px;
+}
+.mp-overview[data-v-b7365fea] { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; max-width: 420px;
+}
+.ov-card[data-v-b7365fea] { border: 1px solid #ebeef5; border-radius: 8px; padding: 12px; text-align: center; background: #fff;
+}
+.ov-num[data-v-b7365fea] { font-size: 22px; font-weight: 700;
+}
+.ov-lbl[data-v-b7365fea] { color: #909399; font-size: 12px; margin-top: 2px;
+}

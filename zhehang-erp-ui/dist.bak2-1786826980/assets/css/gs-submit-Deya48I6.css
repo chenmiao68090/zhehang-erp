@@ -1,0 +1,39 @@
+
+.gss-page[data-v-d0222d09] { padding: 16px 18px;
+}
+.gss-head[data-v-d0222d09] { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px;
+}
+.gss-title[data-v-d0222d09] { margin: 0; font-size: 20px; font-weight: 600; color: var(--el-text-color-primary);
+}
+.gss-sub[data-v-d0222d09] { margin: 5px 0 0; font-size: 13px; color: var(--el-text-color-secondary); max-width: 760px;
+}
+.gss-muted[data-v-d0222d09] { color: var(--el-text-color-secondary); font-size: 12px;
+}
+.gss-stats[data-v-d0222d09] { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.gss-stat[data-v-d0222d09] { flex: 1; min-width: 92px; padding: 10px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; cursor: pointer; transition: border-color .2s, background .2s; background: var(--el-fill-color-blank);
+}
+.gss-stat[data-v-d0222d09]:hover { border-color: var(--el-color-primary);
+}
+.gss-stat.active[data-v-d0222d09] { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9);
+}
+.gss-stat b[data-v-d0222d09] { display: block; font-size: 22px; font-weight: 700; color: var(--el-text-color-primary); line-height: 1.2;
+}
+.gss-stat span[data-v-d0222d09] { font-size: 12px; color: var(--el-text-color-secondary);
+}
+.gss-steps[data-v-d0222d09] { margin-bottom: 20px;
+}
+.gss-step[data-v-d0222d09] { min-height: 200px;
+}
+.gss-dialog[data-v-d0222d09] .el-dialog__body { padding-top: 8px;
+}
+.gss-checks[data-v-d0222d09] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; width: 100%;
+}
+.gss-checks[data-v-d0222d09] .el-checkbox { margin-right: 0; height: auto; white-space: normal;
+}
+.gss-id-uploads[data-v-d0222d09] { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+.gss-doc-tags[data-v-d0222d09] { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px;
+}
+.gss-doc-hint[data-v-d0222d09] { display: block; margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);
+}

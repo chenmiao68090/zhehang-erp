@@ -1,14 +1,14 @@
 <template>
   <div class="task-workbench task-workbench-page template-page">
-    <header class="page-head page-heading"><div class="page-title"><div class="eyebrow"><el-icon><Files /></el-icon> 任务工单 · 标准化</div><h2>计划模板</h2><p>主管按角色配置日、周、月固定任务；量化字段必须有明确名称、编码和单位。</p></div><div class="heading-actions"><el-tag v-if="feigeTaskLocalDemo()" type="warning" size="large" effect="dark">LOCAL-DEMO 演示数据</el-tag><el-button v-if="manager" type="primary" :disabled="!roles.length" @click="formRef?.open()">新增模板</el-button></div></header>
+    <header class="page-head page-heading"><div class="page-title"><div class="eyebrow"><el-icon><Files /></el-icon> 任务工单 · 标准化</div><h2>计划模板</h2><p>主管按角色配置日、周、月固定任务；量化字段必须有明确名称、编码和单位。</p></div><div class="heading-actions"><el-tag v-if="feigeTaskLocalDemo()" type="warning" size="large" effect="dark">LOCAL-DEMO 演示数据</el-tag></div></header>
     <el-alert v-if="!manager && !feigeTaskLocalDemo()" title="当前账号为只读视图，只有主管、老板或管理员可以维护计划模板。" type="info" show-icon :closable="false"/>
     <el-alert v-if="manager&&!roles.length" title="系统暂无可用角色，暂不能新增计划模板" description="请先在系统角色管理中配置并启用角色；模板直接复用系统角色，不在本页另建。" type="warning" show-icon :closable="false"/>
     <el-alert v-if="errorText" :title="errorText" type="error" show-icon :closable="false"/>
     <div class="template-layout">
       <aside class="role-panel"><h3>适用角色</h3><el-input v-model="roleKeyword" clearable placeholder="搜索角色"/><el-tree ref="roleTreeRef" :data="roles" node-key="id" :props="treeProps" :filter-node-method="filterRole" default-expand-all highlight-current @node-click="selectRole"/><el-button text @click="clearRole">查看全部模板</el-button></aside>
       <main class="template-main">
-        <section class="toolbar-card"><el-segmented v-model="query.cycleType" :options="cycleOptions" @change="searchTemplates"/><el-select v-model="query.enabled" clearable placeholder="全部状态" @change="searchTemplates"><el-option label="启用" :value="true"/><el-option label="停用" :value="false"/></el-select><el-button :loading="loading" @click="loadTemplates">刷新</el-button></section>
-        <el-empty v-if="!loading&&templates.length===0" :description="manager&&roles.length?'当前范围没有计划模板，可点击右上角新增':'当前范围没有计划模板'"/>
+        <section class="toolbar-card"><el-segmented v-model="query.cycleType" :options="cycleOptions" @change="searchTemplates"/><el-select v-model="query.enabled" clearable placeholder="全部状态" @change="searchTemplates"><el-option label="启用" :value="true"/><el-option label="停用" :value="false"/></el-select><el-button v-if="manager" type="primary" :disabled="!roles.length" @click="formRef?.open()">新增模板</el-button><el-button :loading="loading" @click="loadTemplates">刷新</el-button></section>
+        <el-empty v-if="!loading&&templates.length===0" :description="manager&&roles.length?'当前范围没有计划模板，可点击上方新增':'当前范围没有计划模板'"/>
         <section v-loading="loading" class="template-grid">
           <article v-for="tpl in templates" :key="tpl.id" class="template-card">
             <div class="card-head"><div><el-tag :type="cycleTag(tpl.cycleType)">{{ cycleText(tpl.cycleType) }}</el-tag><el-tag :type="tpl.enabled?'success':'info'" effect="plain">{{ tpl.enabled?'启用':'停用' }}</el-tag></div><el-dropdown v-if="manager"><el-button text :icon="MoreFilled"/><template #dropdown><el-dropdown-menu><el-dropdown-item @click="formRef?.open(tpl)">编辑</el-dropdown-item><el-dropdown-item @click="toggle(tpl)">{{ tpl.enabled?'停用':'启用' }}</el-dropdown-item><el-dropdown-item divided @click="remove(tpl)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div>

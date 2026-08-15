@@ -1,0 +1,41 @@
+
+.yk[data-v-de346669] { padding: 16px 18px; max-width: 760px;
+}
+.yk-head[data-v-de346669] { margin-bottom: 12px;
+}
+.yk-title[data-v-de346669] { margin: 0; font-size: 20px; font-weight: 600; color: var(--el-text-color-primary);
+}
+.yk-sub[data-v-de346669] { margin: 5px 0 0; font-size: 13px; color: var(--el-text-color-secondary);
+}
+.yk-alert[data-v-de346669] { margin-bottom: 16px;
+}
+.yk-alert[data-v-de346669] .el-alert__description { font-size: 12.5px; line-height: 1.7;
+}
+.yk-alert code[data-v-de346669], .yk-tip code[data-v-de346669] { font-family: var(--el-font-family-mono, monospace); background: var(--el-fill-color); padding: 1px 5px; border-radius: 4px;
+}
+.yk-form[data-v-de346669] { margin-top: 4px;
+}
+.yk-hint[data-v-de346669] { margin-left: 10px; font-size: 12px; color: var(--el-text-color-secondary);
+}
+.yk-result[data-v-de346669] { margin: 4px 0 16px; border-radius: 8px;
+}
+.yk-result.ok[data-v-de346669] { border: 1px solid var(--el-color-success-light-5); background: var(--el-color-success-light-9);
+}
+.yk-result.bad[data-v-de346669] { border: 1px solid var(--el-color-danger-light-5); background: var(--el-color-danger-light-9);
+}
+.yk-result-head[data-v-de346669] { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px;
+}
+.yk-result.ok .yk-result-head[data-v-de346669] { color: var(--el-color-success);
+}
+.yk-result.bad .yk-result-head[data-v-de346669] { color: var(--el-color-danger);
+}
+.yk-result-msg[data-v-de346669] { margin: 8px 0 0; font-size: 13px; color: var(--el-text-color-regular); word-break: break-all;
+}
+.yk-raw[data-v-de346669] { margin-top: 10px; font-size: 12px;
+}
+.yk-raw summary[data-v-de346669] { cursor: pointer; color: var(--el-text-color-secondary);
+}
+.yk-raw pre[data-v-de346669] { margin: 8px 0 0; padding: 10px; background: var(--el-fill-color-light); border-radius: 8px; overflow-x: auto; font-size: 12px; max-height: 300px;
+}
+.yk-tip[data-v-de346669] { margin-top: 8px; padding: 12px 14px; background: var(--el-fill-color-light); border-radius: 8px; font-size: 12.5px; color: var(--el-text-color-secondary); line-height: 1.7;
+}

@@ -29,6 +29,9 @@ public interface IWfProcessService {
     /** 停用流程 */
     void disableProcess(Long defId);
 
+    /** 删除流程定义（逻辑删除，可恢复） */
+    void removeProcess(Long defId);
+
     /** 获取预设模板列表 */
     List<Map<String, Object>> getTemplates();
 }

@@ -3,11 +3,14 @@ package com.zhehang.erp.modules.project.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
+import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import com.zhehang.erp.modules.project.domain.entity.PmProject;
 import com.zhehang.erp.modules.project.service.IPmProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @RestController
@@ -16,6 +19,7 @@ import java.util.Map;
 public class ProjectController {
 
     private final IPmProjectService projectService;
+    private final DataScopeHelper dataScopeHelper;
 
     @GetMapping("/list")
     public R<IPage<PmProject>> list(
@@ -30,12 +34,17 @@ public class ProjectController {
 
     @GetMapping("/{id}")
     public R<PmProject> getInfo(@PathVariable Long id) {
-        return R.ok(projectService.getById(id));
+        PmProject project = projectService.getById(id);
+        if (project != null && !dataScopeHelper.canAccess(project.getCreateBy(), null)) {
+            return R.fail("无权查看他人记录");
+        }
+        return R.ok(project);
     }
 
     @PostMapping
     @Log(module = "项目管理", type = Log.OperationType.INSERT)
     public R<Void> add(@RequestBody PmProject project) {
+        validateProject(project);
         projectService.save(project);
         return R.ok();
     }
@@ -43,13 +52,38 @@ public class ProjectController {
     @PutMapping
     @Log(module = "项目管理", type = Log.OperationType.UPDATE)
     public R<Void> edit(@RequestBody PmProject project) {
+        PmProject existing = projectService.getById(project.getId());
+        if (existing == null) {
+            return R.fail("记录不存在");
+        }
+        if (!dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+            return R.fail("无权修改他人记录");
+        }
+        validateProject(project);
         projectService.updateById(project);
         return R.ok();
+    }
+
+    private void validateProject(PmProject project) {
+        if (project.getStartDate() != null && project.getEndDate() != null
+                && project.getEndDate().isBefore(project.getStartDate())) {
+            throw new BusinessException("结束日期不能早于开始日期");
+        }
+        if (project.getBudget() != null && project.getBudget().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("项目预算必须大于0");
+        }
+        if (project.getProgress() != null && (project.getProgress() < 0 || project.getProgress() > 100)) {
+            throw new BusinessException("项目进度必须在0-100之间");
+        }
     }
 
     @DeleteMapping("/{id}")
     @Log(module = "项目管理", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
+        PmProject project = projectService.getById(id);
+        if (project != null && !dataScopeHelper.canAccess(project.getCreateBy(), null)) {
+            return R.fail("无权删除他人记录");
+        }
         projectService.removeById(id);
         return R.ok();
     }

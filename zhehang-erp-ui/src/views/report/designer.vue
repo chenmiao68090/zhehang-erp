@@ -104,19 +104,16 @@
           </p>
         </div>
 
-        <!-- 筛选器配置 -->
+        <!-- 后端尚未把筛选参数绑定到真实查询，入口明确停用，避免把原样数据伪装成筛选结果。 -->
         <el-divider />
         <h4>{{ $t('report.filterConfig') }}</h4>
-        <div v-for="(f, idx) in filters" :key="idx" class="filter-item">
-          <el-input v-model="f.label" placeholder="Label" size="small" style="width: 80px" />
-          <el-select v-model="f.type" size="small" style="width: 90px">
-            <el-option :label="$t('report.filterDateRange')" value="dateRange" />
-            <el-option :label="$t('report.filterSelect')" value="select" />
-            <el-option :label="$t('report.filterText')" value="text" />
-          </el-select>
-          <el-icon class="filter-remove" @click="filters.splice(idx, 1)"><Close /></el-icon>
-        </div>
-        <el-button size="small" text type="primary" @click="addFilter">+ {{ $t('report.addFilter') }}</el-button>
+        <el-alert
+          title="筛选条件暂未开放"
+          description="当前查询服务尚未接入参数绑定，系统不会展示或保存一个看似生效、实际未筛选的条件。"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
       </div>
     </div>
   </div>
@@ -145,12 +142,6 @@ interface CanvasItem {
   legendPosition: string
 }
 
-interface FilterItem {
-  field: string
-  label: string
-  type: string
-}
-
 const reportForm = reactive<Partial<ReportDefinition>>({
   name: '',
   category: 'crm',
@@ -163,7 +154,6 @@ const reportForm = reactive<Partial<ReportDefinition>>({
 
 const canvasItems = ref<CanvasItem[]>([])
 const selectedIndex = ref(-1)
-const filters = ref<FilterItem[]>([])
 const chartRefs = ref<(HTMLElement | null)[]>([])
 const chartInstances = ref<(echarts.ECharts | null)[]>([])
 
@@ -201,7 +191,7 @@ function onDrop(e: DragEvent) {
       title: '',
       xField: 'name',
       yField: 'value',
-      color: '#F26522',
+      color: '#3370ff',
       legendPosition: 'top'
     })
     nextTick(() => {
@@ -239,13 +229,9 @@ function renderChart(index: number) {
     chartInstances.value[index] = instance
   }
 
-  const demoData = [
-    { name: '1月', value: 120 }, { name: '2月', value: 200 },
-    { name: '3月', value: 150 }, { name: '4月', value: 280 },
-    { name: '5月', value: 220 }, { name: '6月', value: 310 }
-  ]
+  const previewData: Array<{ name: string; value: number }> = []
 
-  const color = item.color || '#F26522'
+  const color = item.color || '#3370ff'
   let option: any = {}
 
   switch (item.chartType) {
@@ -254,18 +240,18 @@ function renderChart(index: number) {
         title: { text: item.title, left: 'center', textStyle: { fontSize: 13 } },
         tooltip: { trigger: 'axis' },
         legend: { show: true, [item.legendPosition === 'left' || item.legendPosition === 'right' ? item.legendPosition : item.legendPosition || 'top']: 0 },
-        xAxis: { type: 'category', data: demoData.map(d => d.name) },
+        xAxis: { type: 'category', data: previewData.map(d => d.name) },
         yAxis: { type: 'value' },
-        series: [{ type: 'line', data: demoData.map(d => d.value), smooth: true, itemStyle: { color }, areaStyle: { color: color + '33' } }]
+        series: [{ type: 'line', data: previewData.map(d => d.value), smooth: true, itemStyle: { color }, areaStyle: { color: color + '33' } }]
       }
       break
     case 'bar':
       option = {
         title: { text: item.title, left: 'center', textStyle: { fontSize: 13 } },
         tooltip: { trigger: 'axis' },
-        xAxis: { type: 'category', data: demoData.map(d => d.name) },
+        xAxis: { type: 'category', data: previewData.map(d => d.name) },
         yAxis: { type: 'value' },
-        series: [{ type: 'bar', data: demoData.map(d => d.value), itemStyle: { color, borderRadius: [4, 4, 0, 0] } }]
+        series: [{ type: 'bar', data: previewData.map(d => d.value), itemStyle: { color, borderRadius: [4, 4, 0, 0] } }]
       }
       break
     case 'pie':
@@ -273,21 +259,14 @@ function renderChart(index: number) {
         title: { text: item.title, left: 'center', textStyle: { fontSize: 13 } },
         tooltip: { trigger: 'item' },
         legend: { orient: 'horizontal', [item.legendPosition || 'bottom']: 0 },
-        series: [{ type: 'pie', radius: ['35%', '60%'], data: demoData.map((d, i) => ({ ...d, itemStyle: { color: ['#F26522', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'][i] } })) }]
+        series: [{ type: 'pie', radius: ['35%', '60%'], data: previewData.map((d, i) => ({ ...d, itemStyle: { color: ['#3370ff', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'][i] } })) }]
       }
       break
     case 'kpi':
       instance.clear()
       option = {
-        title: { text: item.title || 'KPI', left: 'center', top: '20%', textStyle: { fontSize: 13, color: '#666' } },
-        series: [{
-          type: 'gauge', startAngle: 200, endAngle: -20, min: 0, max: 400,
-          pointer: { show: false }, progress: { show: true, width: 16, itemStyle: { color } },
-          axisLine: { lineStyle: { width: 16, color: [[1, '#eee']] } },
-          axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false },
-          detail: { valueAnimation: true, fontSize: 28, offsetCenter: [0, '0%'], color },
-          data: [{ value: 280 }]
-        }]
+        title: { text: item.title || 'KPI', left: 'center', textStyle: { fontSize: 13, color: '#666' } },
+        graphic: realDataPreviewHint()
       }
       break
     case 'table':
@@ -295,23 +274,23 @@ function renderChart(index: number) {
       option = {
         title: { text: item.title || t('report.chartTable'), left: 'center', textStyle: { fontSize: 13 } },
         tooltip: {},
-        xAxis: { type: 'category', data: demoData.map(d => d.name) },
+        xAxis: { type: 'category', data: previewData.map(d => d.name) },
         yAxis: { type: 'value' },
-        series: [{ type: 'bar', data: demoData.map(d => d.value), itemStyle: { color: '#3B82F6' } }]
+        series: [{ type: 'bar', data: previewData.map(d => d.value), itemStyle: { color: '#3B82F6' } }]
       }
       break
     case 'funnel':
+      instance.clear()
       option = {
         title: { text: item.title, left: 'center', textStyle: { fontSize: 13 } },
-        tooltip: { trigger: 'item' },
-        series: [{ type: 'funnel', left: '10%', width: '80%', data: [{ value: 100, name: '访问' }, { value: 80, name: '咨询' }, { value: 60, name: '意向' }, { value: 40, name: '成交' }] }]
+        graphic: realDataPreviewHint()
       }
       break
     case 'radar':
+      instance.clear()
       option = {
         title: { text: item.title, left: 'center', textStyle: { fontSize: 13 } },
-        radar: { indicator: [{ name: '销售', max: 100 }, { name: '管理', max: 100 }, { name: '技术', max: 100 }, { name: '客服', max: 100 }, { name: '研发', max: 100 }] },
-        series: [{ type: 'radar', data: [{ value: [80, 60, 90, 70, 85], itemStyle: { color } }] }]
+        graphic: realDataPreviewHint()
       }
       break
   }
@@ -319,37 +298,78 @@ function renderChart(index: number) {
   instance.setOption(option, true)
 }
 
-function addFilter() {
-  filters.value.push({ field: '', label: '', type: 'text' })
+function realDataPreviewHint() {
+  return {
+    type: 'text',
+    left: 'center',
+    top: 'middle',
+    style: {
+      text: '设计器不展示演示数值\n保存后请到预览页加载真实数据',
+      fill: '#909399',
+      fontSize: 13,
+      lineHeight: 22,
+      align: 'center'
+    }
+  }
 }
 
 function goBack() {
   router.push('/report/list')
 }
 
-async function handleSave() {
+async function resolveCreatedReportId(data: Partial<ReportDefinition>): Promise<number | null> {
+  const response: any = await reportDefinitionApi.list({
+    pageNum: 1,
+    pageSize: 50,
+    name: data.name,
+    category: data.category,
+    type: data.type
+  })
+  const rows: ReportDefinition[] = response?.data?.records || response?.data?.list || []
+  const saved = rows
+    .filter(row =>
+      row.name === data.name
+      && row.category === data.category
+      && row.type === data.type
+      && row.dataSourceType === data.dataSourceType
+      && row.chartConfig === data.chartConfig
+      && row.filterConfig === data.filterConfig
+    )
+    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0]
+  return saved?.id ? Number(saved.id) : null
+}
+
+async function handleSave(): Promise<number | null> {
   if (!reportForm.name) {
     ElMessage.warning(t('common.pleaseInput') + t('report.name'))
-    return
+    return null
   }
   const chartConfig = JSON.stringify(canvasItems.value)
-  const filterConfig = JSON.stringify(filters.value)
-  const data: any = { ...reportForm, chartConfig, filterConfig }
+  // 查询服务当前忽略筛选参数；固定清空旧配置，避免预览页出现无效筛选器。
+  const data: any = { ...reportForm, chartConfig, filterConfig: '[]' }
 
   if (data.id) {
     await reportDefinitionApi.update(data)
   } else {
-    await reportDefinitionApi.create(data)
+    const created: any = await reportDefinitionApi.create(data)
+    const responseId = Number(created?.data?.id ?? created?.data ?? 0)
+    const createdId = responseId > 0 ? responseId : await resolveCreatedReportId(data)
+    if (!createdId) {
+      ElMessage.warning('报表已提交保存，但未能确认真实编号；请返回报表列表后再预览。')
+      return null
+    }
+    reportForm.id = createdId
+    await router.replace({ path: route.path, query: { ...route.query, id: String(createdId) } })
   }
   ElMessage.success(t('report.saveSuccess'))
+  return Number(reportForm.id || data.id) || null
 }
 
-function handlePreview() {
-  handleSave().then(() => {
-    if (reportForm.id) {
-      router.push({ path: '/report/preview', query: { id: String(reportForm.id) } })
-    }
-  })
+async function handlePreview() {
+  const savedId = await handleSave()
+  if (savedId) {
+    router.push({ path: '/report/preview', query: { id: String(savedId) } })
+  }
 }
 
 async function loadReport(id: number) {
@@ -359,9 +379,6 @@ async function loadReport(id: number) {
     Object.assign(reportForm, data)
     if (data.chartConfig) {
       try { canvasItems.value = JSON.parse(data.chartConfig) } catch {}
-    }
-    if (data.filterConfig) {
-      try { filters.value = JSON.parse(data.filterConfig) } catch {}
     }
     nextTick(() => {
       canvasItems.value.forEach((_, i) => renderChart(i))
@@ -402,7 +419,7 @@ onBeforeUnmount(() => {
   padding: 12px 8px; border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px; cursor: grab; font-size: 12px; transition: all 0.2s;
 }
-.component-item:hover { border-color: #F26522; color: #F26522; background: rgba(242,101,34,0.04); }
+.component-item:hover { border-color: #3370ff; color: #3370ff; background: rgba(51, 112, 255,0.04); }
 .panel-center {
   flex: 1; padding: 20px; overflow-y: auto;
   background: var(--el-fill-color-lighter);
@@ -410,7 +427,7 @@ onBeforeUnmount(() => {
 .canvas-empty {
   height: 100%; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px;
-  border: 2px dashed var(--el-border-color); border-radius: 10px;
+  border: 2px dashed var(--el-border-color); border-radius: 8px;
 }
 .canvas-empty p { color: var(--el-text-color-placeholder); font-size: 14px; }
 .canvas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
@@ -418,19 +435,16 @@ onBeforeUnmount(() => {
   background: var(--el-bg-color); border: 2px solid var(--el-border-color-lighter);
   border-radius: 8px; overflow: hidden; transition: all 0.2s;
 }
-.canvas-item.selected { border-color: #F26522; box-shadow: 0 0 0 2px rgba(242,101,34,0.15); }
+.canvas-item.selected { border-color: #3370ff; box-shadow: 0 0 0 2px rgba(51, 112, 255,0.15); }
 .item-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 12px; background: var(--el-fill-color-lighter);
   font-size: 13px; font-weight: 500;
 }
 .item-remove { cursor: pointer; color: var(--el-text-color-placeholder); }
-.item-remove:hover { color: #F26522; }
+.item-remove:hover { color: #3370ff; }
 .item-preview { padding: 8px; }
 .chart-preview-box { width: 100%; height: 220px; }
 .data-config { margin-top: 8px; }
-.filter-item { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
-.filter-remove { cursor: pointer; color: var(--el-text-color-placeholder); flex-shrink: 0; }
-.filter-remove:hover { color: #F26522; }
 .no-selection { padding: 20px; }
 </style>

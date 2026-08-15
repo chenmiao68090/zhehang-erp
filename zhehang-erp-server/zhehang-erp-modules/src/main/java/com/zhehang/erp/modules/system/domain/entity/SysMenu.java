@@ -16,8 +16,10 @@ public class SysMenu extends BaseEntity {
     private Integer orderNum;
     private String path;
     private String component;
+    @TableField(exist = false)
     private String queryParam;
-    private Integer menuType;
+    /** Menu type: M=directory, C=menu, F=button */
+    private String menuType;
     private Integer visible;
     private Integer status;
     private String perms;

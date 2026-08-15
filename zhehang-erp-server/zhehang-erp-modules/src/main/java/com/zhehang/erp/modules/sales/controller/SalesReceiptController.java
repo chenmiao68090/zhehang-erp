@@ -5,6 +5,7 @@ import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.sales.domain.entity.SalesReceipt;
 import com.zhehang.erp.modules.sales.service.ISalesReceiptService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import java.util.Map;
 public class SalesReceiptController {
 
     private final ISalesReceiptService receiptService;
+    private final DataScopeHelper dataScopeHelper;
 
     @GetMapping("/list")
     public R<IPage<SalesReceipt>> list(
@@ -31,7 +33,11 @@ public class SalesReceiptController {
 
     @GetMapping("/{id}")
     public R<SalesReceipt> getInfo(@PathVariable Long id) {
-        return R.ok(receiptService.getById(id));
+        SalesReceipt receipt = receiptService.getById(id);
+        if (receipt != null && !dataScopeHelper.canAccess(receipt.getCreateBy(), null)) {
+            return R.fail("无权操作他人记录");
+        }
+        return R.ok(receipt);
     }
 
     @PostMapping
@@ -44,6 +50,10 @@ public class SalesReceiptController {
     @PutMapping
     @Log(module = "回款管理", type = Log.OperationType.UPDATE)
     public R<Void> edit(@RequestBody SalesReceipt receipt) {
+        SalesReceipt existing = receiptService.getById(receipt.getId());
+        if (existing == null || !dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+            return R.fail("无权操作他人记录");
+        }
         receiptService.updateById(receipt);
         return R.ok();
     }
@@ -51,6 +61,10 @@ public class SalesReceiptController {
     @DeleteMapping("/{id}")
     @Log(module = "回款管理", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
+        SalesReceipt existing = receiptService.getById(id);
+        if (existing == null || !dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+            return R.fail("无权操作他人记录");
+        }
         receiptService.removeById(id);
         return R.ok();
     }

@@ -67,3 +67,59 @@ export const receivableApi = {
   aging: (params: any) => get('/finance/receivable/aging', params),
   overdue: () => get('/finance/receivable/overdue')
 }
+
+// 回款续费：客户应收、实收、欠费、续费到期、催收历史
+export const receivableRenewalApi = {
+  list: (params: any) => get('/finance/receivable-renewal/list', params),
+  summary: () => get('/finance/receivable-renewal/summary'),
+  colleagues: () => get('/finance/receivable-renewal/colleagues'),
+  customerOptions: (params?: any) => get('/finance/receivable-renewal/customer-options', params),
+  detail: (id: number) => get(`/finance/receivable-renewal/${id}`),
+  add: (data: any) => post('/finance/receivable-renewal', data),
+  update: (data: any) => put('/finance/receivable-renewal', data),
+  remove: (id: number) => del(`/finance/receivable-renewal/${id}`),
+  receive: (data: any) => post('/finance/receivable-renewal/receive', data),
+  collect: (data: any) => post('/finance/receivable-renewal/collect', data),
+  logs: (id: number) => get(`/finance/receivable-renewal/logs/${id}`)
+}
+
+// 备用金管理（真实后端 FinPettyCashController /finance/petty-cash/*）
+export const pettyCashApi = {
+  list: (params: any) => get('/finance/petty-cash/list', params),
+  detail: (id: number) => get(`/finance/petty-cash/${id}`),
+  add: (data: any) => post('/finance/petty-cash', data),
+  update: (data: any) => put('/finance/petty-cash', data),
+  changeStatus: (id: number, status: string) => put('/finance/petty-cash', { id, status }),
+  remove: (id: number) => del(`/finance/petty-cash/${id}`)
+}
+
+// 业务支出管理（真实后端 FinExpenseController /finance/expense/*）
+export const expenseApi = {
+  list: (params: any) => get('/finance/expense/list', params),
+  detail: (id: number) => get(`/finance/expense/${id}`),
+  add: (data: any) => post('/finance/expense', data),
+  update: (data: any) => put('/finance/expense', data),
+  changeStatus: (id: number, status: string) => put('/finance/expense', { id, status }),
+  remove: (id: number) => del(`/finance/expense/${id}`)
+}
+
+// 管理成本（真实后端 FinCostController /finance/cost/*）
+export const costApi = {
+  list: (params: any) => get('/finance/cost/list', params),
+  detail: (id: number) => get(`/finance/cost/${id}`),
+  add: (data: any) => post('/finance/cost', data),
+  update: (data: any) => put('/finance/cost', data),
+  changeStatus: (id: number, status: string) => put('/finance/cost', { id, status }),
+  remove: (id: number) => del(`/finance/cost/${id}`)
+}
+
+// 代账客户台账（会计体系·代理记账业务线，真实后端 FinBookkeepingLedgerController /finance/bookkeeping-ledger/*）
+export const bookkeepingLedgerApi = {
+  list: (params: any) => get('/finance/bookkeeping-ledger/list', params),
+  statusCount: (params: any) => get('/finance/bookkeeping-ledger/status-count', params),
+  colleagues: () => get('/finance/bookkeeping-ledger/colleagues'),
+  detail: (id: number) => get(`/finance/bookkeeping-ledger/${id}`),
+  add: (data: any) => post('/finance/bookkeeping-ledger', data),
+  update: (data: any) => put('/finance/bookkeeping-ledger', data),
+  remove: (id: number) => del(`/finance/bookkeeping-ledger/${id}`)
+}

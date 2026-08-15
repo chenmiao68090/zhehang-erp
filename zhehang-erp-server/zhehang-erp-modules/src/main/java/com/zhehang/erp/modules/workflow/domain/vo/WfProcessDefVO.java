@@ -15,6 +15,12 @@ public class WfProcessDefVO {
     private String category;
     private Integer version;
     private String description;
+    /** 发起卡片图标(Element Plus 图标组件名) */
+    private String icon;
+    /** 同分组内排序 */
+    private Integer sort;
+    /** 发起目录分组(attendance/finance/admin/hr/biz/other) */
+    private String groupName;
     private String formConfig;
     private String processConfig;
     private Integer status;

@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.modules.file.domain.entity.KbArticle;
 import com.zhehang.erp.modules.file.mapper.KbArticleMapper;
 import com.zhehang.erp.modules.file.service.IKbArticleService;
+import com.zhehang.erp.common.core.utils.SafeHtmlSanitizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -37,13 +38,14 @@ public class KbArticleServiceImpl extends ServiceImpl<KbArticleMapper, KbArticle
             update(new LambdaUpdateWrapper<KbArticle>()
                     .eq(KbArticle::getId, id)
                     .setSql("view_count = view_count + 1"));
-            article.setViewCount(article.getViewCount() + 1);
+            article.setViewCount((article.getViewCount() == null ? 0 : article.getViewCount()) + 1);
         }
         return article;
     }
 
     @Override
     public void createArticle(KbArticle article) {
+        article.setContent(SafeHtmlSanitizer.sanitize(article.getContent()));
         if (article.getViewCount() == null) {
             article.setViewCount(0);
         }
@@ -61,6 +63,7 @@ public class KbArticleServiceImpl extends ServiceImpl<KbArticleMapper, KbArticle
 
     @Override
     public void updateArticle(KbArticle article) {
+        article.setContent(SafeHtmlSanitizer.sanitize(article.getContent()));
         updateById(article);
     }
 

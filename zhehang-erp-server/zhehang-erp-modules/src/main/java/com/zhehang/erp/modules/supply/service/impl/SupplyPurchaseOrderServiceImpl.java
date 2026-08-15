@@ -9,8 +9,10 @@ import com.zhehang.erp.modules.supply.domain.entity.SupplyPurchaseReq;
 import com.zhehang.erp.modules.supply.mapper.SupplyPurchaseOrderMapper;
 import com.zhehang.erp.modules.supply.mapper.SupplyPurchaseReqMapper;
 import com.zhehang.erp.modules.supply.service.ISupplyPurchaseOrderService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -23,9 +25,11 @@ import java.util.concurrent.ThreadLocalRandom;
 public class SupplyPurchaseOrderServiceImpl extends ServiceImpl<SupplyPurchaseOrderMapper, SupplyPurchaseOrder> implements ISupplyPurchaseOrderService {
 
     private final SupplyPurchaseReqMapper reqMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     public IPage<SupplyPurchaseOrder> selectPage(int pageNum, int pageSize, String orderNo, Integer status, Long vendorId) {
         LambdaQueryWrapper<SupplyPurchaseOrder> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, SupplyPurchaseOrder::getCreateBy); // 采购单(单价/金额)按创建人收敛
         if (StringUtils.hasText(orderNo)) {
             wrapper.like(SupplyPurchaseOrder::getOrderNo, orderNo);
         }
@@ -39,6 +43,7 @@ public class SupplyPurchaseOrderServiceImpl extends ServiceImpl<SupplyPurchaseOr
         return page(new Page<>(pageNum, pageSize), wrapper);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void createFromReq(SupplyPurchaseOrder order) {
         order.setOrderNo(generateOrderNo());
         save(order);

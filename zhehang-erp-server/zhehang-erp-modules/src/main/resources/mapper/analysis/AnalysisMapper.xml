@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.analysis.mapper.AnalysisMapper">
+
+    <select id="monthlyReceipt" resultType="java.util.Map">
+        SELECT MONTH(IFNULL(confirm_time, receive_time)) AS m,
+               IFNULL(SUM(amount), 0) AS amount
+        FROM biz_receipt
+        WHERE deleted = 0 AND status = 2
+          AND YEAR(IFNULL(confirm_time, receive_time)) = #{year}
+        GROUP BY MONTH(IFNULL(confirm_time, receive_time))
+    </select>
+
+    <select id="monthlyNewCustomers" resultType="java.util.Map">
+        SELECT MONTH(create_time) AS m, COUNT(*) AS cnt
+        FROM crm_customer
+        WHERE deleted = 0 AND YEAR(create_time) = #{year}
+        GROUP BY MONTH(create_time)
+    </select>
+
+    <select id="monthlyOrders" resultType="java.util.Map">
+        SELECT MONTH(submit_time) AS m,
+               COUNT(*) AS cnt,
+               IFNULL(SUM(payable_amount), 0) AS amount
+        FROM biz_order
+        WHERE deleted = 0 AND status IN (4, 5) AND YEAR(submit_time) = #{year}
+        GROUP BY MONTH(submit_time)
+    </select>
+
+    <select id="newOrderDetail" resultType="java.util.Map">
+        SELECT DATE_FORMAT(submit_time, '%Y-%m') AS ym,
+               IFNULL(service_type, '未分类') AS service_type,
+               COUNT(*) AS cnt,
+               IFNULL(SUM(payable_amount), 0) AS amount
+        FROM biz_order
+        WHERE deleted = 0 AND status IN (4, 5) AND YEAR(submit_time) = #{year}
+          AND (#{month} IS NULL OR MONTH(submit_time) = #{month})
+        GROUP BY ym, service_type
+        ORDER BY ym
+    </select>
+
+    <select id="monthlyRenewalOrders" resultType="java.util.Map">
+        SELECT MONTH(create_time) AS m,
+               renewal_type,
+               COUNT(*) AS cnt
+        FROM biz_renewal_order
+        WHERE deleted = 0 AND status = 'confirmed' AND YEAR(create_time) = #{year}
+        GROUP BY MONTH(create_time), renewal_type
+    </select>
+
+    <select id="receivableSummary" resultType="java.util.Map">
+        SELECT receivable_status,
+               COUNT(*) AS cnt,
+               IFNULL(SUM(receivable_amount), 0) AS receivable,
+               IFNULL(SUM(arrears_amount), 0) AS arrears
+        FROM fin_receivable_renewal
+        WHERE deleted = 0
+        GROUP BY receivable_status
+        ORDER BY receivable_status
+    </select>
+
+    <select id="receivableMonthly" resultType="java.util.Map">
+        SELECT receivable_month AS ym,
+               IFNULL(SUM(receivable_amount), 0) AS receivable,
+               IFNULL(SUM(received_amount), 0) AS received,
+               IFNULL(SUM(arrears_amount), 0) AS arrears
+        FROM fin_receivable_renewal
+        WHERE deleted = 0 AND receivable_month LIKE CONCAT(#{year}, '-%')
+        GROUP BY receivable_month
+        ORDER BY receivable_month
+    </select>
+
+    <select id="lossRisk" resultType="java.util.Map">
+        SELECT c.id, c.customer_name, c.contract_no, c.end_date, c.amount
+        FROM biz_contract c
+        WHERE c.deleted = 0 AND c.status = 4
+          AND c.end_date &gt;= CURDATE()
+          AND c.end_date &lt;= DATE_ADD(CURDATE(), INTERVAL 90 DAY)
+          AND NOT EXISTS (
+              SELECT 1 FROM biz_contract r
+              WHERE r.deleted = 0 AND r.status = 4 AND r.parent_id = c.id
+          )
+        ORDER BY c.end_date
+        LIMIT 200
+    </select>
+
+    <select id="customerValue" resultType="java.util.Map">
+        SELECT CASE
+                   WHEN t.total &gt;= 100000 THEN 'A'
+                   WHEN t.total &gt;= 50000 THEN 'B'
+                   WHEN t.total &gt;= 10000 THEN 'C'
+                   ELSE 'D'
+               END AS band,
+               COUNT(*) AS cnt,
+               IFNULL(SUM(t.total), 0) AS amount
+        FROM (
+            SELECT customer_id, SUM(payable_amount) AS total
+            FROM biz_order
+            WHERE deleted = 0 AND status IN (4, 5) AND customer_id IS NOT NULL
+            GROUP BY customer_id
+        ) t
+        GROUP BY band
+        ORDER BY band
+    </select>
+
+    <select id="leadRoi" resultType="java.util.Map">
+        SELECT source,
+               COUNT(*) AS lead_cnt,
+               SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) AS converted
+        FROM crm_lead
+        WHERE deleted = 0
+          AND (#{start} IS NULL OR create_time &gt;= #{start})
+          AND (#{end} IS NULL OR create_time &lt;= CONCAT(#{end}, ' 23:59:59'))
+        GROUP BY source
+        ORDER BY lead_cnt DESC
+    </select>
+
+    <select id="customerSource" resultType="java.util.Map">
+        SELECT source,
+               COUNT(*) AS customer_cnt
+        FROM crm_customer
+        WHERE deleted = 0
+          AND (#{start} IS NULL OR create_time &gt;= #{start})
+          AND (#{end} IS NULL OR create_time &lt;= CONCAT(#{end}, ' 23:59:59'))
+        GROUP BY source
+        ORDER BY customer_cnt DESC
+    </select>
+
+    <select id="leadFunnel" resultType="java.util.Map">
+        SELECT status, COUNT(*) AS cnt
+        FROM crm_lead
+        WHERE deleted = 0
+        GROUP BY status
+        ORDER BY status
+    </select>
+
+    <select id="monthlyFollows" resultType="java.util.Map">
+        SELECT MONTH(create_time) AS m, COUNT(*) AS cnt
+        FROM crm_follow
+        WHERE deleted = 0 AND YEAR(create_time) = #{year}
+        GROUP BY MONTH(create_time)
+    </select>
+
+    <select id="monthlyCalls" resultType="java.util.Map">
+        SELECT MONTH(call_time) AS m,
+               COUNT(*) AS cnt,
+               SUM(CASE WHEN connected = 1 THEN 1 ELSE 0 END) AS connected
+        FROM biz_call_record
+        WHERE tenant_id = #{tenantId}
+          AND deleted = 0 AND call_time IS NOT NULL AND YEAR(call_time) = #{year}
+        GROUP BY MONTH(call_time)
+    </select>
+
+    <select id="salesEffort" resultType="java.util.Map">
+        SELECT c.agent_id AS user_id,
+               MAX(c.agent_name) AS agent_name,
+               COUNT(*) AS call_cnt,
+               SUM(CASE WHEN c.connected = 1 THEN 1 ELSE 0 END) AS connected
+        FROM biz_call_record c
+        WHERE c.tenant_id = #{tenantId}
+          AND c.deleted = 0 AND c.agent_id IS NOT NULL AND c.call_time IS NOT NULL
+          AND YEAR(c.call_time) = #{year}
+        GROUP BY c.agent_id
+        ORDER BY call_cnt DESC
+        LIMIT 30
+    </select>
+
+</mapper>

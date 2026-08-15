@@ -25,4 +25,14 @@ public class WfTaskVO {
     private Long initiatorId;
     private String initiatorName;
     private LocalDateTime startTime;
+    /** 流程节点ID */
+    private String nodeId;
+    /** 审批时限(空=不限时) */
+    private LocalDateTime deadline;
+    /** 卡片摘要:表单金额(付款/借款等,来自 form_data.amount) */
+    private String amount;
+    /** 卡片摘要:请假/加班天数(来自 form_data.days) */
+    private String days;
+    /** 抄送已读:0未读 1已读(抄送我列表用) */
+    private Integer readFlag;
 }

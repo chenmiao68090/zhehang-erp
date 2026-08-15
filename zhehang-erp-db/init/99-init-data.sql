@@ -2,7 +2,7 @@ SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
 -- ============================================================
--- 浙杭企服ERP系统 - 初始化数据
+-- 浙杭集团ERP系统 - 初始化数据
 -- ============================================================
 
 USE `zhehang_erp`;
@@ -44,15 +44,10 @@ INSERT INTO `sys_role` (`id`, `role_name`, `role_key`, `sort`, `status`, `data_s
 (6, '普通员工', 'staff', 6, 0, 5, '基础查看权限', 1, 1);
 
 -- -----------------------------------------------------------
--- 4. 初始化用户（admin / admin123）
+-- 4. 初始管理员
 -- -----------------------------------------------------------
-INSERT INTO `sys_user` (`id`, `username`, `password`, `nickname`, `email`, `phone`, `sex`, `avatar`, `status`, `dept_id`, `remark`, `create_by`, `tenant_id`) VALUES
-(1, 'admin', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '超级管理员', 'admin@zhehang.com', '13800000000', 0, NULL, 0, 1, '系统超级管理员', 1, 1);
-
--- -----------------------------------------------------------
--- 5. 用户角色关联
--- -----------------------------------------------------------
-INSERT INTO `sys_user_role` (`user_id`, `role_id`) VALUES (1, 1);
+-- 初始化 SQL 不内置账号或默认密码。全新空库首次部署前，必须由受控运维流程
+-- 创建首个超级管理员并生成一次性随机初始口令；首次登录强制改密并绑定 MFA。
 
 -- -----------------------------------------------------------
 -- 6. 初始化菜单（17个一级模块 + 子菜单）
@@ -65,11 +60,28 @@ INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `compone
 -- ===== 系统管理 =====
 INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES
 (100, '系统管理', 0, 2, '/system', NULL, 'M', 1, 0, NULL, 'setting', 1, 1),
-(101, '用户管理', 100, 1, '/system/user', 'system/user/index', 'C', 1, 0, 'system:user:list', 'user', 1, 1),
+(101, '员工与账号', 100, 1, '/system/employee', 'org/employee/index', 'C', 1, 0, 'org:employee:list', 'employee', 1, 1),
 (102, '角色管理', 100, 2, '/system/role', 'system/role/index', 'C', 1, 0, 'system:role:list', 'role', 1, 1),
 (103, '菜单管理', 100, 3, '/system/menu', 'system/menu/index', 'C', 1, 0, 'system:menu:list', 'menu', 1, 1),
 (104, '部门管理', 100, 4, '/system/dept', 'system/dept/index', 'C', 1, 0, 'system:dept:list', 'dept', 1, 1),
 (105, '通知公告', 100, 5, '/system/notice', 'system/notice/index', 'C', 1, 0, 'system:notice:list', 'notice', 1, 1);
+
+-- 系统管理按钮权限
+INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES
+(10101, '员工账号查询', 101, 1, NULL, NULL, 'F', 0, 0, 'org:employee:query', NULL, 1, 1),
+(10102, '员工账号新增', 101, 2, NULL, NULL, 'F', 0, 0, 'org:employee:add', NULL, 1, 1),
+(10103, '员工账号修改', 101, 3, NULL, NULL, 'F', 0, 0, 'org:employee:edit', NULL, 1, 1),
+(10104, '员工账号删除', 101, 4, NULL, NULL, 'F', 0, 0, 'org:employee:remove', NULL, 1, 1),
+(10105, '重置员工密码', 101, 5, NULL, NULL, 'F', 0, 0, 'org:employee:resetPwd', NULL, 1, 1),
+(10106, '员工账号导出', 101, 6, NULL, NULL, 'F', 0, 0, 'org:employee:export', NULL, 1, 1),
+(10201, '角色查询', 102, 1, NULL, NULL, 'F', 0, 0, 'system:role:query', NULL, 1, 1),
+(10202, '角色新增', 102, 2, NULL, NULL, 'F', 0, 0, 'system:role:add', NULL, 1, 1),
+(10203, '角色修改', 102, 3, NULL, NULL, 'F', 0, 0, 'system:role:edit', NULL, 1, 1),
+(10204, '角色删除', 102, 4, NULL, NULL, 'F', 0, 0, 'system:role:remove', NULL, 1, 1),
+(10301, '菜单查询', 103, 1, NULL, NULL, 'F', 0, 0, 'system:menu:query', NULL, 1, 1),
+(10302, '菜单新增', 103, 2, NULL, NULL, 'F', 0, 0, 'system:menu:add', NULL, 1, 1),
+(10303, '菜单修改', 103, 3, NULL, NULL, 'F', 0, 0, 'system:menu:edit', NULL, 1, 1),
+(10304, '菜单删除', 103, 4, NULL, NULL, 'F', 0, 0, 'system:menu:remove', NULL, 1, 1);
 
 -- ===== 组织架构 =====
 INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES
@@ -163,6 +175,13 @@ INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `compone
 (1201, '登录日志', 1200, 1, '/log/login', 'log/login/index', 'C', 1, 0, 'log:login:list', 'login-log', 1, 1),
 (1202, '操作日志', 1200, 2, '/log/oper', 'log/oper/index', 'C', 1, 0, 'log:oper:list', 'oper-log', 1, 1),
 (1203, '异常日志', 1200, 3, '/log/error', 'log/error/index', 'C', 1, 0, 'log:error:list', 'error-log', 1, 1);
+
+-- 日志管理按钮权限
+INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES
+(120101, '登录日志导出', 1201, 1, NULL, NULL, 'F', 0, 0, 'log:login:export', NULL, 1, 1),
+(120102, '登录日志清空', 1201, 2, NULL, NULL, 'F', 0, 0, 'log:login:remove', NULL, 1, 1),
+(120201, '操作日志导出', 1202, 1, NULL, NULL, 'F', 0, 0, 'log:oper:export', NULL, 1, 1),
+(120202, '操作日志清空', 1202, 2, NULL, NULL, 'F', 0, 0, 'log:oper:remove', NULL, 1, 1);
 
 -- ===== 系统监控 =====
 INSERT INTO `sys_menu` (`id`, `menu_name`, `parent_id`, `sort`, `path`, `component`, `menu_type`, `visible`, `status`, `perms`, `icon`, `create_by`, `tenant_id`) VALUES

@@ -5,6 +5,7 @@ import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.sales.domain.entity.SalesDelivery;
 import com.zhehang.erp.modules.sales.service.ISalesDeliveryService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 public class SalesDeliveryController {
 
     private final ISalesDeliveryService deliveryService;
+    private final DataScopeHelper dataScopeHelper;
 
     @GetMapping("/list")
     public R<IPage<SalesDelivery>> list(
@@ -27,7 +29,14 @@ public class SalesDeliveryController {
 
     @GetMapping("/{id}")
     public R<SalesDelivery> getInfo(@PathVariable Long id) {
-        return R.ok(deliveryService.getById(id));
+        SalesDelivery delivery = deliveryService.getById(id);
+        if (delivery == null) {
+            return R.fail("记录不存在");
+        }
+        if (!dataScopeHelper.canAccess(delivery.getCreateBy(), null)) {
+            return R.fail("无权操作他人记录");
+        }
+        return R.ok(delivery);
     }
 
     @PostMapping
@@ -40,6 +49,13 @@ public class SalesDeliveryController {
     @PutMapping
     @Log(module = "发货管理", type = Log.OperationType.UPDATE)
     public R<Void> edit(@RequestBody SalesDelivery delivery) {
+        SalesDelivery existing = deliveryService.getById(delivery.getId());
+        if (existing == null) {
+            return R.fail("记录不存在");
+        }
+        if (!dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+            return R.fail("无权修改他人记录");
+        }
         deliveryService.updateById(delivery);
         return R.ok();
     }
@@ -47,6 +63,13 @@ public class SalesDeliveryController {
     @DeleteMapping("/{id}")
     @Log(module = "发货管理", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
+        SalesDelivery delivery = deliveryService.getById(id);
+        if (delivery == null) {
+            return R.fail("记录不存在");
+        }
+        if (!dataScopeHelper.canAccess(delivery.getCreateBy(), null)) {
+            return R.fail("无权操作他人记录");
+        }
         deliveryService.removeById(id);
         return R.ok();
     }

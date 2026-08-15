@@ -9,6 +9,7 @@ import com.zhehang.erp.modules.file.domain.entity.FileInfo;
 import com.zhehang.erp.modules.file.domain.entity.FileVersion;
 import com.zhehang.erp.modules.file.mapper.FileInfoMapper;
 import com.zhehang.erp.modules.file.mapper.FileVersionMapper;
+import com.zhehang.erp.modules.file.security.UploadSecurityService;
 import com.zhehang.erp.modules.file.service.IFileInfoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +28,7 @@ import java.util.*;
 public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> implements IFileInfoService {
 
     private final FileVersionMapper fileVersionMapper;
+    private final UploadSecurityService uploadSecurityService;
 
     @Value("${file.upload.path:upload}")
     private String uploadBasePath;
@@ -44,21 +46,28 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         return page(new Page<>(pageNum, pageSize), wrapper);
     }
 
+    private static final Set<String> ALLOWED_UPLOAD_EXTENSIONS = Set.of(
+            "jpg", "jpeg", "png", "gif", "webp", "pdf", "doc", "docx", "xls", "xlsx",
+            "ppt", "pptx", "txt", "csv", "zip", "rar", "mp4", "webm", "ogg", "mp3", "wav");
+
     @Override
     public FileInfo uploadFile(MultipartFile file, Long folderId) {
-        String originalName = file.getOriginalFilename();
-        String fileType = getFileExtension(originalName);
-        String mimeType = file.getContentType();
+        UploadSecurityService.ValidatedFile validated = uploadSecurityService.validate(file, ALLOWED_UPLOAD_EXTENSIONS);
+        String originalName = validated.originalName();
+        String fileType = validated.extension();
+        String mimeType = validated.mimeType();
         long fileSize = file.getSize();
 
         // Generate storage path: upload/yyyy/MM/dd/uuid.ext
         String datePath = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
         String storedName = UUID.randomUUID().toString().replace("-", "") + "." + fileType;
         String relativePath = datePath + "/" + storedName;
-        String fullPath = uploadBasePath + "/" + relativePath;
 
-        // Create directory and save file
-        File dest = new File(fullPath);
+        // Create directory and save file.
+        // 注意:MultipartFile.transferTo() 传入相对路径时,是相对于 Servlet 容器(Tomcat)的临时目录解析,
+        // 而不是进程工作目录 —— 这会导致 mkdirs() 建的目录与 transferTo() 写入的位置不一致,
+        // 抛 FileNotFoundException(整个文件上传功能坏掉)。这里统一转成绝对路径,确保建目录与写文件是同一处。
+        File dest = resolveUploadFile(relativePath);
         dest.getParentFile().mkdirs();
         try {
             file.transferTo(dest);
@@ -75,6 +84,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         fileInfo.setFileSize(fileSize);
         fileInfo.setFileType(fileType);
         fileInfo.setMimeType(mimeType);
+        fileInfo.setAccessScope("NORMAL");
         fileInfo.setDownloadCount(0);
         fileInfo.setCurrentVersion(1);
         save(fileInfo);
@@ -93,19 +103,26 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
     @Override
     public Map<String, Object> downloadFile(Long id) {
-        FileInfo fileInfo = getById(id);
-        if (fileInfo == null) {
-            throw new RuntimeException("文件不存在");
-        }
+        Map<String, Object> result = readFile(id);
         // Increment download count
         update(new LambdaUpdateWrapper<FileInfo>()
                 .eq(FileInfo::getId, id)
                 .setSql("download_count = download_count + 1"));
+        return result;
+    }
 
+    @Override
+    public Map<String, Object> readFile(Long id) {
+        FileInfo fileInfo = getById(id);
+        if (fileInfo == null) {
+            throw new RuntimeException("文件不存在");
+        }
         Map<String, Object> result = new HashMap<>();
-        result.put("filePath", uploadBasePath + "/" + fileInfo.getFilePath());
+        // 与上传写入位置保持一致(绝对路径),否则相对路径下载时会找不到文件
+        result.put("filePath", resolveUploadFile(fileInfo.getFilePath()).getAbsolutePath());
         result.put("fileName", fileInfo.getOriginalName());
         result.put("mimeType", fileInfo.getMimeType());
+        result.put("fileType", fileInfo.getFileType());
         return result;
     }
 
@@ -121,7 +138,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         result.put("mimeType", fileInfo.getMimeType());
         result.put("fileType", fileInfo.getFileType());
         result.put("fileSize", fileInfo.getFileSize());
-        result.put("previewUrl", "/api/file/info/download/" + id);
+        result.put("previewUrl", "/api/file/info/inline/" + id);
         return result;
     }
 
@@ -158,19 +175,21 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public FileInfo uploadNewVersion(Long fileId, MultipartFile file, String changeLog) {
         FileInfo fileInfo = getById(fileId);
         if (fileInfo == null) {
             throw new RuntimeException("文件不存在");
         }
 
-        String fileType = getFileExtension(file.getOriginalFilename());
+        UploadSecurityService.ValidatedFile validated = uploadSecurityService.validate(file, ALLOWED_UPLOAD_EXTENSIONS);
+        String fileType = validated.extension();
         String datePath = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
         String storedName = UUID.randomUUID().toString().replace("-", "") + "." + fileType;
         String relativePath = datePath + "/" + storedName;
-        String fullPath = uploadBasePath + "/" + relativePath;
 
-        File dest = new File(fullPath);
+        // 同 uploadFile:用绝对路径,避免 transferTo() 相对路径解析到 Tomcat 临时目录导致写入失败
+        File dest = resolveUploadFile(relativePath);
         dest.getParentFile().mkdirs();
         try {
             file.transferTo(dest);
@@ -178,7 +197,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             throw new RuntimeException("文件上传失败: " + e.getMessage());
         }
 
-        int newVersion = fileInfo.getCurrentVersion() + 1;
+        int newVersion = (fileInfo.getCurrentVersion() == null ? 0 : fileInfo.getCurrentVersion()) + 1;
 
         // Save version record
         FileVersion version = new FileVersion();
@@ -193,6 +212,8 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         fileInfo.setCurrentVersion(newVersion);
         fileInfo.setFilePath(relativePath);
         fileInfo.setFileSize(file.getSize());
+        fileInfo.setFileType(validated.extension());
+        fileInfo.setMimeType(validated.mimeType());
         updateById(fileInfo);
 
         return fileInfo;
@@ -218,27 +239,32 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void permanentDelete(Long id) {
         // Physically delete the file and record
         FileInfo fileInfo = getById(id);
         if (fileInfo != null) {
-            // Delete physical file
-            File file = new File(uploadBasePath + "/" + fileInfo.getFilePath());
-            if (file.exists()) {
-                file.delete();
-            }
-            // Delete version files
+            // Collect physical file paths first; do all DB deletes inside the
+            // transaction, then delete files only after DB succeeds so a rollback
+            // never leaves the DB record while the file is already gone.
+            List<String> pathsToDelete = new ArrayList<>();
+            pathsToDelete.add(fileInfo.getFilePath());
+            // Delete version records (and collect their file paths)
             List<FileVersion> versions = fileVersionMapper.selectList(
                     new LambdaQueryWrapper<FileVersion>().eq(FileVersion::getFileId, id));
             for (FileVersion v : versions) {
-                File vFile = new File(uploadBasePath + "/" + v.getFilePath());
-                if (vFile.exists()) {
-                    vFile.delete();
-                }
+                pathsToDelete.add(v.getFilePath());
                 fileVersionMapper.deleteById(v.getId());
             }
-            // Remove record physically
+            // Remove main record physically
             baseMapper.deleteById(id);
+            // All DB deletes succeeded — now remove the physical files
+            for (String path : pathsToDelete) {
+                File f = resolveUploadFile(path);
+                if (f.exists()) {
+                    f.delete();
+                }
+            }
         }
     }
 
@@ -259,5 +285,18 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             return "";
         }
         return fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
+    }
+
+    /**
+     * 把 relativePath(形如 2026/07/03/xxx.png)解析成绝对文件路径。
+     * uploadBasePath 若是相对路径(默认 "upload"),这里锚定到进程工作目录并转成绝对路径,
+     * 保证 mkdirs() 建目录 与 MultipartFile.transferTo() 写文件、以及后续下载/删除,指向同一处。
+     */
+    private File resolveUploadFile(String relativePath) {
+        File base = new File(uploadBasePath);
+        if (!base.isAbsolute()) {
+            base = base.getAbsoluteFile();
+        }
+        return new File(base, relativePath);
     }
 }

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmResume;
 
 public interface IHrmResumeService extends IService<HrmResume> {
-    IPage<HrmResume> selectPage(int pageNum, int pageSize, Long recruitId, String name, Integer status);
+    IPage<HrmResume> selectPage(int pageNum, int pageSize, Long recruitId, String keyword, Integer status, String tags,
+                                String interviewDateStart, String interviewDateEnd);
     void changeStatus(Long id, Integer status, String evaluation);
 }

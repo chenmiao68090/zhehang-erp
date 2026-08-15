@@ -210,6 +210,8 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Folder, Plus, Upload, List, Grid, Document, FolderAdd } from '@element-plus/icons-vue'
 import { fileFolderApi, fileInfoApi } from '@/api/file'
+import { resolveApiUrl } from '@/api/base-url'
+import { downloadFileById } from '@/utils/download'
 
 const { t } = useI18n()
 
@@ -366,14 +368,15 @@ async function submitUpload() {
 }
 
 function handleDownload(row: any) {
-  window.open(`${import.meta.env.VITE_API_BASE_URL}/api/file/info/download/${row.id}`, '_blank')
+  // 走带 token 的 blob 下载,避免裸链接 GET 不带 token 导致 401
+  downloadFileById(row.id, row.name)
 }
 
 async function handlePreview(row: any) {
   try {
     const res: any = await fileInfoApi.preview(row.id)
     previewFile.value = res.data
-    previewUrl.value = `${import.meta.env.VITE_API_BASE_URL}${res.data.previewUrl}`
+    previewUrl.value = resolveApiUrl(res.data.previewUrl, import.meta.env?.VITE_API_BASE_URL)
     previewVisible.value = true
   } catch (e) { /* ignore */ }
 }
@@ -464,7 +467,7 @@ function getFileIconColor(fileType: string): string {
     pdf: '#f56c6c', doc: '#409eff', docx: '#409eff',
     xls: '#67c23a', xlsx: '#67c23a',
     ppt: '#e6a23c', pptx: '#e6a23c',
-    jpg: '#F26522', jpeg: '#F26522', png: '#F26522', gif: '#F26522',
+    jpg: '#3370ff', jpeg: '#3370ff', png: '#3370ff', gif: '#3370ff',
     zip: '#909399', rar: '#909399'
   }
   return colorMap[fileType?.toLowerCase()] || '#909399'

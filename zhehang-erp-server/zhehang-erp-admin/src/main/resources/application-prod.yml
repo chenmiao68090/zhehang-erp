@@ -2,17 +2,47 @@ spring:
   datasource:
     url: jdbc:mysql://${DB_HOST:mysql}:3306/zhehang_erp?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${DB_USER:root}
-    password: ${DB_PASSWORD:zhehang@2024}
+    password: ${DB_PASSWORD}
     hikari:
       minimum-idle: 10
       maximum-pool-size: 50
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 30000
   data:
     redis:
       host: ${REDIS_HOST:redis}
       port: 6379
-      password: ${REDIS_PASSWORD:zhehang@2024}
+      password: ${REDIS_PASSWORD}
       database: 0
       timeout: 10000ms
+  # 邮件发送(Offer 邮件等)。SMTP 信息全部走环境变量,未设置(MAIL_HOST/MAIL_USERNAME 为空)时不真正发信、由 MailService 优雅降级。
+  # 常见:QQ企业邮箱 smtp.exmail.qq.com:465、QQ smtp.qq.com:465、163 smtp.163.com:465、阿里企业邮 smtp.qiye.aliyun.com:465(均 SSL)。
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtp
+    default-encoding: UTF-8
+    from-name: ${MAIL_FROM_NAME:浙杭集团}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+          ssl:
+            enable: ${MAIL_SSL:true}
+          starttls:
+            enable: ${MAIL_STARTTLS:false}
+
+# 关闭 mail 健康检查:未配置 SMTP 时空 host 不应拖累就绪探针
+management:
+  health:
+    mail:
+      enabled: false
 
 mybatis-plus:
   configuration:
@@ -22,3 +52,37 @@ logging:
   level:
     com.zhehang.erp: info
     org.springframework.security: warn
+
+# 生产环境不得回退到开发占位值。任一变量缺失时，Spring 在启动阶段直接失败。
+jwt:
+  secret: ${JWT_SECRET}
+
+account-security:
+  mfa:
+    encryption-key: ${MFA_ENCRYPTION_KEY}
+
+security:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://zhehangjituan.xn--fiqs8s,https://www.zhehangjituan.xn--fiqs8s}
+  auth:
+    refresh-cookie:
+      name: ${AUTH_REFRESH_COOKIE_NAME:zhehang_refresh}
+      path: ${AUTH_REFRESH_COOKIE_PATH:/api/auth}
+      secure: true
+      same-site: Strict
+
+upload:
+  security:
+    virus-scan:
+      enabled: true
+      host: ${CLAMAV_HOST:clamav}
+      port: ${CLAMAV_PORT:3310}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+knife4j:
+  enable: false

@@ -21,4 +21,8 @@ public class HrmRecruit extends BaseEntity {
     private String requirements;
     private Integer status;
     private LocalDate publishDate;
+    private LocalDate startDate;
+    private LocalDate planFinishDate;
+    private String jobOwner;
+    private String recruitOwner;
 }

@@ -42,3 +42,8 @@ export function getTodoList(params?: { status?: string; pageNum?: number; pageSi
 export function getRecentNotices() {
   return get<{ data: NoticeItem[] }>('/dashboard/notices')
 }
+
+/** 老板总控台:一次拉全部今日关键统计 + 异常清单 + 员工执行排行(仅老板/超管) */
+export function getBossOverview() {
+  return get<any>('/dashboard/boss/overview')
+}

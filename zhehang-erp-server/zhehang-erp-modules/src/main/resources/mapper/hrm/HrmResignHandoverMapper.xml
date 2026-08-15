@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.hrm.mapper.HrmResignHandoverMapper">
+
+    <resultMap id="ResignedStaffMap" type="com.zhehang.erp.modules.hrm.domain.vo.ResignedStaffVO">
+        <id column="employee_id" property="employeeId"/>
+        <result column="emp_code" property="empCode"/>
+        <result column="name" property="name"/>
+        <result column="dept_id" property="deptId"/>
+        <result column="dept_name" property="deptName"/>
+        <result column="post_id" property="postId"/>
+        <result column="post_name" property="postName"/>
+        <result column="hire_date" property="hireDate"/>
+        <result column="resign_date" property="resignDate"/>
+        <result column="account_status" property="accountStatus"/>
+        <result column="account_enabled" property="accountEnabled"/>
+        <result column="handover_id" property="handoverId"/>
+        <result column="handover_date" property="handoverDate"/>
+        <result column="handover_to_employee_id" property="handoverToEmployeeId"/>
+        <result column="handover_to" property="handoverTo"/>
+        <result column="handover_status" property="status"/>
+        <result column="customer_check_status" property="customerCheckStatus"/>
+        <result column="task_check_status" property="taskCheckStatus"/>
+        <result column="document_check_status" property="documentCheckStatus"/>
+        <result column="asset_check_status" property="assetCheckStatus"/>
+        <result column="settlement_check_status" property="settlementCheckStatus"/>
+        <result column="archive_time" property="archiveTime"/>
+        <result column="risk_count" property="riskCount"/>
+        <result column="risk_level" property="riskLevel"/>
+    </resultMap>
+
+    <!--
+      离职中心只返回最小员工字段，禁止改为员工全字段投影；
+      最新交接以 create_time + id 稳定排序，历史分批记录仍保留在详情中。
+    -->
+    <sql id="LatestHandoverJoin">
+        LEFT JOIN hrm_resign_handover h ON h.id = (
+            SELECT h2.id
+            FROM hrm_resign_handover h2
+            WHERE h2.employee_id = e.id
+              AND h2.deleted = 0
+            ORDER BY h2.create_time DESC, h2.id DESC
+            LIMIT 1
+        )
+        LEFT JOIN sys_user u ON u.id = e.user_id AND u.deleted = 0
+        LEFT JOIN sys_dept d ON d.id = e.dept_id AND d.deleted = 0
+        LEFT JOIN org_post p ON p.id = e.post_id AND p.deleted = 0
+    </sql>
+
+    <!-- 0可登录 / 1已停用 / 2未开通 / 3账号关联异常 -->
+    <sql id="AccountStatusExpression">
+        CASE
+            WHEN e.user_id IS NULL THEN 2
+            WHEN u.id IS NULL THEN 3
+            WHEN u.status = 0 THEN 0
+            ELSE 1
+        END
+    </sql>
+
+    <!-- 账号风险 + 五项未完成；无交接记录时五项均为待确认。 -->
+    <sql id="RiskCountExpression">
+        (CASE WHEN e.user_id IS NOT NULL AND (u.id IS NULL OR u.status = 0) THEN 1 ELSE 0 END)
+        + (CASE WHEN COALESCE(h.customer_check_status, 0) = 2 THEN 0 ELSE 1 END)
+        + (CASE WHEN COALESCE(h.task_check_status, 0) = 2 THEN 0 ELSE 1 END)
+        + (CASE WHEN COALESCE(h.document_check_status, 0) = 2 THEN 0 ELSE 1 END)
+        + (CASE WHEN COALESCE(h.asset_check_status, 0) = 2 THEN 0 ELSE 1 END)
+        + (CASE WHEN COALESCE(h.settlement_check_status, 0) = 2 THEN 0 ELSE 1 END)
+    </sql>
+
+    <sql id="CenterColumns">
+        e.id AS employee_id,
+        e.emp_code,
+        e.name,
+        e.dept_id,
+        d.dept_name,
+        e.post_id,
+        p.post_name,
+        e.hire_date,
+        e.resign_date,
+        <include refid="AccountStatusExpression"/> AS account_status,
+        CASE WHEN u.id IS NOT NULL AND u.status = 0 THEN 1 ELSE 0 END AS account_enabled,
+        h.id AS handover_id,
+        h.handover_date,
+        h.handover_to_employee_id,
+        h.handover_to,
+        COALESCE(h.status, 0) AS handover_status,
+        COALESCE(h.customer_check_status, 0) AS customer_check_status,
+        COALESCE(h.task_check_status, 0) AS task_check_status,
+        COALESCE(h.document_check_status, 0) AS document_check_status,
+        COALESCE(h.asset_check_status, 0) AS asset_check_status,
+        COALESCE(h.settlement_check_status, 0) AS settlement_check_status,
+        h.archive_time,
+        <include refid="RiskCountExpression"/> AS risk_count,
+        CASE
+            WHEN COALESCE(h.status, 0) = 2
+              AND (<include refid="RiskCountExpression"/>) = 0 THEN 'CLOSED'
+            WHEN (e.user_id IS NOT NULL AND (u.id IS NULL OR u.status = 0))
+              OR COALESCE(h.customer_check_status, 0) = 3
+              OR COALESCE(h.task_check_status, 0) = 3
+              OR COALESCE(h.document_check_status, 0) = 3
+              OR COALESCE(h.asset_check_status, 0) = 3
+              OR COALESCE(h.settlement_check_status, 0) = 3
+              OR (<include refid="RiskCountExpression"/>) &gt;= 3
+                THEN 'HIGH'
+            ELSE 'MEDIUM'
+        END AS risk_level
+    </sql>
+
+    <select id="selectCenterPage" resultMap="ResignedStaffMap">
+        SELECT <include refid="CenterColumns"/>
+        FROM org_employee e
+        <include refid="LatestHandoverJoin"/>
+        WHERE e.deleted = 0
+          AND e.status = 3
+        <if test="name != null and name != ''">
+          AND e.name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="deptId != null">
+          AND e.dept_id = #{deptId}
+        </if>
+        <if test="status != null">
+          AND COALESCE(h.status, 0) = #{status}
+        </if>
+        <if test="riskOnly != null and riskOnly">
+          AND (COALESCE(h.status, 0) &lt;&gt; 2 OR (<include refid="RiskCountExpression"/>) &gt; 0)
+        </if>
+        ORDER BY e.resign_date DESC, e.id DESC
+    </select>
+
+    <select id="selectCenterSummary" resultType="com.zhehang.erp.modules.hrm.domain.vo.OffboardingSummaryVO">
+        SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN center.handover_status = 1 THEN 1 ELSE 0 END), 0) AS in_progress,
+            COALESCE(SUM(CASE WHEN center.handover_status &lt;&gt; 2 OR center.risk_count &gt; 0 THEN 1 ELSE 0 END), 0) AS risk_count,
+            COALESCE(SUM(CASE WHEN center.account_status IN (0, 3) THEN 1 ELSE 0 END), 0) AS account_risk_count,
+            COALESCE(SUM(CASE WHEN center.handover_status = 2 AND center.risk_count = 0 THEN 1 ELSE 0 END), 0) AS closed_count
+        FROM (
+            SELECT
+                COALESCE(h.status, 0) AS handover_status,
+                <include refid="AccountStatusExpression"/> AS account_status,
+                <include refid="RiskCountExpression"/> AS risk_count
+            FROM org_employee e
+            <include refid="LatestHandoverJoin"/>
+            WHERE e.deleted = 0
+              AND e.status = 3
+        ) center
+    </select>
+
+    <select id="selectCenterByEmployeeId" resultMap="ResignedStaffMap">
+        SELECT <include refid="CenterColumns"/>
+        FROM org_employee e
+        <include refid="LatestHandoverJoin"/>
+        WHERE e.id = #{employeeId}
+          AND e.deleted = 0
+          AND e.status = 3
+        LIMIT 1
+    </select>
+
+</mapper>

@@ -8,14 +8,21 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.finance.domain.entity.FinanceReimburse;
 import com.zhehang.erp.modules.finance.mapper.FinanceReimburseMapper;
 import com.zhehang.erp.modules.finance.service.IFinanceReimburseService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
+@RequiredArgsConstructor
 public class FinanceReimburseServiceImpl extends ServiceImpl<FinanceReimburseMapper, FinanceReimburse> implements IFinanceReimburseService {
+
+    private final DataScopeHelper dataScopeHelper;
 
     public IPage<FinanceReimburse> selectPage(Integer pageNum, Integer pageSize, String reimburseNo, Long applicantId, Integer status) {
         LambdaQueryWrapper<FinanceReimburse> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:报销按创建人(=申请人)收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, FinanceReimburse::getCreateBy);
         wrapper.like(StringUtils.hasText(reimburseNo), FinanceReimburse::getReimburseNo, reimburseNo)
                .eq(applicantId != null, FinanceReimburse::getApplicantId, applicantId)
                .eq(status != null, FinanceReimburse::getStatus, status)

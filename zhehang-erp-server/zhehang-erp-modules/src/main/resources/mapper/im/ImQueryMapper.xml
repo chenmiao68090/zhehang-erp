@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.im.mapper.ImQueryMapper">
+
+    <select id="lockConversation" resultType="java.lang.Long">
+        SELECT id
+        FROM im_conversation
+        WHERE id = #{conversationId} AND status = 'active'
+        FOR UPDATE
+    </select>
+
+    <update id="incrementSequence">
+        UPDATE im_conversation
+        SET last_seq = LAST_INSERT_ID(last_seq + 1), updated_at = CURRENT_TIMESTAMP(3)
+        WHERE id = #{conversationId} AND status = 'active'
+    </update>
+
+    <select id="lastAllocatedSequence" resultType="java.lang.Long">
+        SELECT LAST_INSERT_ID()
+    </select>
+
+    <update id="updateLastMessage">
+        UPDATE im_conversation
+        SET last_message_id = #{messageId}, last_message_at = #{messageAt}, updated_at = #{messageAt}
+        WHERE id = #{conversationId} AND last_seq = #{seq}
+    </update>
+
+    <select id="listConversations" resultType="com.zhehang.erp.modules.im.domain.ImModels$Conversation">
+        SELECT
+            c.id,
+            c.type,
+            CASE WHEN c.type = 'direct'
+                 THEN COALESCE(pe.name, pu.nickname, pu.username, '已离职员工')
+                 ELSE c.name END AS name,
+            CASE WHEN c.type = 'direct'
+                 THEN COALESCE(pe.avatar, pu.avatar)
+                 ELSE c.avatar_url END AS avatar_url,
+            c.owner_id,
+            c.business_type,
+            c.business_id,
+            c.last_seq,
+            cm.last_read_seq,
+            cm.manual_unread_seq,
+            c.last_message_id,
+            c.last_message_at,
+            CASE
+                WHEN lm.status = 'recalled' THEN '[消息已撤回]'
+                WHEN lm.message_type = 'image' THEN '[图片]'
+                WHEN lm.message_type = 'file' THEN '[文件]'
+                ELSE lm.search_text
+            END AS last_message_text,
+            lm.message_type AS last_message_type,
+            COALESCE(se.name, su.nickname, su.username,
+                     CASE WHEN lm.sender_id = 0 THEN '系统消息' ELSE '已离职员工' END) AS last_sender_name,
+            GREATEST(
+                (SELECT COUNT(*)
+                 FROM im_message um
+                 WHERE um.conversation_id = c.id
+                   AND um.seq &gt; GREATEST(cm.last_read_seq, cm.join_seq)
+                   AND um.sender_id != #{userId}
+                   AND um.status != 'recalled'),
+                IF(cm.manual_unread_seq &gt; 0, 1, 0)
+            ) AS unread_count,
+            (SELECT COUNT(*)
+             FROM im_message_mention mm
+             JOIN im_message mx ON mx.id = mm.message_id
+             WHERE mm.conversation_id = c.id
+               AND mm.mentioned_user_id = #{userId}
+               AND mm.read_at IS NULL
+               AND mx.status != 'recalled') AS mention_count,
+            (SELECT COUNT(*)
+             FROM im_message mi
+             WHERE mi.conversation_id = c.id
+               AND mi.is_important = 1
+               AND mi.status != 'recalled') AS important_count,
+            (SELECT COUNT(*)
+             FROM im_conversation_member mc
+             WHERE mc.conversation_id = c.id AND mc.status = 'active') AS member_count,
+            cm.is_pinned AS pinned,
+            cm.is_muted AS muted,
+            cm.is_hidden AS hidden,
+            cm.notification_level,
+            JSON_UNQUOTE(JSON_EXTRACT(cm.draft_json, '$.text')) AS draft,
+            cm.member_role,
+            pm.user_id AS peer_user_id,
+            pu.login_date AS peer_last_active_at,
+            CASE WHEN c.type IN ('group') THEN 1 ELSE 0 END AS can_leave,
+            CASE WHEN cm.is_pinned = 1
+                 THEN COALESCE(cm.pinned_at, c.updated_at)
+                 ELSE COALESCE(c.last_message_at, c.created_at) END AS sort_time
+        FROM im_conversation_member cm
+        JOIN im_conversation c ON c.id = cm.conversation_id
+        LEFT JOIN im_message lm ON lm.id = c.last_message_id
+        LEFT JOIN sys_user su ON su.id = lm.sender_id AND su.deleted = 0
+        LEFT JOIN org_employee se ON se.user_id = lm.sender_id AND se.deleted = 0
+        LEFT JOIN im_conversation_member pm
+               ON pm.conversation_id = c.id
+              AND pm.user_id != #{userId}
+              AND pm.status = 'active'
+              AND c.type = 'direct'
+        LEFT JOIN sys_user pu ON pu.id = pm.user_id AND pu.deleted = 0
+        LEFT JOIN org_employee pe ON pe.user_id = pm.user_id AND pe.deleted = 0
+        WHERE cm.user_id = #{userId}
+          AND cm.status = 'active'
+          AND c.status = 'active'
+          AND (cm.is_hidden = 0 OR (c.last_message_at IS NOT NULL AND c.last_message_at &gt; cm.hidden_at))
+        <if test="conversationId != null">
+            AND c.id = #{conversationId}
+        </if>
+        <if test="filter != null and filter != '' and filter != 'all'">
+            <choose>
+                <when test="filter == 'unread'">
+                    AND (cm.manual_unread_seq &gt; 0 OR EXISTS (
+                        SELECT 1 FROM im_message fu
+                        WHERE fu.conversation_id = c.id
+                          AND fu.seq &gt; GREATEST(cm.last_read_seq, cm.join_seq)
+                          AND fu.sender_id != #{userId}
+                          AND fu.status != 'recalled'))
+                </when>
+                <when test="filter == 'mention'">
+                    AND EXISTS (
+                        SELECT 1 FROM im_message_mention fm
+                        JOIN im_message fmm ON fmm.id = fm.message_id
+                        WHERE fm.conversation_id = c.id
+                          AND fm.mentioned_user_id = #{userId}
+                          AND fm.read_at IS NULL
+                          AND fmm.status != 'recalled')
+                </when>
+                <when test="filter == 'important'">
+                    AND EXISTS (SELECT 1 FROM im_message fi WHERE fi.conversation_id = c.id AND fi.is_important = 1 AND fi.status != 'recalled')
+                </when>
+                <when test="filter == 'todo'">
+                    AND EXISTS (SELECT 1 FROM im_message ft WHERE ft.conversation_id = c.id AND ft.message_type = 'task' AND ft.status != 'recalled')
+                </when>
+                <when test="filter == 'group'">
+                    AND c.type IN ('group', 'department', 'business', 'announcement')
+                </when>
+                <otherwise>
+                    AND c.type = #{filter}
+                </otherwise>
+            </choose>
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (
+                c.name LIKE CONCAT('%', #{keyword}, '%')
+                OR COALESCE(pe.name, pu.nickname, pu.username, '') LIKE CONCAT('%', #{keyword}, '%')
+                OR COALESCE(lm.search_text, '') LIKE CONCAT('%', #{keyword}, '%')
+                OR CAST(c.business_id AS CHAR) LIKE CONCAT('%', #{keyword}, '%')
+                OR EXISTS (SELECT 1 FROM im_message fs WHERE fs.conversation_id = c.id AND fs.search_text LIKE CONCAT('%', #{keyword}, '%'))
+            )
+        </if>
+        <if test="cursorPinned != null and cursorTime != null and cursorId != null">
+            AND (
+                cm.is_pinned &lt; #{cursorPinned}
+                OR (cm.is_pinned = #{cursorPinned}
+                    AND (CASE WHEN cm.is_pinned = 1 THEN COALESCE(cm.pinned_at, c.updated_at) ELSE COALESCE(c.last_message_at, c.created_at) END) &lt; #{cursorTime})
+                OR (cm.is_pinned = #{cursorPinned}
+                    AND (CASE WHEN cm.is_pinned = 1 THEN COALESCE(cm.pinned_at, c.updated_at) ELSE COALESCE(c.last_message_at, c.created_at) END) = #{cursorTime}
+                    AND c.id &lt; #{cursorId})
+            )
+        </if>
+        ORDER BY cm.is_pinned DESC, sort_time DESC, c.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="unreadSummary" resultType="com.zhehang.erp.modules.im.domain.ImModels$UnreadSummary">
+        SELECT
+            COALESCE(SUM(CASE WHEN (cm.is_muted = 0 AND cm.notification_level = 'all')
+                OR m.is_important = 1 OR m.message_type = 'task' OR EXISTS (
+                SELECT 1 FROM im_message_mention ma
+                WHERE ma.message_id = m.id
+                  AND ma.mentioned_user_id = #{userId}
+                  AND ma.read_at IS NULL
+            ) THEN 1 ELSE 0 END), 0) + (
+                SELECT COUNT(*) FROM im_conversation_member cmu
+                WHERE cmu.user_id = #{userId} AND cmu.status = 'active' AND cmu.manual_unread_seq &gt; 0
+                  AND NOT EXISTS (SELECT 1 FROM im_message mmu WHERE mmu.conversation_id = cmu.conversation_id AND mmu.seq &gt; GREATEST(cmu.last_read_seq, cmu.join_seq) AND mmu.sender_id != #{userId} AND mmu.status != 'recalled')
+            ) AS badge_count,
+            COUNT(*) + (
+                SELECT COUNT(*) FROM im_conversation_member cmt
+                WHERE cmt.user_id = #{userId} AND cmt.status = 'active' AND cmt.manual_unread_seq &gt; 0
+                  AND NOT EXISTS (SELECT 1 FROM im_message mmt WHERE mmt.conversation_id = cmt.conversation_id AND mmt.seq &gt; GREATEST(cmt.last_read_seq, cmt.join_seq) AND mmt.sender_id != #{userId} AND mmt.status != 'recalled')
+            ) AS total_unread,
+            COALESCE(SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM im_message_mention mu
+                WHERE mu.message_id = m.id
+                  AND mu.mentioned_user_id = #{userId}
+                  AND mu.read_at IS NULL
+            ) THEN 1 ELSE 0 END), 0) AS mention_unread,
+            COUNT(DISTINCT m.conversation_id) + (
+                SELECT COUNT(*) FROM im_conversation_member cmc
+                WHERE cmc.user_id = #{userId}
+                  AND cmc.status = 'active'
+                  AND cmc.manual_unread_seq &gt; 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM im_message mmc
+                      WHERE mmc.conversation_id = cmc.conversation_id
+                        AND mmc.seq &gt; GREATEST(cmc.last_read_seq, cmc.join_seq)
+                        AND mmc.sender_id != #{userId}
+                        AND mmc.status != 'recalled'
+                  )
+            ) AS unread_conversations
+        FROM im_conversation_member cm
+        JOIN im_conversation c ON c.id = cm.conversation_id AND c.status = 'active'
+        JOIN im_message m ON m.conversation_id = cm.conversation_id
+                         AND m.seq &gt; GREATEST(cm.last_read_seq, cm.join_seq)
+                         AND m.sender_id != #{userId}
+                         AND m.status != 'recalled'
+        WHERE cm.user_id = #{userId} AND cm.status = 'active'
+    </select>
+
+    <sql id="contactColumns">
+        u.id AS user_id,
+        COALESCE(e.name, u.nickname, u.username) AS name,
+        COALESCE(e.avatar, u.avatar) AS avatar,
+        e.emp_code,
+        COALESCE(e.dept_id, u.dept_id) AS dept_id,
+        d.dept_name,
+        u.login_date AS last_active_at
+    </sql>
+
+    <select id="searchContacts" resultType="com.zhehang.erp.modules.im.domain.ImModels$Contact">
+        SELECT <include refid="contactColumns"/>
+        FROM sys_user u
+        LEFT JOIN org_employee e ON e.user_id = u.id AND e.deleted = 0
+        LEFT JOIN sys_dept d ON d.id = COALESCE(e.dept_id, u.dept_id) AND d.deleted = 0
+        WHERE u.deleted = 0
+          AND u.status = 0
+          AND u.id != #{userId}
+          AND (e.id IS NULL OR e.status IN (1, 2))
+        <if test="keyword != null and keyword != ''">
+          AND (COALESCE(e.name, u.nickname, u.username) LIKE CONCAT('%', #{keyword}, '%')
+               OR e.emp_code LIKE CONCAT('%', #{keyword}, '%')
+               OR d.dept_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY d.sort, name
+        LIMIT #{limit}
+    </select>
+
+    <select id="contactsByIds" resultType="com.zhehang.erp.modules.im.domain.ImModels$Contact">
+        SELECT <include refid="contactColumns"/>
+        FROM sys_user u
+        LEFT JOIN org_employee e ON e.user_id = u.id AND e.deleted = 0
+        LEFT JOIN sys_dept d ON d.id = COALESCE(e.dept_id, u.dept_id) AND d.deleted = 0
+        WHERE u.deleted = 0
+          AND u.status = 0
+          AND (e.id IS NULL OR e.status IN (1, 2))
+          AND u.id IN
+          <foreach collection="userIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="conversationMembers" resultType="com.zhehang.erp.modules.im.domain.ImModels$Contact">
+        SELECT <include refid="contactColumns"/>, cm.member_role
+        FROM im_conversation_member cm
+        JOIN sys_user u ON u.id = cm.user_id AND u.deleted = 0
+        LEFT JOIN org_employee e ON e.user_id = u.id AND e.deleted = 0
+        LEFT JOIN sys_dept d ON d.id = COALESCE(e.dept_id, u.dept_id) AND d.deleted = 0
+        WHERE cm.conversation_id = #{conversationId} AND cm.status = 'active'
+        ORDER BY FIELD(cm.member_role, 'owner', 'admin', 'member'), name
+    </select>
+
+    <select id="activeUserInTenant" resultType="int">
+        SELECT COUNT(*)
+        FROM sys_user u
+        LEFT JOIN org_employee e ON e.user_id = u.id AND e.deleted = 0
+        WHERE u.id = #{userId}
+          AND u.tenant_id = #{tenantId}
+          AND u.deleted = 0
+          AND u.status = 0
+          AND (e.id IS NULL OR e.status IN (1, 2))
+    </select>
+
+    <update id="markRead">
+        UPDATE im_conversation_member
+        SET last_read_seq = GREATEST(last_read_seq, #{seq}),
+            last_delivered_seq = GREATEST(last_delivered_seq, #{seq}),
+            manual_unread_seq = 0,
+            is_hidden = 0,
+            updated_at = CURRENT_TIMESTAMP(3)
+        WHERE conversation_id = #{conversationId} AND user_id = #{userId} AND status = 'active'
+    </update>
+
+    <update id="markMentionsRead">
+        UPDATE im_message_mention mm
+        JOIN im_message m ON m.id = mm.message_id
+        SET mm.read_at = COALESCE(mm.read_at, CURRENT_TIMESTAMP(3))
+        WHERE mm.conversation_id = #{conversationId}
+          AND mm.mentioned_user_id = #{userId}
+          AND m.seq &lt;= #{seq}
+    </update>
+</mapper>

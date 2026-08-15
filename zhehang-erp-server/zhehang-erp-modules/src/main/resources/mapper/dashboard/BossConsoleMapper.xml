@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.dashboard.boss.mapper.BossConsoleMapper">
+
+    <!-- ①客户问题:crm_customer_issue(status pending/processing/waiting/completed/closed;priority P0/P1/P2;deadline 逾期) -->
+    <select id="customerIssueStat" resultType="java.util.Map">
+        SELECT
+            SUM(CASE WHEN DATE(create_time)=CURDATE() THEN 1 ELSE 0 END) AS todayNew,
+            SUM(CASE WHEN status IN ('pending','processing','waiting') THEN 1 ELSE 0 END) AS unhandled,
+            SUM(CASE WHEN deadline &lt; NOW() AND status NOT IN ('completed','closed') THEN 1 ELSE 0 END) AS overdue,
+            SUM(CASE WHEN priority='P0' AND status NOT IN ('completed','closed') THEN 1 ELSE 0 END) AS p0
+        FROM crm_customer_issue WHERE deleted=0
+    </select>
+
+    <!-- ②代账服务:biz_bookkeeping_order(status pending/processing/completed/closed;service_end 服务结束) -->
+    <select id="bookkeepingStat" resultType="java.util.Map">
+        SELECT
+            SUM(CASE WHEN status &lt;&gt; 'closed' THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed,
+            SUM(CASE WHEN status IN ('pending','processing') THEN 1 ELSE 0 END) AS processing,
+            SUM(CASE WHEN service_end &lt; CURDATE() AND status NOT IN ('completed','closed') THEN 1 ELSE 0 END) AS overdue
+        FROM biz_bookkeeping_order WHERE deleted=0
+    </select>
+
+    <!-- ③销售线索:拆单表标量 -->
+    <select id="countTodayLeads" resultType="long">
+        SELECT COUNT(*) FROM crm_lead WHERE deleted=0 AND DATE(create_time)=CURDATE()
+    </select>
+    <select id="countTodayFollows" resultType="long">
+        SELECT COUNT(*) FROM crm_follow WHERE deleted=0 AND DATE(create_time)=CURDATE()
+    </select>
+    <select id="sumExpectAmount" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(amount),0) FROM crm_opportunity WHERE deleted=0 AND stage IN (1,2,3,4)
+    </select>
+    <select id="sumDealAmountThisMonth" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(amount),0) FROM crm_contract
+        WHERE deleted=0 AND sign_date IS NOT NULL
+          AND YEAR(sign_date)=YEAR(CURDATE()) AND MONTH(sign_date)=MONTH(CURDATE())
+    </select>
+
+    <!-- ④回款续费:biz_receipt_plan(status 1未收/2部分/3已收) + biz_receipt(status 1待确认/2已确认/3退款) -->
+    <select id="sumTodayDue" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(plan_amount),0) FROM biz_receipt_plan WHERE deleted=0 AND plan_date=CURDATE()
+    </select>
+    <select id="sumTodayReceived" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(amount),0) FROM biz_receipt
+        WHERE deleted=0 AND status=2 AND DATE(IFNULL(confirm_time, receive_time))=CURDATE()
+    </select>
+    <select id="sumOverdueArrears" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(plan_amount - IFNULL(paid_amount,0)),0)
+        FROM biz_receipt_plan WHERE deleted=0 AND plan_date &lt; CURDATE() AND status &lt;&gt; 3
+    </select>
+    <select id="countArrearsCustomers" resultType="long">
+        SELECT COUNT(DISTINCT order_id) FROM biz_receipt_plan
+        WHERE deleted=0 AND plan_date &lt; CURDATE() AND status &lt;&gt; 3
+    </select>
+
+    <!-- ⑤员工执行:biz_task(status 1待指派/2待执行/3执行中/4待验收/5已完成/6已驳回/7已取消) -->
+    <select id="employeeExec" resultType="java.util.Map">
+        SELECT
+            executor_id AS executorId,
+            MAX(executor_name) AS executorName,
+            SUM(CASE WHEN DATE(plan_end_time)=CURDATE() THEN 1 ELSE 0 END) AS todayCount,
+            SUM(CASE WHEN plan_end_time &lt; NOW() AND status NOT IN (5,6,7) THEN 1 ELSE 0 END) AS overdueCount,
+            SUM(CASE WHEN status=5 THEN 1 ELSE 0 END) AS doneCount,
+            SUM(CASE WHEN status &lt;&gt; 7 THEN 1 ELSE 0 END) AS totalCount
+        FROM biz_task
+        WHERE deleted=0 AND executor_id IS NOT NULL
+          AND (plan_end_time &gt;= DATE_FORMAT(CURDATE(),'%Y-%m-01')
+               OR (plan_end_time &lt; NOW() AND status NOT IN (5,6,7)))
+        GROUP BY executor_id
+        ORDER BY overdueCount DESC, todayCount DESC
+        LIMIT 50
+    </select>
+
+    <!-- 异常清单 -->
+    <select id="overdueIssues" resultType="java.util.Map">
+        SELECT id, issue_no AS issueNo, customer_name AS customerName, owner_name AS ownerName,
+               priority, deadline, status
+        FROM crm_customer_issue
+        WHERE deleted=0 AND deadline &lt; NOW() AND status NOT IN ('completed','closed')
+        ORDER BY deadline ASC LIMIT 10
+    </select>
+    <select id="p0Issues" resultType="java.util.Map">
+        SELECT id, issue_no AS issueNo, customer_name AS customerName, owner_name AS ownerName,
+               deadline, status
+        FROM crm_customer_issue
+        WHERE deleted=0 AND priority='P0' AND status NOT IN ('completed','closed')
+        ORDER BY create_time DESC LIMIT 10
+    </select>
+    <select id="bookkeepingAbnormal" resultType="java.util.Map">
+        SELECT id, company_name AS companyName, owner_name AS ownerName, service_end AS serviceEnd, status
+        FROM biz_bookkeeping_order
+        WHERE deleted=0 AND service_end &lt; CURDATE() AND status NOT IN ('completed','closed')
+        ORDER BY service_end ASC LIMIT 10
+    </select>
+    <select id="arrearsList" resultType="java.util.Map">
+        SELECT p.order_id AS orderId, o.customer_name AS customerName,
+               SUM(p.plan_amount - IFNULL(p.paid_amount,0)) AS arrears,
+               MIN(p.plan_date) AS earliestDue
+        FROM biz_receipt_plan p
+        LEFT JOIN biz_order o ON o.id = p.order_id AND o.deleted=0
+        WHERE p.deleted=0 AND p.plan_date &lt; CURDATE() AND p.status &lt;&gt; 3
+        GROUP BY p.order_id, o.customer_name
+        ORDER BY arrears DESC LIMIT 10
+    </select>
+
+</mapper>

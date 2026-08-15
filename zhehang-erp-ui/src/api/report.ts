@@ -74,7 +74,7 @@ export const reportDefinitionApi = {
 
 // ==================== 报表数据接口 ====================
 export const reportDataApi = {
-  execute: (reportId: number, params?: any) => get(`/report/data/execute/${reportId}`, params),
+  execute: (reportId: number) => get(`/report/data/execute/${reportId}`),
   listDatasets: (reportId: number) => get(`/report/data/dataset/${reportId}`),
   addDataset: (data: ReportDataset) => post('/report/data/dataset', data),
   updateDataset: (data: ReportDataset) => put('/report/data/dataset', data),

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.system.mapper.SysImpersonationSessionMapper">
+
+    <sql id="candidateProjection">
+        SELECT u.id AS user_id,
+               COALESCE(NULLIF(e.name, ''), NULLIF(u.nickname, ''), u.username) AS display_name,
+               u.dept_id AS dept_id,
+               d.dept_name AS dept_name,
+               CONCAT('[', COALESCE(GROUP_CONCAT(DISTINCT JSON_QUOTE(r.role_name)
+                       ORDER BY r.id SEPARATOR ','), ''), ']') AS role_names_json,
+               CONCAT('[', COALESCE(GROUP_CONCAT(DISTINCT JSON_QUOTE(r.role_key)
+                       ORDER BY r.id SEPARATOR ','), ''), ']') AS role_keys_json,
+               COUNT(DISTINCT r.id) AS role_count
+        FROM sys_user u
+        INNER JOIN org_employee e
+                ON e.user_id = u.id
+               AND e.tenant_id = u.tenant_id
+               AND e.deleted = 0
+               AND e.status IN (1, 2)
+        LEFT JOIN sys_dept d
+               ON d.id = u.dept_id
+              AND d.tenant_id = u.tenant_id
+              AND d.deleted = 0
+              AND d.status = 0
+        LEFT JOIN sys_user_role ur ON ur.user_id = u.id
+        LEFT JOIN sys_role r
+               ON r.id = ur.role_id
+              AND r.tenant_id = u.tenant_id
+              AND r.deleted = 0
+              AND r.status = 0
+    </sql>
+
+    <select id="selectCandidates" resultType="com.zhehang.erp.modules.system.domain.dto.ImpersonationCandidateRow">
+        <include refid="candidateProjection"/>
+        WHERE u.tenant_id = #{tenantId}
+          AND u.id NOT IN (1, 3)
+          AND u.status = 0
+          AND u.deleted = 0
+        <if test="keyword != null and keyword != ''">
+          AND (e.name LIKE CONCAT('%', #{keyword}, '%')
+               OR u.nickname LIKE CONCAT('%', #{keyword}, '%')
+               OR u.username LIKE CONCAT('%', #{keyword}, '%')
+               OR d.dept_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="deptId != null">
+          AND u.dept_id = #{deptId}
+        </if>
+        GROUP BY u.id, e.name, u.nickname, u.username, u.dept_id, d.dept_name
+        ORDER BY COALESCE(d.sort, 999999), d.id, display_name, u.id
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectCandidateByUserId" resultType="com.zhehang.erp.modules.system.domain.dto.ImpersonationCandidateRow">
+        <include refid="candidateProjection"/>
+        WHERE u.tenant_id = #{tenantId}
+          AND u.id = #{userId}
+          AND u.id NOT IN (1, 3)
+          AND u.status = 0
+          AND u.deleted = 0
+        GROUP BY u.id, e.name, u.nickname, u.username, u.dept_id, d.dept_name
+        LIMIT 1
+    </select>
+
+    <update id="markExpiredSessions">
+        UPDATE sys_impersonation_session
+        SET status = 'EXPIRED',
+            end_time = COALESCE(end_time, expire_time),
+            end_reason = COALESCE(end_reason, '30分钟会话到期'),
+            update_time = #{now}
+        WHERE status = 'ACTIVE'
+          AND expire_time &lt;= #{now}
+    </update>
+</mapper>

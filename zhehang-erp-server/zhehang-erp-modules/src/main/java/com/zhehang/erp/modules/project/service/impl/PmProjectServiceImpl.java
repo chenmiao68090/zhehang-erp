@@ -11,8 +11,10 @@ import com.zhehang.erp.modules.project.mapper.PmProjectMapper;
 import com.zhehang.erp.modules.project.mapper.PmTaskMapper;
 import com.zhehang.erp.modules.project.mapper.PmTimesheetMapper;
 import com.zhehang.erp.modules.project.service.IPmProjectService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -28,10 +30,13 @@ public class PmProjectServiceImpl extends ServiceImpl<PmProjectMapper, PmProject
     private final PmProjectMapper projectMapper;
     private final PmTaskMapper taskMapper;
     private final PmTimesheetMapper timesheetMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<PmProject> selectPage(int pageNum, int pageSize, String name, Integer type, Integer status, Long managerId) {
         LambdaQueryWrapper<PmProject> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:项目按创建人收敛;管理员/data_scope=1看全部(项目经理可见可后续改按manager_id)
+        dataScopeHelper.applyCreatorScope(wrapper, PmProject::getCreateBy);
         wrapper.like(StringUtils.hasText(name), PmProject::getName, name)
                .eq(type != null, PmProject::getType, type)
                .eq(status != null, PmProject::getStatus, status)
@@ -41,6 +46,7 @@ public class PmProjectServiceImpl extends ServiceImpl<PmProjectMapper, PmProject
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void calcProgress(Long projectId) {
         List<PmTask> tasks = taskMapper.selectList(
             new LambdaQueryWrapper<PmTask>().eq(PmTask::getProjectId, projectId));
@@ -49,7 +55,8 @@ public class PmProjectServiceImpl extends ServiceImpl<PmProjectMapper, PmProject
         for (PmTask t : tasks) {
             totalProgress += (t.getProgress() != null ? t.getProgress() : 0);
         }
-        int avg = totalProgress / tasks.size();
+        int avg = java.math.BigDecimal.valueOf(totalProgress).divide(java.math.BigDecimal.valueOf(tasks.size()), 0, java.math.RoundingMode.HALF_UP).intValue();
+        avg = Math.min(avg, 100);
         PmProject project = new PmProject();
         project.setId(projectId);
         project.setProgress(avg);

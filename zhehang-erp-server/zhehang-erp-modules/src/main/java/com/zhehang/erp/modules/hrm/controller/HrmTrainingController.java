@@ -13,6 +13,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/hrm/training")
 @RequiredArgsConstructor
+@org.springframework.security.access.prepost.PreAuthorize("@perm.hasModule('hrm')")
 public class HrmTrainingController {
 
     private final IHrmTrainingService trainingService;

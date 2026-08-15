@@ -9,6 +9,6 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface SysNotificationMapper extends BaseMapper<SysNotification> {
 
-    @Update("UPDATE sys_notification SET is_read = 1 WHERE user_id = #{userId} AND is_read = 0 AND deleted = 0")
+    @Update("UPDATE sys_notification SET is_read = 1, read_time = NOW() WHERE receiver_id = #{userId} AND is_read = 0 AND deleted = 0")
     int markAllRead(@Param("userId") Long userId);
 }

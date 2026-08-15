@@ -8,7 +8,11 @@ import App from './App.vue'
 import router from './router'
 import { i18n } from './locales'
 import { setupPermissionDirective } from './directives/permission'
+import { setupErrorHandler } from '@/utils/error-handler'
+import { cleanupMockStorage } from '@/utils/cleanup-storage'
 import './styles/index.scss'
+
+cleanupMockStorage()
 
 const app = createApp(App)
 
@@ -24,5 +28,8 @@ app.use(ElementPlus)
 
 // Register permission directives
 setupPermissionDirective(app)
+
+// Setup global error handler
+setupErrorHandler(app)
 
 app.mount('#app')

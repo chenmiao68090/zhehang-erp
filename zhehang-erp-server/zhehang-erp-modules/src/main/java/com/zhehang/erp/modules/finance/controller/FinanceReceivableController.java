@@ -15,6 +15,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/finance/receivable")
 @RequiredArgsConstructor
+@org.springframework.security.access.prepost.PreAuthorize("@perm.hasModule('finance')")
 public class FinanceReceivableController {
 
     private final FinanceReceivableServiceImpl receivableService;

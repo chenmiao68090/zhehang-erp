@@ -2,7 +2,7 @@ SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
 -- ============================================================
--- 浙杭企服ERP系统 - 财务管理模块
+-- 浙杭集团ERP系统 - 财务管理模块
 -- ============================================================
 
 USE `zhehang_erp`;
@@ -16,7 +16,7 @@ CREATE TABLE `finance_voucher` (
   `summary` VARCHAR(500) DEFAULT NULL COMMENT '摘要',
   `total_debit` DECIMAL(15,2) DEFAULT 0.00 COMMENT '借方合计',
   `total_credit` DECIMAL(15,2) DEFAULT 0.00 COMMENT '贷方合计',
-  `status` TINYINT DEFAULT 1 COMMENT '状态（1草稿 2已审核 3已过账 4已作废）',
+  `status` TINYINT DEFAULT 0 COMMENT '状态（0草稿 1已审核 2已过账 3已作废，与 FinanceVoucherServiceImpl 一致）',
   `reviewer_id` BIGINT DEFAULT NULL COMMENT '审核人ID',
   `review_time` DATETIME DEFAULT NULL COMMENT '审核时间',
   `customer_id` BIGINT DEFAULT NULL COMMENT '代账客户ID',

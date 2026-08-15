@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -28,6 +29,16 @@ public class OrgStructureServiceImpl implements IOrgStructureService {
         wrapper.eq(SysDept::getStatus, 0).orderByAsc(SysDept::getOrderNum);
         List<SysDept> depts = deptMapper.selectList(wrapper);
 
+        // 一次性查所有部门在职人数,避免逐部门查询(N+1 优化:原每部门一次 count → 现一次 GROUP BY)
+        Map<Long, Integer> memberCountMap = new HashMap<>();
+        for (Map<String, Object> row : employeeMapper.selectMemberCountGroupByDept()) {
+            Object did = row.get("deptId");
+            Object cnt = row.get("cnt");
+            if (did != null && cnt != null) {
+                memberCountMap.put(((Number) did).longValue(), ((Number) cnt).intValue());
+            }
+        }
+
         // 转换为树节点
         List<OrgTreeVO> nodes = depts.stream().map(dept -> {
             OrgTreeVO node = new OrgTreeVO();
@@ -37,8 +48,8 @@ public class OrgStructureServiceImpl implements IOrgStructureService {
             node.setType("dept");
             node.setLeader(dept.getLeader());
             node.setStatus(dept.getStatus());
-            // 统计该部门下的在职人数
-            node.setMemberCount(employeeMapper.countByDeptId(dept.getId()));
+            // 该部门在职人数(从批量结果取,无额外查询)
+            node.setMemberCount(memberCountMap.getOrDefault(dept.getId(), 0));
             return node;
         }).collect(Collectors.toList());
 

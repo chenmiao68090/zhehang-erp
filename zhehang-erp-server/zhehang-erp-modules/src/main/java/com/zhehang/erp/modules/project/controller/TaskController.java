@@ -2,6 +2,7 @@ package com.zhehang.erp.modules.project.controller;
 
 import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import com.zhehang.erp.modules.project.domain.entity.PmTask;
 import com.zhehang.erp.modules.project.service.IPmTaskService;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.Map;
 public class TaskController {
 
     private final IPmTaskService taskService;
+    private final DataScopeHelper dataScopeHelper;
 
     @GetMapping("/tree")
     public R<List<PmTask>> tree(@RequestParam Long projectId) {
@@ -47,6 +49,13 @@ public class TaskController {
     @PutMapping
     @Log(module = "椤圭洰浠诲姟", type = Log.OperationType.UPDATE)
     public R<Void> edit(@RequestBody PmTask task) {
+        PmTask existing = taskService.getById(task.getId());
+        if (existing == null) {
+            return R.fail("记录不存在");
+        }
+        if (!dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+            return R.fail("无权修改他人记录");
+        }
         taskService.updateById(task);
         return R.ok();
     }
@@ -54,6 +63,10 @@ public class TaskController {
     @DeleteMapping("/{id}")
     @Log(module = "椤圭洰浠诲姟", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
+        PmTask task = taskService.getById(id);
+        if (task != null && !dataScopeHelper.canAccess(task.getCreateBy(), null)) {
+            return R.fail("无权删除他人记录");
+        }
         taskService.removeById(id);
         return R.ok();
     }

@@ -1,122 +1,203 @@
 <template>
-  <div class="message-center" v-click-outside="closePanel">
-    <el-badge :value="unreadTotal" :max="99" :hidden="unreadTotal === 0" class="notification-badge">
-      <el-icon class="header-icon" @click="togglePanel" :size="20"><Bell /></el-icon>
-    </el-badge>
-    <transition name="msg-dropdown">
-      <div class="msg-panel" v-show="visible">
-        <div class="msg-panel-header">
-          <span>{{ $t('notification.title') }}</span>
-          <el-link type="primary" :underline="false" @click="handleMarkAllRead">{{ $t('common.markAllRead') }}</el-link>
+  <div class="im-entry" :class="{ 'sidebar-bottom': props.placement === 'sidebar-bottom' }" v-click-outside="close">
+    <button class="im-trigger" type="button" title="消息" @click="toggle">
+      <el-badge :value="imStore.badgeText" :hidden="imStore.summary.badgeCount === 0" class="im-badge">
+        <el-icon :size="20"><ChatDotRound /></el-icon>
+      </el-badge>
+    </button>
+
+    <transition name="im-pop">
+      <section v-if="visible" class="im-popover">
+        <header class="im-popover-head">
+          <div>
+            <h3>消息</h3>
+            <p>
+              <span class="connection-dot" :class="imStore.connectionState" />
+              {{ connectionText }}
+            </p>
+          </div>
+          <el-button text :icon="Refresh" title="刷新" @click="refresh" />
+        </header>
+
+        <div class="im-summary">
+          <button type="button" @click="goCenter('unread')">
+            <strong>{{ imStore.summary.totalUnread }}</strong><span>未读消息</span>
+          </button>
+          <button type="button" @click="goCenter('mention')">
+            <strong>{{ imStore.summary.mentionUnread }}</strong><span>@我的</span>
+          </button>
+          <button type="button" @click="goCenter('all')">
+            <strong>{{ imStore.summary.unreadConversations }}</strong><span>待查看会话</span>
+          </button>
         </div>
-        <el-tabs v-model="activeTab" class="msg-tabs" stretch>
-          <el-tab-pane name="notification">
-            <template #label>{{ $t('notification.tabs.notification') }}<el-badge :value="unreadNotif" :hidden="unreadNotif === 0" :max="99" /></template>
-            <div class="msg-list">
-              <div v-if="notifList.length === 0" class="msg-empty">{{ $t('notification.noNotification') }}</div>
-              <div v-for="item in notifList.slice(0, 5)" :key="item.id" class="msg-item" :class="{ unread: !item.isRead }" @click="handleItemClick(item)">
-                <div class="msg-item-dot" v-if="!item.isRead"></div>
-                <div class="msg-item-body"><div class="msg-item-title">{{ item.title }}</div><div class="msg-item-time">{{ item.createTime }}</div></div>
-              </div>
-            </div>
-          </el-tab-pane>
-          <el-tab-pane name="message">
-            <template #label>{{ $t('notification.message') }}<el-badge :value="unreadMsg" :hidden="unreadMsg === 0" :max="99" /></template>
-            <div class="msg-list">
-              <div v-if="msgList.length === 0" class="msg-empty">{{ $t('notification.noNotification') }}</div>
-              <div v-for="item in msgList.slice(0, 5)" :key="item.id" class="msg-item" :class="{ unread: !item.isRead }" @click="handleItemClick(item)">
-                <div class="msg-item-dot" v-if="!item.isRead"></div>
-                <div class="msg-item-body"><div class="msg-item-title">{{ item.title }}</div><div class="msg-item-time">{{ item.createTime }}</div></div>
-              </div>
-            </div>
-          </el-tab-pane>
-          <el-tab-pane name="todo">
-            <template #label>{{ $t('notification.tabs.todo') }}<el-badge :value="unreadTodo" :hidden="unreadTodo === 0" :max="99" /></template>
-            <div class="msg-list">
-              <div v-if="todoList.length === 0" class="msg-empty">{{ $t('notification.noNotification') }}</div>
-              <div v-for="item in todoList.slice(0, 5)" :key="item.id" class="msg-item" :class="{ unread: !item.isRead }" @click="handleItemClick(item)">
-                <div class="msg-item-dot" v-if="!item.isRead"></div>
-                <div class="msg-item-body"><div class="msg-item-title">{{ item.title }}</div><div class="msg-item-time">{{ item.createTime }}</div></div>
-              </div>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
-        <div class="msg-panel-footer" @click="goNotificationPage">{{ $t('common.viewAll') }}</div>
-      </div>
+
+        <div class="im-recent-title">
+          <span>最近消息</span>
+          <button type="button" @click="goCenter('all')">全部会话</button>
+        </div>
+
+        <div class="im-recent-list">
+          <button
+            v-for="conversation in imStore.recent"
+            :key="conversation.id"
+            class="im-recent-row"
+            type="button"
+            @click="openConversation(conversation.id)"
+          >
+            <span class="im-avatar-wrap">
+              <el-avatar :size="38" :src="conversation.avatarUrl" class="im-avatar">{{ conversation.name?.slice(0, 1) || '消' }}</el-avatar>
+              <i v-if="conversation.type === 'direct'" :class="{ online: conversation.peerOnline }" />
+            </span>
+            <span class="im-recent-body">
+              <span class="im-recent-line">
+                <b>{{ conversation.name }}</b>
+                <time>{{ formatTime(conversation.lastMessageAt) }}</time>
+              </span>
+              <span class="im-recent-line preview">
+                <em v-if="conversation.draft">[草稿] {{ conversation.draft }}</em>
+                <span v-else>{{ conversation.lastSenderName ? `${conversation.lastSenderName}：` : '' }}{{ conversation.lastMessageText || '开始沟通' }}</span>
+                <small v-if="conversation.type === 'direct'" class="im-presence" :class="{ online: conversation.peerOnline }">{{ presenceText(conversation.peerOnline, conversation.peerLastActiveAt) }}</small>
+                <el-icon v-if="conversation.muted" title="免打扰"><MuteNotification /></el-icon>
+                <i v-if="conversation.mentionCount">@我</i>
+                <u v-if="conversation.unreadCount">{{ conversation.unreadCount > 99 ? '99+' : conversation.unreadCount }}</u>
+              </span>
+            </span>
+          </button>
+          <div v-if="!imStore.recent.length" class="im-empty">
+            <el-icon><ChatLineRound /></el-icon>
+            <span>暂无会话</span>
+          </div>
+        </div>
+
+        <footer>
+          <button type="button" @click="goCenter('all')">
+            进入内部沟通
+            <el-icon><ArrowRight /></el-icon>
+          </button>
+        </footer>
+      </section>
     </transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { Bell } from '@element-plus/icons-vue'
 import { ClickOutside as vClickOutside } from 'element-plus'
+import { ArrowRight, ChatDotRound, ChatLineRound, MuteNotification, Refresh } from '@element-plus/icons-vue'
+import { useImStore } from '@/stores/im'
+import { formatImPresence } from '@/utils/im-presence'
+
+const props = withDefaults(defineProps<{
+  placement?: 'top-right' | 'sidebar-bottom'
+}>(), {
+  placement: 'top-right'
+})
 
 const router = useRouter()
-const { t } = useI18n()
+const imStore = useImStore()
 const visible = ref(false)
-const activeTab = ref('notification')
 
-interface MsgItem { id: number; title: string; createTime: string; isRead: boolean; link?: string; type: string }
+const connectionText = computed(() => ({
+  connected: '实时连接正常',
+  connecting: '正在连接',
+  reconnecting: '正在恢复连接',
+  offline: '离线，内容会保留',
+  idle: '准备连接'
+}[imStore.connectionState]))
 
-const notifList = ref<MsgItem[]>([
-  { id: 1, title: '系统升级维护通知', createTime: '09:30', isRead: false, type: 'system' },
-  { id: 2, title: '端午节放假通知', createTime: '昨天', isRead: false, type: 'system' },
-  { id: 3, title: '考勤异常提醒', createTime: '05-16', isRead: true, type: 'system' }
-])
-const msgList = ref<MsgItem[]>([
-  { id: 4, title: '新客户分配通知', createTime: '14:10', isRead: false, type: 'message' },
-  { id: 5, title: '李四回复了您的评论', createTime: '昨天', isRead: true, type: 'message' }
-])
-const todoList = ref<MsgItem[]>([
-  { id: 6, title: '审批张三的报销申请', createTime: '08:45', isRead: false, link: '/workflow/todo', type: 'approval' },
-  { id: 7, title: '合同到期跟进提醒', createTime: '昨天', isRead: false, link: '/crm/contract', type: 'task' },
-  { id: 8, title: '完成月度销售报告', createTime: '05-16', isRead: true, type: 'task' }
-])
+onMounted(() => imStore.initialize())
 
-const unreadNotif = computed(() => notifList.value.filter(n => !n.isRead).length)
-const unreadMsg = computed(() => msgList.value.filter(n => !n.isRead).length)
-const unreadTodo = computed(() => todoList.value.filter(n => !n.isRead).length)
-const unreadTotal = computed(() => unreadNotif.value + unreadMsg.value + unreadTodo.value)
+function toggle() {
+  visible.value = !visible.value
+  if (visible.value) refresh()
+}
 
-function togglePanel() { visible.value = !visible.value }
-function closePanel() { visible.value = false }
-function handleItemClick(item: MsgItem) { item.isRead = true; if (item.link) { visible.value = false; router.push(item.link) } }
-function handleMarkAllRead() { notifList.value.forEach(n => n.isRead = true); msgList.value.forEach(n => n.isRead = true); todoList.value.forEach(n => n.isRead = true) }
-function goNotificationPage() { visible.value = false; router.push('/system/notification') }
+function close() {
+  visible.value = false
+}
+
+async function refresh() {
+  await Promise.allSettled([imStore.refreshSummary(), imStore.refreshRecent()])
+}
+
+function goCenter(filter: string) {
+  close()
+  router.push({ path: '/message/center', query: filter === 'all' ? {} : { filter } })
+}
+
+function openConversation(id: number) {
+  close()
+  router.push({ path: '/message/center', query: { conversationId: String(id) } })
+}
+
+function presenceText(online: boolean, lastActiveAt?: string) {
+  return formatImPresence(online, lastActiveAt, true, new Date(imStore.presenceClock))
+}
+
+function formatTime(value?: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  const now = new Date()
+  if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
 </script>
 
-<style lang="scss" scoped>
-.message-center { position: relative; display: flex; align-items: center; }
-.header-icon { cursor: pointer; color: #64748b; &:hover { color: #F26522; } }
-.notification-badge { display: flex; align-items: center; }
-.msg-panel { position: absolute; top: 40px; right: -60px; width: 340px; background: #fff; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); z-index: 2100; overflow: hidden; }
-.msg-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid #f1f5f9; }
-.msg-tabs {
-  :deep(.el-tabs__header) { margin: 0; padding: 0 8px; }
-  :deep(.el-tabs__nav-wrap::after) { height: 1px; }
-  :deep(.el-tabs__item) { height: 40px; font-size: 13px; }
-  :deep(.el-badge) { margin-left: 4px; }
+<style scoped lang="scss">
+.im-entry { position: relative; display: flex; align-items: center; }
+.im-trigger {
+  width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text-body); cursor: pointer;
+  &:hover { color: var(--brand-primary); background: #f2f7ff; }
 }
-.msg-list { max-height: 280px; overflow-y: auto; padding: 4px 0; }
-.msg-empty { text-align: center; padding: 32px 0; color: #94a3b8; font-size: 13px; }
-.msg-item { display: flex; align-items: flex-start; gap: 8px; padding: 10px 16px; cursor: pointer; transition: background 0.15s; &:hover { background: #f8fafc; } &.unread { background: #fef7f2; } }
-.msg-item-dot { width: 6px; height: 6px; border-radius: 50%; background: #F26522; flex-shrink: 0; margin-top: 6px; }
-.msg-item-body { flex: 1; min-width: 0; }
-.msg-item-title { font-size: 13px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.msg-item-time { font-size: 12px; color: #94a3b8; margin-top: 2px; }
-.msg-panel-footer { text-align: center; padding: 10px; font-size: 13px; color: #F26522; border-top: 1px solid #f1f5f9; cursor: pointer; transition: background 0.15s; &:hover { background: #fef7f2; } }
-.msg-dropdown-enter-active, .msg-dropdown-leave-active { transition: all 0.2s ease; }
-.msg-dropdown-enter-from, .msg-dropdown-leave-to { opacity: 0; transform: translateY(-8px); }
-
-html.dark {
-  .msg-panel { background: var(--el-bg-color); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-  .msg-panel-header { border-color: var(--el-border-color); }
-  .msg-panel-footer { border-color: var(--el-border-color); }
-  .msg-item:hover { background: var(--el-bg-color-overlay); }
-  .msg-item.unread { background: #2a1a10; }
-  .msg-item-title { color: var(--el-text-color-regular); }
+:deep(.im-badge .el-badge__content) { top: 2px; right: 5px; min-width: 17px; height: 17px; line-height: 15px; padding: 0 4px; border: 2px solid #fff; font-size: 10px; }
+.im-popover {
+  position: absolute; z-index: 2200; top: 45px; right: -84px; width: 420px; max-height: min(620px, calc(100vh - 82px));
+  overflow: hidden; background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(31, 35, 41, .18);
+}
+.im-entry.sidebar-bottom .im-popover { top: auto; right: auto; bottom: 46px; left: 0; }
+.im-popover-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; border-bottom: 1px solid var(--border-soft); }
+.im-popover-head h3 { margin: 0; font-size: 18px; line-height: 24px; }
+.im-popover-head p { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
+.connection-dot { width: 7px; height: 7px; border-radius: 50%; background: #c9cdd4; }
+.connection-dot.connected { background: #00b42a; }
+.connection-dot.connecting, .connection-dot.reconnecting { background: #ff7d00; }
+.connection-dot.offline { background: #f53f3f; }
+.im-summary { display: grid; grid-template-columns: repeat(3, 1fr); padding: 12px 14px; gap: 8px; background: #f7f8fa; }
+.im-summary button { display: grid; gap: 2px; padding: 9px 4px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.im-summary button:hover { background: #e8f3ff; }
+.im-summary strong { color: var(--text-primary); font-size: 19px; line-height: 24px; }
+.im-summary span { color: var(--text-muted); font-size: 12px; }
+.im-recent-title { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px 8px; color: var(--text-primary); font-size: 14px; font-weight: 650; }
+.im-recent-title button { border: 0; background: none; color: var(--brand-primary); cursor: pointer; font-size: 12px; }
+.im-recent-list { max-height: 390px; overflow: auto; padding: 0 8px 8px; }
+.im-recent-row { width: 100%; min-height: 62px; display: flex; align-items: center; gap: 11px; padding: 9px 10px; border: 0; border-radius: 7px; background: #fff; text-align: left; cursor: pointer; }
+.im-recent-row:hover { background: #f5f7fa; }
+.im-avatar-wrap { position: relative; flex: 0 0 auto; }
+.im-avatar { background: #e8f3ff; color: #3370ff; font-weight: 700; }
+.im-avatar-wrap i { position: absolute; right: 0; bottom: 1px; width: 9px; height: 9px; border: 2px solid #fff; border-radius: 50%; background: #c9cdd4; }
+.im-avatar-wrap i.online { background: #00b42a; }
+.im-recent-body { min-width: 0; flex: 1; display: grid; gap: 5px; }
+.im-recent-line { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.im-recent-line b { flex: 1; overflow: hidden; color: var(--text-primary); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.im-recent-line time { color: var(--text-muted); font-size: 11px; }
+.im-recent-line.preview > span, .im-recent-line.preview > em { flex: 1; min-width: 0; overflow: hidden; color: var(--text-muted); font-size: 12px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.im-recent-line.preview > em { color: #f53f3f; }
+.im-recent-line.preview .im-presence { flex: 0 0 auto; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.im-recent-line.preview .im-presence.online { color: #00a82d; }
+.im-recent-line.preview i { color: #f53f3f; font-size: 11px; font-style: normal; white-space: nowrap; }
+.im-recent-line.preview u { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #f53f3f; color: #fff; font-size: 10px; line-height: 18px; text-align: center; text-decoration: none; }
+.im-empty { height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); }
+.im-empty .el-icon { font-size: 28px; }
+footer { padding: 10px 14px; border-top: 1px solid var(--border-soft); }
+footer button { width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 7px; background: #f2f7ff; color: var(--brand-primary); font-weight: 650; cursor: pointer; }
+.im-pop-enter-active, .im-pop-leave-active { transition: opacity .16s ease, transform .16s ease; transform-origin: top right; }
+.sidebar-bottom .im-pop-enter-active, .sidebar-bottom .im-pop-leave-active { transform-origin: bottom left; }
+.im-pop-enter-from, .im-pop-leave-to { opacity: 0; transform: translateY(-4px) scale(.98); }
+@media (max-width: 720px) {
+  .im-popover { position: fixed; top: 62px; right: 8px; left: 8px; width: auto; }
+  .im-entry.sidebar-bottom .im-popover { top: auto; right: 8px; bottom: 72px; left: 8px; width: auto; }
 }
 </style>

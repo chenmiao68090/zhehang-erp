@@ -2,6 +2,7 @@ package com.zhehang.erp.modules.supply.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhehang.erp.common.core.annotation.Log;
+import com.zhehang.erp.common.core.annotation.DenyDuringImpersonation;
 import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.supply.domain.entity.SupplyVendor;
 import com.zhehang.erp.modules.supply.service.impl.SupplyVendorServiceImpl;
@@ -13,6 +14,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/supply/vendor")
 @RequiredArgsConstructor
+@DenyDuringImpersonation(reason = "供应商档案包含银行账号")
 public class SupplyVendorController {
 
     private final SupplyVendorServiceImpl vendorService;

@@ -16,6 +16,7 @@ public class FileInfo extends BaseEntity {
     private Long fileSize;
     private String fileType;
     private String mimeType;
+    private String accessScope;
     private Integer downloadCount;
     private Integer currentVersion;
 }

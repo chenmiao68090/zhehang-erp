@@ -14,6 +14,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/finance/report")
 @RequiredArgsConstructor
+@org.springframework.security.access.prepost.PreAuthorize("@perm.hasModule('finance')")
 public class FinanceReportController {
 
     private final FinanceReportServiceImpl reportService;

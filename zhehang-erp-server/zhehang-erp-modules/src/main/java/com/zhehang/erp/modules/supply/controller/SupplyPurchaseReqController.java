@@ -3,6 +3,7 @@ package com.zhehang.erp.modules.supply.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
+import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.supply.domain.entity.SupplyPurchaseReq;
 import com.zhehang.erp.modules.supply.service.impl.SupplyPurchaseReqServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,9 @@ public class SupplyPurchaseReqController {
     @PostMapping
     @Log(module = "Purchase Request", type = Log.OperationType.INSERT)
     public R<Void> add(@RequestBody SupplyPurchaseReq req) {
+        if (req.getApplicantId() == null || req.getDeptId() == null || req.getTotalAmount() == null) {
+            throw new BusinessException("申请人/部门/合计金额不能为空");
+        }
         req.setReqNo(reqService.generateReqNo());
         if (req.getStatus() == null) req.setStatus(0);
         reqService.save(req);

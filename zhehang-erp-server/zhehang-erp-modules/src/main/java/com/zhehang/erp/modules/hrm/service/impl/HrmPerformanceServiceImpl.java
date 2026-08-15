@@ -8,6 +8,7 @@ import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmPerformance;
 import com.zhehang.erp.modules.hrm.mapper.HrmPerformanceMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmPerformanceService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -23,9 +24,15 @@ import java.util.Map;
 public class HrmPerformanceServiceImpl extends ServiceImpl<HrmPerformanceMapper, HrmPerformance> implements IHrmPerformanceService {
 
     private final HrmPerformanceMapper performanceMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<HrmPerformance> selectPage(int pageNum, int pageSize, Long employeeId, String period, Integer type, Integer status) {
+        // 数据范围:HR/管理员看全部;其余员工只看自己的绩效
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         LambdaQueryWrapper<HrmPerformance> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(employeeId != null, HrmPerformance::getEmployeeId, employeeId)
                .eq(StringUtils.hasText(period), HrmPerformance::getPeriod, period)
@@ -61,14 +68,23 @@ public class HrmPerformanceServiceImpl extends ServiceImpl<HrmPerformanceMapper,
 
     @Override
     public Map<String, Object> statistics(String period, Integer type) {
+        // 数据范围:与 selectPage 同口径,HR/管理员看全部;其余员工只统计自己的绩效
+        Long scopedEmployeeId = null;
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            scopedEmployeeId = (myEmp != null ? myEmp : -1L);
+        }
         LambdaQueryWrapper<HrmPerformance> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(StringUtils.hasText(period), HrmPerformance::getPeriod, period)
+        wrapper.eq(scopedEmployeeId != null, HrmPerformance::getEmployeeId, scopedEmployeeId)
+               .eq(StringUtils.hasText(period), HrmPerformance::getPeriod, period)
                .eq(type != null, HrmPerformance::getType, type)
                .eq(HrmPerformance::getStatus, 2);
         List<HrmPerformance> list = performanceMapper.selectList(wrapper);
         int a = 0, b = 0, c = 0, d = 0, e = 0;
         for (HrmPerformance p : list) {
-            switch (p.getLevel()) {
+            String lv = p.getLevel();
+            if (lv == null) { continue; }
+            switch (lv) {
                 case "A": a++; break;
                 case "B": b++; break;
                 case "C": c++; break;

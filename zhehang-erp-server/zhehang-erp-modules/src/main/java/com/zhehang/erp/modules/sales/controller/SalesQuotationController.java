@@ -5,6 +5,7 @@ import com.zhehang.erp.common.core.annotation.Log;
 import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.sales.domain.entity.SalesQuotation;
 import com.zhehang.erp.modules.sales.service.ISalesQuotationService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 public class SalesQuotationController {
 
     private final ISalesQuotationService quotationService;
+    private final DataScopeHelper dataScopeHelper;
 
     @GetMapping("/list")
     public R<IPage<SalesQuotation>> list(
@@ -27,7 +29,11 @@ public class SalesQuotationController {
 
     @GetMapping("/{id}")
     public R<SalesQuotation> getInfo(@PathVariable Long id) {
-        return R.ok(quotationService.getById(id));
+        SalesQuotation quotation = quotationService.getById(id);
+        if (quotation != null && !dataScopeHelper.canAccess(quotation.getCreateBy(), null)) {
+            return R.fail("无权操作他人记录");
+        }
+        return R.ok(quotation);
     }
 
     @PostMapping
@@ -40,6 +46,10 @@ public class SalesQuotationController {
     @PutMapping
     @Log(module = "报价管理", type = Log.OperationType.UPDATE)
     public R<Void> edit(@RequestBody SalesQuotation quotation) {
+        SalesQuotation existing = quotationService.getById(quotation.getId());
+        if (existing != null && !dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+            return R.fail("无权修改他人记录");
+        }
         quotationService.updateById(quotation);
         return R.ok();
     }
@@ -47,6 +57,10 @@ public class SalesQuotationController {
     @DeleteMapping("/{id}")
     @Log(module = "报价管理", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
+        SalesQuotation quotation = quotationService.getById(id);
+        if (quotation != null && !dataScopeHelper.canAccess(quotation.getCreateBy(), null)) {
+            return R.fail("无权操作他人记录");
+        }
         quotationService.removeById(id);
         return R.ok();
     }
@@ -61,6 +75,9 @@ public class SalesQuotationController {
     @PostMapping("/confirm/{id}")
     @Log(module = "报价管理", type = Log.OperationType.UPDATE)
     public R<Void> confirm(@PathVariable Long id) {
+        if (!dataScopeHelper.isManagerOrAdmin()) {
+            return R.fail("无权确认报价");
+        }
         quotationService.confirm(id);
         return R.ok();
     }
@@ -68,6 +85,13 @@ public class SalesQuotationController {
     @PostMapping("/newVersion/{id}")
     @Log(module = "报价管理", type = Log.OperationType.INSERT)
     public R<SalesQuotation> newVersion(@PathVariable Long id) {
+        SalesQuotation source = quotationService.getById(id);
+        if (source == null) {
+            return R.fail("记录不存在");
+        }
+        if (!dataScopeHelper.canAccess(source.getCreateBy(), null)) {
+            return R.fail("无权基于他人报价派生新版本");
+        }
         return R.ok(quotationService.newVersion(id));
     }
 }

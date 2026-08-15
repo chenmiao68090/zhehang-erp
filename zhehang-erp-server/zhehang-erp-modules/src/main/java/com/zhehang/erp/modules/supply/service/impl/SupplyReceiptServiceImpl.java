@@ -9,8 +9,10 @@ import com.zhehang.erp.modules.supply.domain.entity.SupplyPurchaseOrder;
 import com.zhehang.erp.modules.supply.mapper.SupplyReceiptMapper;
 import com.zhehang.erp.modules.supply.mapper.SupplyPurchaseOrderMapper;
 import com.zhehang.erp.modules.supply.service.ISupplyReceiptService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -22,9 +24,11 @@ import java.util.concurrent.ThreadLocalRandom;
 public class SupplyReceiptServiceImpl extends ServiceImpl<SupplyReceiptMapper, SupplyReceipt> implements ISupplyReceiptService {
 
     private final SupplyPurchaseOrderMapper orderMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     public IPage<SupplyReceipt> selectPage(int pageNum, int pageSize, String receiptNo, Integer status) {
         LambdaQueryWrapper<SupplyReceipt> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, SupplyReceipt::getCreateBy); // 到货单按创建人收敛
         if (StringUtils.hasText(receiptNo)) {
             wrapper.like(SupplyReceipt::getReceiptNo, receiptNo);
         }
@@ -35,8 +39,12 @@ public class SupplyReceiptServiceImpl extends ServiceImpl<SupplyReceiptMapper, S
         return page(new Page<>(pageNum, pageSize), wrapper);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void inspect(Long id, Integer result) {
         SupplyReceipt receipt = getById(id);
+        if (receipt == null) {
+            throw new com.zhehang.erp.common.core.exception.BusinessException("到货单不存在");
+        }
         receipt.setStatus(result);
         updateById(receipt);
         // 验收通过后更新订单状态为已验收

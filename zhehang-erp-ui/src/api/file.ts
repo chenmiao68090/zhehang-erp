@@ -14,15 +14,16 @@ export const fileFolderApi = {
 export const fileInfoApi = {
   list: (params: { pageNum?: number; pageSize?: number; folderId?: number; keyword?: string }) =>
     get('/file/info/list', params),
-  upload: (file: File, folderId?: number) => {
+  upload: (file: File, folderId?: number, options?: { silentError?: boolean }) => {
     const formData = new FormData()
     formData.append('file', file)
     if (folderId) {
       formData.append('folderId', String(folderId))
     }
     return service.post('/file/info/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+      headers: { 'Content-Type': 'multipart/form-data' },
+      silentError: !!options?.silentError
+    } as any)
   },
   download: (id: number) => get(`/file/info/download/${id}`, null, { responseType: 'blob' }),
   preview: (id: number) => get(`/file/info/preview/${id}`),

@@ -29,12 +29,18 @@ public class HrmAttendanceController {
     @PostMapping("/clock-in")
     @Log(module = "考勤管理", type = Log.OperationType.INSERT)
     public R<HrmAttendance> clockIn(@RequestBody Map<String, Long> params) {
+        if (params.get("employeeId") == null) {
+            return R.fail("缺少员工ID");
+        }
         return R.ok(attendanceService.clockIn(params.get("employeeId")));
     }
 
     @PostMapping("/clock-out")
     @Log(module = "考勤管理", type = Log.OperationType.UPDATE)
     public R<HrmAttendance> clockOut(@RequestBody Map<String, Long> params) {
+        if (params.get("employeeId") == null) {
+            return R.fail("缺少员工ID");
+        }
         return R.ok(attendanceService.clockOut(params.get("employeeId")));
     }
 

@@ -11,6 +11,8 @@ public interface ISysMenuService extends IService<SysMenu> {
     List<SysMenu> selectMenuList(String menuName, Integer status);
     List<MenuTreeVO> selectMenuTree();
     List<MenuTreeVO> selectMenuTreeByRoleId(Long roleId);
+    List<Long> selectMenuIdsByRoleId(Long roleId);
+    List<Long> selectCheckedMenuIdsByRoleId(Long roleId);
     List<RouterVO> buildRouters(Long userId);
     void createMenu(SysMenu menu);
     void updateMenu(SysMenu menu);

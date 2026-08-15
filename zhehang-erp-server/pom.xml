@@ -14,7 +14,7 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>zhehang-erp-server</name>
-    <description>娴欐澀ERP绠＄悊绯荤粺鍚庣</description>
+    <description>浙杭ERP管理系统后端</description>
     <modules>
         <module>zhehang-erp-common</module>
         <module>zhehang-erp-security</module>
@@ -29,6 +29,8 @@
         <hutool.version>5.8.25</hutool.version>
         <knife4j.version>4.4.0</knife4j.version>
         <redisson.version>3.27.0</redisson.version>
+        <owasp-html-sanitizer.version>20240325.1</owasp-html-sanitizer.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -82,12 +84,18 @@
                 <artifactId>redisson-spring-boot-starter</artifactId>
                 <version>${redisson.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+                <artifactId>owasp-java-html-sanitizer</artifactId>
+                <version>${owasp-html-sanitizer.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
             <optional>true</optional>
         </dependency>
     </dependencies>
@@ -100,6 +108,14 @@
                     <source>${java.version}</source>
                     <target>${java.version}</target>
                     <encoding>${project.build.sourceEncoding}</encoding>
+                    <proc>full</proc>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
         </plugins>

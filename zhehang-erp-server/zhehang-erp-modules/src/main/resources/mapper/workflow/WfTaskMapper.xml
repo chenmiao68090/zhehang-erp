@@ -2,38 +2,99 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhehang.erp.modules.workflow.mapper.WfTaskMapper">
 
+    <!-- 列表通用查询列:任务 + 实例/流程信息 + 卡片摘要(金额/天数,来自表单JSON) -->
+    <sql id="taskListColumns">
+        t.id, t.instance_id, t.node_name, t.node_id, t.node_type, t.assignee_id,
+        t.status, t.comment, t.handle_time, t.create_time, t.deadline, t.read_flag,
+        pd.name AS process_name,
+        wi.title AS instance_title,
+        wi.initiator_id,
+        COALESCE((SELECT e.name FROM org_employee e WHERE e.user_id = wi.initiator_id AND e.deleted = 0 ORDER BY e.id DESC LIMIT 1), su.nickname, su.username) AS initiator_name,
+        wi.start_time,
+        CASE WHEN JSON_VALID(wi.form_data) THEN JSON_UNQUOTE(JSON_EXTRACT(wi.form_data, '$.amount')) END AS amount,
+        CASE WHEN JSON_VALID(wi.form_data) THEN JSON_UNQUOTE(JSON_EXTRACT(wi.form_data, '$.days')) END AS days
+    </sql>
+
+    <!-- 服务端筛选:关键字命中 标题/流程名/发起人姓名或账号;流程按 processKey 精确 -->
+    <sql id="taskListFilters">
+        <if test="q != null and q.keyword != null and q.keyword != ''">
+            AND (
+                wi.title LIKE CONCAT('%', #{q.keyword}, '%')
+                OR pd.name LIKE CONCAT('%', #{q.keyword}, '%')
+                OR su.nickname LIKE CONCAT('%', #{q.keyword}, '%')
+                OR su.username LIKE CONCAT('%', #{q.keyword}, '%')
+                OR EXISTS (SELECT 1 FROM org_employee ek WHERE ek.user_id = wi.initiator_id AND ek.deleted = 0
+                           AND ek.name LIKE CONCAT('%', #{q.keyword}, '%'))
+            )
+        </if>
+        <if test="q != null and q.processKey != null and q.processKey != ''">
+            AND pd.process_key = #{q.processKey}
+        </if>
+    </sql>
+
     <select id="selectTodoPage" resultType="com.zhehang.erp.modules.workflow.domain.vo.WfTaskVO">
         SELECT
-            t.id, t.instance_id, t.node_name, t.node_type, t.assignee_id,
-            t.status, t.comment, t.handle_time, t.create_time,
-            pd.name AS process_name,
-            wi.title AS instance_title,
-            wi.initiator_id,
-            wi.start_time
+        <include refid="taskListColumns"/>
         FROM wf_task t
         LEFT JOIN wf_instance wi ON t.instance_id = wi.id
         LEFT JOIN wf_process_def pd ON wi.process_def_id = pd.id
+        LEFT JOIN sys_user su ON su.id = wi.initiator_id
         WHERE t.assignee_id = #{assigneeId}
           AND t.status = 0
           AND t.deleted = 0
+          AND wi.deleted = 0
+        <include refid="taskListFilters"/>
+        <if test="q != null and q.startDate != null and q.startDate != ''">
+            AND t.create_time &gt;= CONCAT(#{q.startDate}, ' 00:00:00')
+        </if>
+        <if test="q != null and q.endDate != null and q.endDate != ''">
+            AND t.create_time &lt;= CONCAT(#{q.endDate}, ' 23:59:59')
+        </if>
         ORDER BY t.create_time DESC
     </select>
 
+    <!-- 已办 = 我真实操作过的:1通过/2拒绝/3转交/6退回;5=已作废(或签他人已办/撤销)不算我办的 -->
     <select id="selectDonePage" resultType="com.zhehang.erp.modules.workflow.domain.vo.WfTaskVO">
         SELECT
-            t.id, t.instance_id, t.node_name, t.node_type, t.assignee_id,
-            t.status, t.comment, t.handle_time, t.create_time,
-            pd.name AS process_name,
-            wi.title AS instance_title,
-            wi.initiator_id,
-            wi.start_time
+        <include refid="taskListColumns"/>
         FROM wf_task t
         LEFT JOIN wf_instance wi ON t.instance_id = wi.id
         LEFT JOIN wf_process_def pd ON wi.process_def_id = pd.id
+        LEFT JOIN sys_user su ON su.id = wi.initiator_id
         WHERE t.assignee_id = #{assigneeId}
-          AND t.status != 0
+          AND t.status IN (1, 2, 3, 6)
+          AND t.node_type != 'cc'
           AND t.deleted = 0
+          AND wi.deleted = 0
+        <include refid="taskListFilters"/>
+        <if test="q != null and q.startDate != null and q.startDate != ''">
+            AND t.handle_time &gt;= CONCAT(#{q.startDate}, ' 00:00:00')
+        </if>
+        <if test="q != null and q.endDate != null and q.endDate != ''">
+            AND t.handle_time &lt;= CONCAT(#{q.endDate}, ' 23:59:59')
+        </if>
         ORDER BY t.handle_time DESC
+    </select>
+
+    <select id="selectCcPage" resultType="com.zhehang.erp.modules.workflow.domain.vo.WfTaskVO">
+        SELECT
+        <include refid="taskListColumns"/>
+        FROM wf_task t
+        LEFT JOIN wf_instance wi ON t.instance_id = wi.id
+        LEFT JOIN wf_process_def pd ON wi.process_def_id = pd.id
+        LEFT JOIN sys_user su ON su.id = wi.initiator_id
+        WHERE t.assignee_id = #{assigneeId}
+          AND t.node_type = 'cc'
+          AND t.deleted = 0
+          AND wi.deleted = 0
+        <include refid="taskListFilters"/>
+        <if test="q != null and q.startDate != null and q.startDate != ''">
+            AND t.create_time &gt;= CONCAT(#{q.startDate}, ' 00:00:00')
+        </if>
+        <if test="q != null and q.endDate != null and q.endDate != ''">
+            AND t.create_time &lt;= CONCAT(#{q.endDate}, ' 23:59:59')
+        </if>
+        ORDER BY t.create_time DESC
     </select>
 
 </mapper>

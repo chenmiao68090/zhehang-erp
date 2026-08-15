@@ -1,40 +1,41 @@
-// Element Plus 榛戦噾涓婚娣卞害瑕嗗啓
-
-// 鎸夐挳
-.el-button--primary {
-  background: var(--gradient-gold);
-  border: none;
-  color: #0A0A0F;
+.el-button {
+  border-radius: 8px;
   font-weight: 600;
+}
+
+.el-button--primary {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
 
   &:hover,
   &:focus {
-    background: linear-gradient(135deg, #C5A55A, #D4AF37);
-    box-shadow: 0 4px 16px rgba(212, 175, 55, 0.3);
-  }
-
-  &:active {
-    transform: scale(0.97);
+    background: var(--brand-primary-hover);
+    border-color: var(--brand-primary-hover);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.16);
   }
 }
 
 .el-button--default {
-  background: transparent;
-  border: 1px solid var(--border-gold);
-  color: var(--gold-primary);
+  color: var(--text-body);
+  background: #fff;
+  border-color: var(--border-color);
 
   &:hover,
   &:focus {
-    background: rgba(212, 175, 55, 0.08);
-    border-color: var(--border-gold-hover);
-    color: var(--gold-primary);
+    color: var(--brand-primary);
+    background: #f8fbff;
+    border-color: #bfdbfe;
   }
 }
 
-// 鑿滃崟
+.el-button.is-link {
+  font-weight: 600;
+}
+
 .el-menu {
   border-right: none !important;
-  background-color: transparent !important;
+  background: transparent !important;
 }
 
 .el-menu-item,
@@ -42,126 +43,146 @@
   color: var(--text-body) !important;
 
   &:hover {
-    background-color: rgba(212, 175, 55, 0.05) !important;
-    color: var(--text-primary) !important;
+    color: var(--brand-primary) !important;
+    background: #f2f7ff !important;
   }
 }
 
 .el-menu-item.is-active {
-  background: linear-gradient(90deg, rgba(212, 175, 55, 0.1), transparent) !important;
-  color: var(--gold-primary) !important;
-  border-left: 3px solid var(--gold-primary);
+  color: var(--brand-primary) !important;
+  background: #e8f3ff !important;
+  border-left: 0;
 }
 
-// 鍗＄墖
 .el-card {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-gold);
+  color: var(--text-body);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: var(--el-border-radius-base);
   box-shadow: var(--shadow-card);
-  color: var(--text-body);
 
   .el-card__header {
-    border-bottom: 1px solid var(--border-gold);
     color: var(--text-primary);
+    border-bottom: 1px solid var(--border-soft);
   }
 }
 
-// 琛ㄦ牸
 .el-table {
-  --el-table-bg-color: var(--bg-card);
-  --el-table-tr-bg-color: var(--bg-card);
-  --el-table-header-bg-color: rgba(212, 175, 55, 0.05);
-  --el-table-row-hover-bg-color: rgba(212, 175, 55, 0.05);
-  --el-table-border-color: var(--border-gold);
+  --el-table-bg-color: #fff;
+  --el-table-tr-bg-color: #fff;
+  --el-table-header-bg-color: #f7f8fa;
+  --el-table-row-hover-bg-color: #f2f7ff;
+  --el-table-border-color: #eff0f1;
   --el-table-text-color: var(--text-body);
-  --el-table-header-text-color: var(--text-primary);
+  --el-table-header-text-color: var(--text-muted);
   color: var(--text-body);
+  border-radius: 8px;
 
   th.el-table__cell {
+    height: 44px;
+    color: var(--text-muted);
+    font-size: 14px;
     font-weight: 600;
-    color: var(--text-primary);
-    background-color: rgba(212, 175, 55, 0.05) !important;
+    background: #f7f8fa !important;
+  }
+
+  td.el-table__cell {
+    height: 48px;
   }
 
   .el-table__row:hover > td {
-    background-color: rgba(212, 175, 55, 0.05) !important;
+    background: #f2f7ff !important;
   }
 }
 
-// 琛ㄥ崟杈撳叆妗?
-.el-input__wrapper {
-  background-color: var(--bg-elevated) !important;
-  border: 1px solid var(--border-gold) !important;
-  box-shadow: none !important;
+.el-input__wrapper,
+.el-select__wrapper {
+  background: #fff !important;
+  border: 1px solid var(--border-color) !important;
   border-radius: 8px;
+  box-shadow: none !important;
 
   &:hover {
-    border-color: var(--border-gold-hover) !important;
+    border-color: #bedaff !important;
   }
 
-  &.is-focus {
-    border-color: var(--gold-primary) !important;
-    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1) !important;
+  &.is-focus,
+  &.is-focused {
+    border-color: var(--brand-primary) !important;
+    box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12) !important;
   }
 }
 
-.el-input__inner {
+.el-input__inner,
+.el-select__placeholder,
+.el-select__selected-item {
   color: var(--text-primary);
 
   &::placeholder {
-    color: var(--text-muted);
+    color: var(--text-subtle);
   }
 }
 
 .el-textarea__inner {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-gold);
   color: var(--text-primary);
+  background: #fff;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
+  box-shadow: none;
 
   &:focus {
-    border-color: var(--gold-primary);
-    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
   }
 }
 
-// Select 涓嬫媺
+.el-select-dropdown,
+.el-picker__popper,
+.el-dropdown__popper {
+  .el-popper__arrow::before {
+    border-color: var(--border-color) !important;
+  }
+}
+
 .el-select-dropdown {
-  background-color: var(--bg-elevated) !important;
-  border: 1px solid var(--border-gold) !important;
+  background: #fff !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--el-box-shadow-light);
 }
 
 .el-select-dropdown__item {
   color: var(--text-body);
 
-  &.hover,
-  &:hover {
-    background-color: rgba(212, 175, 55, 0.08);
-    color: var(--text-primary);
+    &.hover,
+    &:hover {
+      color: var(--text-primary);
+      background: #f2f7ff;
   }
 
   &.selected {
-    color: var(--gold-primary);
-    font-weight: 600;
+    color: var(--brand-primary);
+    font-weight: 700;
   }
 }
 
-// 瀵硅瘽妗?
+.el-dialog,
+.el-drawer {
+  background: #fff;
+  box-shadow: var(--el-box-shadow-dark);
+}
+
 .el-dialog {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-gold);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
 
   .el-dialog__header {
-    border-bottom: 1px solid var(--border-gold);
-    padding: 16px 24px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--border-soft);
   }
 
   .el-dialog__title {
     color: var(--text-primary);
-    font-weight: 600;
+    font-weight: 700;
   }
 
   .el-dialog__body {
@@ -169,37 +190,47 @@
   }
 }
 
-// 鍒嗛〉
+.el-drawer__header {
+  padding: 18px 22px;
+  margin-bottom: 0;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.el-drawer__body {
+  color: var(--text-body);
+}
+
 .el-pagination {
   justify-content: flex-end;
   margin-top: 16px;
 
   .el-pager li {
-    background-color: var(--bg-elevated);
     color: var(--text-body);
-    border: 1px solid var(--border-gold);
-    border-radius: 6px;
+    background: #fff;
+    border: 1px solid transparent;
+    border-radius: 4px;
 
     &.is-active {
-      background: var(--gradient-gold);
-      color: #0A0A0F;
-      border-color: var(--gold-primary);
-      font-weight: 600;
+      color: #fff;
+      background: var(--brand-primary);
+      border-color: var(--brand-primary);
+      font-weight: 700;
     }
   }
 
   button {
-    background-color: var(--bg-elevated) !important;
     color: var(--text-body) !important;
+    background: #fff !important;
   }
 }
 
-// 鏍囩椤?
 .el-tabs__item {
-  color: var(--text-body) !important;
+  color: var(--text-muted) !important;
+  font-weight: 600;
 
   &.is-active {
-    color: var(--gold-primary) !important;
+    color: var(--brand-primary) !important;
   }
 
   &:hover {
@@ -208,14 +239,14 @@
 }
 
 .el-tabs__active-bar {
-  background-color: var(--gold-primary);
+    background: var(--brand-primary);
 }
 
-// 娑堟伅鎻愮ず妗?
 .el-message-box {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-gold);
-  
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+
   .el-message-box__title {
     color: var(--text-primary);
   }
@@ -225,82 +256,89 @@
   }
 }
 
-// 涓嬫媺鑿滃崟
 .el-dropdown-menu {
-  background-color: var(--bg-elevated) !important;
-  border: 1px solid var(--border-gold) !important;
+  background: #fff !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--el-box-shadow-light);
 
   .el-dropdown-menu__item {
     color: var(--text-body);
 
     &:hover {
-      background-color: rgba(212, 175, 55, 0.08);
-      color: var(--gold-primary);
+      color: var(--brand-primary);
+      background: #f2f7ff;
     }
   }
 }
 
-// 闈㈠寘灞?
 .el-breadcrumb__inner {
   color: var(--text-muted) !important;
 
   &.is-link:hover {
-    color: var(--gold-primary) !important;
+    color: var(--brand-primary) !important;
   }
 }
 
 .el-breadcrumb__item:last-child .el-breadcrumb__inner {
-  color: var(--gold-primary) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
 }
 
-// Checkbox / Radio
 .el-checkbox__inner {
-  background-color: var(--bg-elevated);
-  border-color: var(--border-gold);
+  background: #fff;
+  border-color: #cbd5e1;
 }
 
-.el-checkbox__input.is-checked .el-checkbox__inner {
-  background-color: var(--gold-primary);
-  border-color: var(--gold-primary);
+.el-checkbox__input.is-checked .el-checkbox__inner,
+.el-checkbox__input.is-indeterminate .el-checkbox__inner {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 
-.el-checkbox__label {
-  color: var(--text-body);
-}
-
-// Switch
-.el-switch.is-checked .el-switch__core {
-  background-color: var(--gold-primary);
-  border-color: var(--gold-primary);
-}
-
-// Tag (Element Plus)
-.el-tag {
-  border-radius: 20px;
-}
-
-// Form Label
+.el-checkbox__label,
 .el-form-item__label {
   color: var(--text-body);
 }
 
-// Scrollbar inside element components
+.el-switch.is-checked .el-switch__core {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.el-tag {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
 .el-scrollbar__thumb {
-  background-color: rgba(212, 175, 55, 0.3);
+  background: #cbd5e1;
 }
 
-// Popover
 .el-popover {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-gold) !important;
   color: var(--text-body);
+  background: #fff !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--el-box-shadow-light) !important;
 }
 
-// Loading
 .el-loading-mask {
-  background-color: rgba(10, 10, 15, 0.7);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
 }
 
 .el-loading-spinner .circular .path {
-  stroke: var(--gold-primary);
+  stroke: var(--brand-primary);
+}
+
+/* 移动端(<768px):所有弹窗宽度收成 90vw(Element Plus 用行内 width,需 !important 压过) */
+@media (max-width: 768px) {
+  .el-dialog {
+    width: 90vw !important;
+    max-width: 90vw !important;
+  }
+  .el-message-box {
+    width: 90vw !important;
+    max-width: 340px;
+  }
 }

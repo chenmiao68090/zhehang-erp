@@ -22,7 +22,7 @@
         <div v-if="article.tags" class="article-view__tags">
           <el-tag v-for="tag in article.tags.split(',')" :key="tag" size="small">{{ tag }}</el-tag>
         </div>
-        <div class="article-view__body markdown-body" v-html="renderedContent"></div>
+        <div class="article-view__body markdown-body" v-html="sanitizeHtml(renderedContent)" @click="handleDownloadClick"></div>
         <div class="article-view__actions">
           <el-button @click="handleLike" :type="liked ? 'primary' : 'default'" round>
             <el-icon><Star /></el-icon>
@@ -86,17 +86,46 @@
               <el-radio-button value="write">{{ $t('kb.write') }}</el-radio-button>
               <el-radio-button value="preview">{{ $t('kb.preview') }}</el-radio-button>
             </el-radio-group>
+            <el-upload
+              :show-file-list="false"
+              :auto-upload="false"
+              accept="image/*"
+              :on-change="handleImageSelect"
+              class="image-upload"
+            >
+              <el-button size="small" :loading="imageUploading">
+                <el-icon><PictureFilled /></el-icon>
+                插入图片
+              </el-button>
+            </el-upload>
+            <el-upload
+              :show-file-list="false"
+              :auto-upload="false"
+              accept=".doc,.docx,.ppt,.pptx,.xls,.xlsx,.pdf,.txt,.md,.csv,.zip,.rar,.7z,.png,.jpg,.jpeg,.gif,.bmp,.webp"
+              :on-change="handleAttachSelect"
+              class="attach-upload"
+            >
+              <el-button size="small" :loading="attachUploading">
+                <el-icon><Paperclip /></el-icon>
+                上传附件
+              </el-button>
+            </el-upload>
           </div>
           <div v-show="editorMode === 'write'" class="editor-write">
             <el-input
+              ref="contentInputRef"
               v-model="form.content"
               type="textarea"
               :rows="20"
               :placeholder="$t('kb.enterContent')"
               resize="none"
+              @paste="handleContentPaste"
             />
           </div>
-          <div v-show="editorMode === 'preview'" class="editor-preview markdown-body" v-html="previewContent"></div>
+          <div v-show="editorMode === 'preview'" class="editor-preview markdown-body" v-html="sanitizeHtml(previewContent)" @click="handleDownloadClick"></div>
+          <div class="editor-hint">
+            支持 Markdown + 图片粘贴/上传;可直接『上传附件』(Word/PPT/Excel/PDF/图片等),上传后自动在正文插入下载链接。
+          </div>
         </div>
       </div>
     </div>
@@ -108,8 +137,11 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, View, Star } from '@element-plus/icons-vue'
-import { kbArticleApi, kbCategoryApi } from '@/api/file'
+import { ArrowLeft, View, Star, PictureFilled, Paperclip } from '@element-plus/icons-vue'
+import { kbArticleApi, kbCategoryApi, fileInfoApi } from '@/api/file'
+import { getApiBaseUrl } from '@/api/base-url'
+import { downloadFileById } from '@/utils/download'
+import { sanitizeHtml } from '@/utils/sanitize-html'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -130,6 +162,119 @@ const tagInputRef = ref()
 
 // Editor
 const editorMode = ref<'write' | 'preview'>('write')
+const contentInputRef = ref()
+const imageUploading = ref(false)
+const attachUploading = ref(false)
+
+// 图片读成 base64 dataURL 内嵌到 markdown(content 为 LONGTEXT 放得下),
+// 避免走 /file/info/download 需鉴权导致 <img> 加载失败(浏览器GET不带token)。
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('read fail'))
+    reader.readAsDataURL(file)
+  })
+}
+
+// Insert a markdown snippet at the textarea cursor position (fallback: append at end).
+function insertMarkdownAtCursor(snippet: string) {
+  const textarea: HTMLTextAreaElement | undefined = contentInputRef.value?.textarea
+  const current = form.value.content || ''
+  if (textarea && typeof textarea.selectionStart === 'number') {
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    form.value.content = current.slice(0, start) + snippet + current.slice(end)
+    nextTick(() => {
+      const pos = start + snippet.length
+      textarea.focus()
+      textarea.setSelectionRange(pos, pos)
+    })
+  } else {
+    form.value.content = current + (current ? '\n' : '') + snippet
+  }
+}
+
+// Insert markdown image syntax at the textarea cursor position.
+function insertImageMarkdown(url: string, alt: string) {
+  insertMarkdownAtCursor(`![${alt}](${url})`)
+}
+
+// "插入图片" button: select an image -> upload -> insert markdown at cursor.
+async function handleImageSelect(uploadFile: any) {
+  const file: File = uploadFile?.raw
+  if (!file) return
+  if (!file.type?.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件')
+    return
+  }
+  imageUploading.value = true
+  try {
+    const url = await readAsDataUrl(file)
+    insertImageMarkdown(url, '图片')
+    ElMessage.success('图片已插入')
+  } catch (e) {
+    ElMessage.error('图片读取失败')
+  } finally {
+    imageUploading.value = false
+  }
+}
+
+// "上传附件" button: upload a Word/PPT/Excel/PDF/image etc. via fileInfoApi,
+// then insert a markdown download link (to /file/info/download/{id}) at the cursor.
+async function handleAttachSelect(uploadFile: any) {
+  const file: File = uploadFile?.raw
+  if (!file) return
+  // 20MB 上限,避免超大文件卡住上传;后端黑名单会另行拦截危险类型。
+  const maxSize = 20 * 1024 * 1024
+  if (file.size > maxSize) {
+    ElMessage.warning('附件不能超过 20MB')
+    return
+  }
+  attachUploading.value = true
+  try {
+    const res: any = await fileInfoApi.upload(file)
+    const info = res?.data || res
+    const fileId = info?.id
+    const fileName = info?.name || info?.originalName || file.name
+    if (!fileId) {
+      ElMessage.error('附件上传失败')
+      return
+    }
+    const url = `${getApiBaseUrl()}/file/info/download/${fileId}`
+    insertMarkdownAtCursor(`[📎 ${fileName}](${url})`)
+    ElMessage.success('附件已上传并插入链接')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '附件上传失败')
+  } finally {
+    attachUploading.value = false
+  }
+}
+
+// Paste handler: when clipboard contains an image, upload it and insert markdown.
+async function handleContentPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  let imageFile: File | null = null
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type && items[i].type.indexOf('image') !== -1) {
+      imageFile = items[i].getAsFile()
+      break
+    }
+  }
+  if (!imageFile) return
+  e.preventDefault()
+  imageUploading.value = true
+  try {
+    const url = await readAsDataUrl(imageFile)
+    form.value.content = (form.value.content || '') + (form.value.content ? '\n' : '') + `![粘贴图片](${url})`
+    ElMessage.success('图片已插入')
+  } catch (err) {
+    ElMessage.error('图片读取失败')
+  } finally {
+    imageUploading.value = false
+  }
+}
 
 onMounted(async () => {
   await loadCategoryTree()
@@ -178,6 +323,9 @@ const previewContent = computed(() => {
 function renderMarkdown(text: string): string {
   // Simple markdown rendering
   let html = text
+    .replace(/!\[(.*?)\]\((.+?)\)/g, '<img src="$2" alt="$1" class="md-img" />')
+    // 普通链接 [文字](链接) -> <a>;附件下载链接靠容器上的 handleDownloadClick 拦截带 token 下载。
+    .replace(/\[(.*?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -188,7 +336,23 @@ function renderMarkdown(text: string): string {
     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
-  return '<p>' + html + '</p>'
+  return sanitizeHtml('<p>' + html + '</p>')
+}
+
+// 事件委托:拦截正文/预览里附件下载链接的点击。
+// 裸链 GET 不带 token 会 401,改走 downloadFileById(带 Bearer token 取 blob 再保存),
+// 同时覆盖历史文章里已持久化的旧链接。
+function handleDownloadClick(e: MouseEvent) {
+  const target = e.target as HTMLElement | null
+  const link = target?.closest?.('a[href*="/file/info/download/"]') as HTMLAnchorElement | null
+  if (!link) return
+  e.preventDefault()
+  const href = link.getAttribute('href') || ''
+  const m = href.match(/\/file\/info\/download\/(\d+)/)
+  if (!m) return
+  // 用链接文本作文件名,去掉前缀的 📎 图标和空白;为空则让助手回退到 file_{id}。
+  const filename = (link.textContent || '').replace(/^\s*📎\s*/, '').trim() || undefined
+  downloadFileById(m[1], filename)
 }
 
 function goBack() {
@@ -385,9 +549,25 @@ function confirmTag() {
 }
 
 .editor-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 8px 12px;
   background: var(--el-fill-color-lighter);
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.image-upload :deep(.el-upload),
+.attach-upload :deep(.el-upload) {
+  display: inline-flex;
+}
+
+.editor-hint {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-lighter);
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 
 .editor-write :deep(.el-textarea__inner) {
@@ -412,4 +592,5 @@ function confirmTag() {
 .markdown-body h3 { font-size: 17px; margin: 12px 0 6px; }
 .markdown-body code { background: var(--el-fill-color); padding: 2px 6px; border-radius: 3px; font-size: 13px; }
 .markdown-body li { margin: 4px 0; }
+.markdown-body .md-img { max-width: 100%; height: auto; border-radius: 6px; margin: 8px 0; display: block; }
 </style>

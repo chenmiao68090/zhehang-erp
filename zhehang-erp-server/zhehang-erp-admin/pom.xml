@@ -9,7 +9,7 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
     <artifactId>zhehang-erp-admin</artifactId>
-    <description>鍚姩妯″潡</description>
+    <description>启动模块</description>
     <dependencies>
         <dependency>
             <groupId>com.zhehang</groupId>

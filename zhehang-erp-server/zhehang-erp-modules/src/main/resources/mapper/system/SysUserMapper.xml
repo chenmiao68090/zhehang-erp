@@ -6,15 +6,109 @@
         SELECT DISTINCT m.perms
         FROM sys_menu m
         INNER JOIN sys_role_menu rm ON rm.menu_id = m.id
+        INNER JOIN sys_role r ON r.id = rm.role_id
         INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
         WHERE ur.user_id = #{userId}
           AND m.perms IS NOT NULL
           AND m.perms != ''
           AND m.deleted = 0
+          AND m.status = 0
+          AND r.status = 0
+          AND r.deleted = 0
     </select>
 
     <select id="selectRoleIdsByUserId" resultType="java.lang.Long">
         SELECT role_id FROM sys_user_role WHERE user_id = #{userId}
+    </select>
+
+    <!-- 批量查多个用户的角色关联(消除员工/用户列表的 N+1) -->
+    <select id="selectUserRoleMappings" resultType="java.util.Map">
+        SELECT user_id AS userId, role_id AS roleId
+        FROM sys_user_role
+        WHERE user_id IN
+        <foreach collection="userIds" item="uid" open="(" separator="," close=")">
+            #{uid}
+        </foreach>
+    </select>
+
+    <select id="selectRoleKeysByUserId" resultType="java.lang.String">
+        SELECT DISTINCT r.role_key
+        FROM sys_role r
+        INNER JOIN sys_user_role ur ON ur.role_id = r.id
+        WHERE ur.user_id = #{userId}
+          AND r.status = 0
+          AND r.deleted = 0
+    </select>
+
+    <select id="selectMinDataScopeByUserId" resultType="java.lang.Integer">
+        SELECT MIN(r.data_scope)
+        FROM sys_role r
+        INNER JOIN sys_user_role ur ON ur.role_id = r.id
+        WHERE ur.user_id = #{userId}
+          AND r.status = 0
+          AND r.deleted = 0
+    </select>
+
+    <select id="existsResignedEmployee" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM org_employee e
+            WHERE e.user_id = #{userId}
+              AND e.tenant_id = #{tenantId}
+              AND e.deleted = 0
+              AND e.status = 3
+        )
+    </select>
+
+    <!--
+      代登录安全投影：禁止改为用户全字段查询，避免读取目标员工密码/手机号等敏感字段。
+      status=0 为可登录账号；员工 status 1=在职、2=试用，离职或无有效员工档案均失败收紧。
+    -->
+    <select id="selectActiveForImpersonation"
+            resultType="com.zhehang.erp.modules.system.domain.entity.SysUser">
+        SELECT u.id, u.username, u.nickname, u.tenant_id, u.dept_id, u.status, u.deleted
+        FROM sys_user u
+        WHERE u.id = #{targetUserId}
+          AND u.id NOT IN (1, 3)
+          AND u.tenant_id = #{tenantId}
+          AND u.status = 0
+          AND u.deleted = 0
+          AND EXISTS (
+              SELECT 1
+              FROM org_employee e
+              WHERE e.user_id = u.id
+                AND e.tenant_id = #{tenantId}
+                AND e.deleted = 0
+                AND e.status IN (1, 2)
+          )
+        LIMIT 1
+    </select>
+
+    <select id="selectFirstUserIdByRoleKey" resultType="java.lang.Long">
+        SELECT ur.user_id
+        FROM sys_user_role ur
+        INNER JOIN sys_role r ON r.id = ur.role_id
+        INNER JOIN sys_user u ON u.id = ur.user_id
+        WHERE r.role_key = #{roleKey}
+          AND r.status = 0
+          AND r.deleted = 0
+          AND u.status = 0
+          AND u.deleted = 0
+        ORDER BY u.id ASC
+        LIMIT 1
+    </select>
+
+    <select id="selectUserIdsByRoleKey" resultType="java.lang.Long">
+        SELECT ur.user_id
+        FROM sys_user_role ur
+        INNER JOIN sys_role r ON r.id = ur.role_id
+        INNER JOIN sys_user u ON u.id = ur.user_id
+        WHERE r.role_key = #{roleKey}
+          AND r.status = 0
+          AND r.deleted = 0
+          AND u.status = 0
+          AND u.deleted = 0
+        ORDER BY u.id ASC
     </select>
 
 </mapper>

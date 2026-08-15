@@ -1,6 +1,7 @@
 package com.zhehang.erp.modules.system.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -12,13 +13,14 @@ import java.time.LocalDateTime;
 public class SysLoginLog implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(type = IdType.ASSIGN_ID)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     /** Login username */
     private String username;
 
     /** IP address */
+    @TableField("ip_address")
     private String ipAddr;
 
     /** Login location */
@@ -40,5 +42,6 @@ public class SysLoginLog implements Serializable {
     private LocalDateTime loginTime;
 
     /** Tenant ID */
+    @TableField(exist = false)
     private Long tenantId;
 }

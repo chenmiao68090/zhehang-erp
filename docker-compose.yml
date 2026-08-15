@@ -1,43 +1,98 @@
 version: '3.8'
 
+# 密码/密钥统一从同目录 .env 读取(请先 cp .env.example .env 并填写强口令)
 services:
-  # Spring Boot 后端服务
+  # 前端 + Nginx(对外唯一入口:80 端口;托管前端并把 /api 转发给后端)
+  erp-web:
+    build: ./zhehang-erp-ui
+    container_name: zhehang-web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Let's Encrypt 证书与 ACME 验证目录(放在 data/ 下,部署不会覆盖)
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+    depends_on:
+      - erp-server
+    networks:
+      - erp-network
+    restart: unless-stopped
+
+  # Spring Boot 后端(只对内网/本机开放,外部统一走 Nginx)
   erp-server:
     build: ./zhehang-erp-server
     container_name: zhehang-server
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"   # 仅本机可访问,便于排查;不暴露公网
+    volumes:
+      # 上传文件持久化:后端把文件写到 /app/upload(WORKDIR=/app + file.upload.path=upload 解析成绝对路径),
+      # 挂到宿主机 ./data/upload,避免每次部署 rebuild 容器时把用户上传的图片/附件冲掉。
+      - ./data/upload:/app/upload
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - DB_HOST=mysql
       - DB_PORT=3306
       - DB_NAME=zhehang_erp
       - DB_USER=root
-      - DB_PASSWORD=zhehang@2024
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=zhehang@2024
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - ES_HOST=elasticsearch
       - ES_PORT=9200
+      - JWT_SECRET=${JWT_SECRET}
+      - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY}
+      - MFA_ENFORCEMENT_ENABLED=${MFA_ENFORCEMENT_ENABLED:-true}
+      - MFA_REQUIRED_ROLES=${MFA_REQUIRED_ROLES:-boss,super_admin,finance_hq}
+      - CORS_ALLOWED_ORIGINS=https://zhehangjituan.xn--fiqs8s,https://www.zhehangjituan.xn--fiqs8s
+      - CLAMAV_HOST=clamav
+      - CLAMAV_PORT=3310
+      # 邮件发送(Offer 邮件)。在 /opt/zhehang-erp/.env 里填 MAIL_HOST/MAIL_USERNAME/MAIL_PASSWORD;不填则默认空=不发信、优雅降级。
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-465}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_SSL=${MAIL_SSL:-true}
+      - MAIL_STARTTLS=${MAIL_STARTTLS:-false}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-浙杭集团}
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_started
+      clamav:
+        condition: service_healthy
       elasticsearch:
         condition: service_started
     networks:
       - erp-network
     restart: unless-stopped
 
-  # MySQL 8.0 数据库
+  # 上传文件病毒扫描。生产配置采用 fail-closed：该服务不可用时拒绝上传，不绕过扫描。
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: zhehang-clamav
+    volumes:
+      - ./data/clamav:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping 1 >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    networks:
+      - erp-network
+    restart: unless-stopped
+
+  # MySQL 8.0(仅本机可访问;首次启动自动执行 init 建库建表)
   mysql:
     image: mysql:8.0
     container_name: zhehang-mysql
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"   # 仅本机,用于备份/排查;不暴露公网
     environment:
-      - MYSQL_ROOT_PASSWORD=zhehang@2024
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=zhehang_erp
       - MYSQL_CHARSET=utf8mb4
     volumes:
@@ -53,25 +108,21 @@ services:
       - erp-network
     restart: unless-stopped
 
-  # Redis 7 缓存
+  # Redis 7(仅内网互通,不暴露端口到宿主机)
   redis:
     image: redis:7-alpine
     container_name: zhehang-redis
-    ports:
-      - "6379:6379"
     volumes:
       - ./data/redis:/data
-    command: redis-server --appendonly yes --requirepass zhehang@2024
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     networks:
       - erp-network
     restart: unless-stopped
 
-  # Elasticsearch 全文搜索
+  # Elasticsearch 8(仅内网互通;内存吃紧时可整段删除,详见 DEPLOY.md)
   elasticsearch:
     image: elasticsearch:8.11.0
     container_name: zhehang-es
-    ports:
-      - "9200:9200"
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false

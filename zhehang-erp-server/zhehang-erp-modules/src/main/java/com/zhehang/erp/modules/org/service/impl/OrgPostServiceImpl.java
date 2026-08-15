@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,12 +48,14 @@ public class OrgPostServiceImpl extends ServiceImpl<OrgPostMapper, OrgPost> impl
 
     @Override
     public void createPost(PostDTO dto) {
-        long count = count(new LambdaQueryWrapper<OrgPost>().eq(OrgPost::getPostCode, dto.getPostCode()));
+        String postCode = StringUtils.hasText(dto.getPostCode()) ? dto.getPostCode().trim() : generatePostCode();
+        long count = count(new LambdaQueryWrapper<OrgPost>().eq(OrgPost::getPostCode, postCode));
         if (count > 0) {
             throw new BusinessException("岗位编码已存在");
         }
         OrgPost post = new OrgPost();
         BeanUtils.copyProperties(dto, post);
+        post.setPostCode(postCode);
         postMapper.insert(post);
     }
 
@@ -61,14 +65,19 @@ public class OrgPostServiceImpl extends ServiceImpl<OrgPostMapper, OrgPost> impl
         if (post == null) {
             throw new BusinessException("岗位不存在");
         }
-        // 检查编码唯一性（排除自身）
+        String postCode = StringUtils.hasText(dto.getPostCode()) ? dto.getPostCode().trim() : post.getPostCode();
+        if (!StringUtils.hasText(postCode)) {
+            postCode = generatePostCode();
+        }
+        // 岗位编码作为内部唯一标识保留,前端不再展示和手填。
         long count = count(new LambdaQueryWrapper<OrgPost>()
-                .eq(OrgPost::getPostCode, dto.getPostCode())
+                .eq(OrgPost::getPostCode, postCode)
                 .ne(OrgPost::getId, dto.getId()));
         if (count > 0) {
             throw new BusinessException("岗位编码已存在");
         }
         BeanUtils.copyProperties(dto, post);
+        post.setPostCode(postCode);
         postMapper.updateById(post);
     }
 
@@ -88,5 +97,16 @@ public class OrgPostServiceImpl extends ServiceImpl<OrgPostMapper, OrgPost> impl
         PostVO vo = new PostVO();
         BeanUtils.copyProperties(post, vo);
         return vo;
+    }
+
+    private String generatePostCode() {
+        for (int i = 0; i < 5; i++) {
+            String code = "POST-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
+            long count = count(new LambdaQueryWrapper<OrgPost>().eq(OrgPost::getPostCode, code));
+            if (count == 0) {
+                return code;
+            }
+        }
+        throw new BusinessException("岗位编码生成失败,请稍后重试");
     }
 }

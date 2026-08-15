@@ -37,11 +37,15 @@
           </template>
         </el-table-column>
         <el-table-column :label="$t('system.menu.orderNum')" prop="orderNum" width="80" align="center" />
-        <el-table-column :label="$t('system.menu.perms')" prop="perms" min-width="180" />
-        <el-table-column :label="$t('system.menu.component')" prop="component" min-width="180" />
+        <!-- 权限标识(perms)/组件路径(component) 为英文技术字段,列表不再展示,只在新增/编辑弹窗中维护 -->
         <el-table-column :label="$t('system.menu.status')" prop="status" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 0 ? 'success' : 'danger'">{{ row.status === 0 ? $t('common.enabled') : $t('common.disabled') }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('system.menu.visible')" prop="visible" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.visible === 1 ? 'success' : 'info'">{{ row.visible === 1 ? $t('system.menu.show') : $t('system.menu.hide') }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="$t('common.operation')" width="200" align="center" fixed="right">
@@ -68,9 +72,9 @@
           <el-col :span="24">
             <el-form-item :label="$t('system.menu.menuType')" prop="menuType">
               <el-radio-group v-model="form.menuType">
-                <el-radio :value="0">{{ $t('system.menu.typeDir') }}</el-radio>
-                <el-radio :value="1">{{ $t('system.menu.typeMenu') }}</el-radio>
-                <el-radio :value="2">{{ $t('system.menu.typeBtn') }}</el-radio>
+                <el-radio value="M">{{ $t('system.menu.typeDir') }}</el-radio>
+                <el-radio value="C">{{ $t('system.menu.typeMenu') }}</el-radio>
+                <el-radio value="F">{{ $t('system.menu.typeBtn') }}</el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
@@ -87,36 +91,50 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="20" v-if="form.menuType !== 2">
+        <el-row :gutter="20" v-if="form.menuType !== 'F'">
           <el-col :span="12">
             <el-form-item :label="$t('system.menu.path')" prop="path">
               <el-input v-model="form.path" :placeholder="$t('common.inputPlaceholder')" />
             </el-form-item>
           </el-col>
-          <el-col :span="12" v-if="form.menuType === 1">
+          <el-col :span="12" v-if="form.menuType === 'C'">
             <el-form-item :label="$t('system.menu.component')" prop="component">
               <el-input v-model="form.component" :placeholder="$t('common.inputPlaceholder')" />
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="20" v-if="form.menuType !== 0">
+        <el-row :gutter="20" v-if="form.menuType !== 'M'">
           <el-col :span="12">
             <el-form-item :label="$t('system.menu.perms')" prop="perms">
               <el-input v-model="form.perms" :placeholder="$t('system.menu.permsPlaceholder')" />
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="20" v-if="form.menuType !== 2">
+        <el-row :gutter="20" v-if="form.menuType !== 'F'">
           <el-col :span="12">
             <el-form-item :label="$t('system.menu.icon')" prop="icon">
-              <el-input v-model="form.icon" :placeholder="$t('common.inputPlaceholder')" />
+              <IconPicker
+                v-model="form.icon"
+                mode="element"
+                :columns="6"
+                :panel-width="420"
+                placeholder="请选择菜单图标，也可输入图标组件名"
+              />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="6">
             <el-form-item :label="$t('system.menu.status')" prop="status">
               <el-radio-group v-model="form.status">
                 <el-radio :value="0">{{ $t('common.enabled') }}</el-radio>
                 <el-radio :value="1">{{ $t('common.disabled') }}</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item :label="$t('system.menu.visible')" prop="visible">
+              <el-radio-group v-model="form.visible">
+                <el-radio :value="1">{{ $t('system.menu.show') }}</el-radio>
+                <el-radio :value="0">{{ $t('system.menu.hide') }}</el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
@@ -136,6 +154,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { menuApi } from '@/api/system'
+import IconPicker from '@/components/IconPicker.vue'
 
 const { t } = useI18n()
 
@@ -154,7 +173,7 @@ const menuOptions = ref<any[]>([])
 const form = reactive<any>({
   id: undefined,
   parentId: 0,
-  menuType: 0,
+  menuType: 'M',
   menuName: '',
   orderNum: 0,
   path: '',
@@ -162,7 +181,7 @@ const form = reactive<any>({
   perms: '',
   icon: '',
   status: 0,
-  visible: 0
+  visible: 1
 })
 
 const rules = reactive<FormRules>({
@@ -277,7 +296,7 @@ async function submitForm() {
 function resetForm() {
   form.id = undefined
   form.parentId = 0
-  form.menuType = 0
+  form.menuType = 'M'
   form.menuName = ''
   form.orderNum = 0
   form.path = ''
@@ -285,7 +304,7 @@ function resetForm() {
   form.perms = ''
   form.icon = ''
   form.status = 0
-  form.visible = 0
+  form.visible = 1
 }
 </script>
 

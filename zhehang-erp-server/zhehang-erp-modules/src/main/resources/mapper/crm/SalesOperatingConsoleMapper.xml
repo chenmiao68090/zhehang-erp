@@ -1,0 +1,372 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.crm.mapper.SalesOperatingConsoleMapper">
+
+    <sql id="leadScope">
+        AND l.tenant_id = #{ctx.tenantId}
+        AND l.deleted = 0
+        <if test="ctx.scopeMode == 'DEPARTMENT'">
+            AND l.dept_id IN
+            <foreach collection="ctx.deptIds" item="deptId" open="(" separator="," close=")">#{deptId}</foreach>
+        </if>
+        <if test="ctx.scopeMode == 'SELF'">AND l.owner_id = #{ctx.userId}</if>
+        <if test="ctx.ownerId != null">AND l.owner_id = #{ctx.ownerId}</if>
+        <if test="ctx.deptId != null">AND l.dept_id = #{ctx.deptId}</if>
+    </sql>
+
+    <sql id="orderScope">
+        AND o.tenant_id = #{ctx.tenantId}
+        AND o.deleted = 0
+        <if test="ctx.scopeMode == 'DEPARTMENT'">
+            AND o.dept_id IN
+            <foreach collection="ctx.deptIds" item="deptId" open="(" separator="," close=")">#{deptId}</foreach>
+        </if>
+        <if test="ctx.scopeMode == 'SELF'">AND o.salesman_id = #{ctx.userId}</if>
+        <if test="ctx.ownerId != null">AND o.salesman_id = #{ctx.ownerId}</if>
+        <if test="ctx.deptId != null">AND o.dept_id = #{ctx.deptId}</if>
+    </sql>
+
+    <sql id="renewalScope">
+        AND r.tenant_id = #{ctx.tenantId}
+        AND r.deleted = 0
+        <if test="ctx.scopeMode == 'DEPARTMENT'">
+            AND r.collector_dept_id IN
+            <foreach collection="ctx.deptIds" item="deptId" open="(" separator="," close=")">#{deptId}</foreach>
+        </if>
+        <if test="ctx.scopeMode == 'SELF'">AND r.collector_id = #{ctx.userId}</if>
+        <if test="ctx.ownerId != null">AND r.collector_id = #{ctx.ownerId}</if>
+        <if test="ctx.deptId != null">AND r.collector_dept_id = #{ctx.deptId}</if>
+    </sql>
+
+    <select id="selectLeadSummary" resultType="java.util.Map">
+        SELECT
+            COUNT(*) AS activeLeadCount,
+            SUM(CASE WHEN COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &gt;= #{ctx.todayStart}
+                          AND COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &lt; #{ctx.tomorrowStart}
+                     THEN 1 ELSE 0 END) AS todayActionCount,
+            SUM(CASE WHEN COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &lt; #{ctx.now}
+                     THEN 1 ELSE 0 END) AS overdueCount,
+            SUM(CASE WHEN l.next_action_time IS NULL AND l.next_follow_time IS NULL THEN 1 ELSE 0 END) AS noNextActionCount,
+            SUM(CASE WHEN COALESCE(NULLIF(l.intent_level, ''), l.customer_level) IN ('A','B')
+                     THEN 1 ELSE 0 END) AS highIntentCount,
+            SUM(CASE WHEN COALESCE(l.deal_amount, l.quoted_price) &gt; 0
+                          AND l.deal_probability BETWEEN 1 AND 100
+                     THEN COALESCE(l.deal_amount, l.quoted_price) * l.deal_probability / 100 ELSE 0 END)
+                AS weightedForecastAmount,
+            SUM(CASE WHEN COALESCE(l.deal_amount, l.quoted_price) &gt; 0
+                          AND l.deal_probability BETWEEN 1 AND 100 THEN 1 ELSE 0 END) AS forecastValidCount
+        FROM crm_lead l
+        WHERE l.status IN (1,2) AND l.owner_id IS NOT NULL
+        <include refid="leadScope"/>
+    </select>
+
+    <select id="selectStageSnapshot" resultType="java.util.Map">
+        SELECT x.stageCode,
+               COUNT(*) AS currentCount,
+               SUM(CASE WHEN x.nextActionAt &lt; #{ctx.now} THEN 1 ELSE 0 END) AS overdueCount
+        FROM (
+            SELECT
+                CASE
+                    WHEN l.status = 4 THEN 'INVALID'
+                    WHEN l.status = 3 THEN 'HANDOFF_DELIVERY'
+                    WHEN l.follow_status = '线索接收' THEN 'LEAD_RECEIVED'
+                    WHEN l.follow_status = '需求沟通' THEN 'NEEDS_COMMUNICATION'
+                    WHEN l.follow_status = '需求答疑' THEN 'NEEDS_CLARIFICATION'
+                    WHEN l.follow_status = '签单收款' THEN 'SIGNING_PAYMENT'
+                    WHEN l.follow_status = '移交结束交付' THEN 'HANDOFF_DELIVERY'
+                    WHEN l.status = 2 THEN 'NEEDS_COMMUNICATION'
+                    ELSE 'LEAD_RECEIVED'
+                END AS stageCode,
+                COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) AS nextActionAt
+            FROM crm_lead l
+            WHERE l.status IN (1,2,3)
+            <include refid="leadScope"/>
+        ) x
+        GROUP BY x.stageCode
+    </select>
+
+    <select id="selectOrderSummary" resultType="java.util.Map">
+        SELECT
+            COALESCE(SUM(o.payable_amount),0) AS confirmedAmount,
+            COUNT(*) AS confirmedOrderCount,
+            COALESCE(SUM(CASE WHEN o.order_type = 'new' THEN o.payable_amount ELSE 0 END),0) AS newBusinessAmount,
+            SUM(CASE WHEN o.order_type = 'new' THEN 1 ELSE 0 END) AS newBusinessCount,
+            COALESCE(SUM(CASE WHEN o.order_type = 'renew' THEN o.payable_amount ELSE 0 END),0) AS renewalAmount,
+            SUM(CASE WHEN o.order_type = 'renew' THEN 1 ELSE 0 END) AS renewalCount
+        FROM biz_order o
+        WHERE o.finance_confirm_time &gt;= #{ctx.startTime}
+          AND o.finance_confirm_time &lt; #{ctx.endTimeExclusive}
+        <include refid="orderScope"/>
+    </select>
+
+    <select id="selectRenewalSummary" resultType="java.util.Map">
+        SELECT
+            COUNT(*) AS outstandingCount,
+            COALESCE(SUM(r.arrears_amount),0) AS outstandingAmount,
+            SUM(CASE WHEN r.due_date &gt;= CURDATE() AND r.due_date &lt;= #{ctx.dueSoonDate} THEN 1 ELSE 0 END) AS dueSoonCount,
+            COALESCE(SUM(CASE WHEN r.due_date &gt;= CURDATE() AND r.due_date &lt;= #{ctx.dueSoonDate}
+                              THEN r.arrears_amount ELSE 0 END),0) AS dueSoonAmount,
+            SUM(CASE WHEN r.due_date &lt; CURDATE() THEN 1 ELSE 0 END) AS overdueCount,
+            COALESCE(SUM(CASE WHEN r.due_date &lt; CURDATE() THEN r.arrears_amount ELSE 0 END),0) AS overdueAmount,
+            SUM(CASE WHEN r.collection_status = '承诺付款' THEN 1 ELSE 0 END) AS promisedCount,
+            COALESCE(SUM(CASE WHEN r.collection_status = '承诺付款' THEN r.arrears_amount ELSE 0 END),0) AS promisedAmount,
+            SUM(CASE WHEN r.collection_status = '坏账风险' THEN 1 ELSE 0 END) AS badRiskCount,
+            COALESCE(SUM(CASE WHEN r.collection_status = '坏账风险' THEN r.arrears_amount ELSE 0 END),0) AS badRiskAmount
+        FROM fin_receivable_renewal r
+        WHERE r.arrears_amount &gt; 0
+        <include refid="renewalScope"/>
+    </select>
+
+    <select id="selectStageEventFlows" resultType="java.util.Map">
+        SELECT e.from_stage_code AS fromStageCode,
+               e.to_stage_code AS toStageCode,
+               COUNT(*) AS eventCount
+        FROM crm_lead_stage_event e
+        INNER JOIN crm_lead l ON l.id = e.lead_id
+        WHERE e.tenant_id = #{ctx.tenantId}
+          AND e.deleted = 0
+          AND e.occurred_at &gt;= #{ctx.startTime}
+          AND e.occurred_at &lt; #{ctx.endTimeExclusive}
+        <include refid="leadScope"/>
+        GROUP BY e.from_stage_code, e.to_stage_code
+    </select>
+
+    <select id="selectActionRows" resultType="java.util.Map">
+        SELECT
+            l.id AS leadId,
+            l.company AS companyName,
+            l.owner_id AS ownerId,
+            COALESCE(NULLIF(u.nickname,''), u.username) AS ownerName,
+            l.dept_id AS deptId,
+            d.dept_name AS deptName,
+            CASE
+                WHEN l.follow_status = '需求沟通' THEN 'NEEDS_COMMUNICATION'
+                WHEN l.follow_status = '需求答疑' THEN 'NEEDS_CLARIFICATION'
+                WHEN l.follow_status = '签单收款' THEN 'SIGNING_PAYMENT'
+                WHEN l.follow_status = '移交结束交付' THEN 'HANDOFF_DELIVERY'
+                WHEN l.status = 2 THEN 'NEEDS_COMMUNICATION'
+                ELSE 'LEAD_RECEIVED'
+            END AS stageCode,
+            l.next_action_type AS nextActionType,
+            COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) AS nextActionTime,
+            l.last_follow_time AS lastFollowTime,
+            COALESCE(l.deal_amount, l.quoted_price, 0) AS expectedAmount,
+            CASE
+                WHEN COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &lt; #{ctx.now} THEN 'OVERDUE'
+                WHEN l.next_action_time IS NULL AND l.next_follow_time IS NULL THEN 'NO_ACTION'
+                ELSE 'TODAY'
+            END AS actionType,
+            CASE
+                WHEN COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &lt; #{ctx.now} THEN 'danger'
+                WHEN l.next_action_time IS NULL AND l.next_follow_time IS NULL THEN 'warning'
+                ELSE 'primary'
+            END AS severity,
+            DATEDIFF(CURDATE(), DATE(COALESCE(l.last_follow_time, l.create_time))) AS ageDays,
+            COALESCE(NULLIF(l.intent_level, ''), l.customer_level) AS customerLevel
+        FROM crm_lead l
+        LEFT JOIN sys_user u ON u.id = l.owner_id AND u.deleted = 0
+        LEFT JOIN sys_dept d ON d.id = l.dept_id AND d.deleted = 0
+        WHERE l.status IN (1,2)
+          AND l.owner_id IS NOT NULL
+          AND (COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &lt; #{ctx.tomorrowStart}
+               OR (l.next_action_time IS NULL AND l.next_follow_time IS NULL))
+        <include refid="leadScope"/>
+        ORDER BY
+            CASE
+                WHEN COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &lt; #{ctx.now} THEN 1
+                WHEN l.next_action_time IS NULL AND l.next_follow_time IS NULL THEN 2
+                ELSE 3
+            END,
+            COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time), l.create_time),
+            COALESCE(l.deal_amount, l.quoted_price, 0) DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectOwnerLeadStats" resultType="java.util.Map">
+        SELECT l.owner_id AS ownerId,
+               COALESCE(NULLIF(u.nickname,''), u.username) AS ownerName,
+               l.dept_id AS deptId,
+               d.dept_name AS deptName,
+               COUNT(*) AS activeLeadCount,
+               SUM(CASE WHEN COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) &lt; #{ctx.now}
+                        THEN 1 ELSE 0 END) AS overdueCount,
+               SUM(CASE WHEN l.next_action_time IS NULL AND l.next_follow_time IS NULL THEN 1 ELSE 0 END)
+                   AS noNextActionCount
+        FROM crm_lead l
+        LEFT JOIN sys_user u ON u.id = l.owner_id AND u.deleted = 0
+        LEFT JOIN sys_dept d ON d.id = l.dept_id AND d.deleted = 0
+        WHERE l.status IN (1,2) AND l.owner_id IS NOT NULL
+        <include refid="leadScope"/>
+        GROUP BY l.owner_id, u.nickname, u.username, l.dept_id, d.dept_name
+    </select>
+
+    <select id="selectOwnerOrderStats" resultType="java.util.Map">
+        SELECT o.salesman_id AS ownerId,
+               MAX(COALESCE(NULLIF(u.nickname,''), u.username, o.salesman_name)) AS ownerName,
+               o.dept_id AS deptId,
+               MAX(d.dept_name) AS deptName,
+               COALESCE(SUM(o.payable_amount),0) AS confirmedAmount,
+               COUNT(*) AS confirmedOrderCount
+        FROM biz_order o
+        LEFT JOIN sys_user u ON u.id = o.salesman_id AND u.deleted = 0
+        LEFT JOIN sys_dept d ON d.id = o.dept_id AND d.deleted = 0
+        WHERE o.finance_confirm_time &gt;= #{ctx.startTime}
+          AND o.finance_confirm_time &lt; #{ctx.endTimeExclusive}
+          AND o.salesman_id IS NOT NULL
+        <include refid="orderScope"/>
+        GROUP BY o.salesman_id, o.dept_id
+    </select>
+
+    <select id="selectSourceQuality" resultType="java.util.Map">
+        SELECT
+            CASE
+                WHEN NULLIF(TRIM(l.source_platform), '') IS NOT NULL THEN LEFT(TRIM(l.source_platform), 32)
+                WHEN l.source = 1 THEN '工商公开名单'
+                WHEN l.source = 2 THEN '客户转介绍'
+                WHEN l.source = 3 THEN '美团投流'
+                WHEN l.source = 4 THEN '抖音投流'
+                WHEN l.source = 5 THEN '线下来客'
+                WHEN l.source = 6 THEN '其他投流'
+                WHEN l.source = 7 THEN '名单采购/电销'
+                WHEN l.source = 8 THEN '渠道合作'
+                WHEN l.source = 9 THEN '私域二开'
+                WHEN l.source = 10 THEN '其他'
+                ELSE '未标注来源'
+            END AS sourceName,
+            COUNT(*) AS leadCount,
+            SUM(CASE WHEN l.status = 3 THEN 1 ELSE 0 END) AS convertedCount,
+            SUM(CASE WHEN l.status = 4 THEN 1 ELSE 0 END) AS lostCount,
+            ROUND(SUM(CASE WHEN l.status = 3 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1)
+                AS conversionRate
+        FROM crm_lead l
+        WHERE l.create_time &gt;= #{ctx.startTime}
+          AND l.create_time &lt; #{ctx.endTimeExclusive}
+        <include refid="leadScope"/>
+        GROUP BY sourceName
+        ORDER BY leadCount DESC, sourceName
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectLossReasons" resultType="java.util.Map">
+        SELECT
+            CASE
+                WHEN l.invalid_reason LIKE '%号码无效%' OR l.invalid_reason LIKE '%空号%'
+                    OR l.invalid_reason LIKE '%错号%' OR l.invalid_reason LIKE '%停机%' THEN '号码无效或异常'
+                WHEN l.invalid_reason LIKE '%明确拒绝%' OR l.invalid_reason LIKE 'D类-%' THEN '无意向或明确拒绝'
+                WHEN l.invalid_reason LIKE 'E类-%' THEN '无效客户'
+                WHEN l.invalid_reason IS NULL OR TRIM(l.invalid_reason) = '' THEN '未填写原因'
+                ELSE '其他已归档原因'
+            END AS reason,
+            COUNT(*) AS leadCount
+        FROM crm_lead l
+        WHERE l.status = 4
+          AND l.update_time &gt;= #{ctx.startTime}
+          AND l.update_time &lt; #{ctx.endTimeExclusive}
+        <include refid="leadScope"/>
+        GROUP BY reason
+        ORDER BY leadCount DESC, reason
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectOwnerOptions" resultType="java.util.Map">
+        SELECT u.id, COALESCE(NULLIF(u.nickname,''), u.username) AS name,
+               u.dept_id AS deptId, d.dept_name AS deptName
+        FROM sys_user u
+        LEFT JOIN sys_dept d ON d.id = u.dept_id AND d.deleted = 0
+        WHERE u.tenant_id = #{ctx.tenantId} AND u.deleted = 0
+          AND EXISTS (
+              SELECT 1 FROM crm_lead l0
+              WHERE l0.tenant_id = #{ctx.tenantId} AND l0.deleted = 0 AND l0.owner_id = u.id
+              UNION ALL
+              SELECT 1 FROM biz_order o0
+              WHERE o0.tenant_id = #{ctx.tenantId} AND o0.deleted = 0 AND o0.salesman_id = u.id
+          )
+        <if test="ctx.scopeMode == 'DEPARTMENT'">
+            AND u.dept_id IN
+            <foreach collection="ctx.deptIds" item="deptId" open="(" separator="," close=")">#{deptId}</foreach>
+        </if>
+        <if test="ctx.scopeMode == 'SELF'">AND u.id = #{ctx.userId}</if>
+        <if test="ctx.deptId != null">AND u.dept_id = #{ctx.deptId}</if>
+        ORDER BY d.sort, u.id
+    </select>
+
+    <select id="selectDepartmentOptions" resultType="java.util.Map">
+        SELECT d.id, d.dept_name AS name
+        FROM sys_dept d
+        WHERE d.tenant_id = #{ctx.tenantId} AND d.deleted = 0
+        <if test="ctx.scopeMode == 'DEPARTMENT'">
+            AND d.id IN
+            <foreach collection="ctx.deptIds" item="deptId" open="(" separator="," close=")">#{deptId}</foreach>
+        </if>
+        <if test="ctx.scopeMode == 'SELF' and ctx.currentDeptId != null">AND d.id = #{ctx.currentDeptId}</if>
+        ORDER BY d.sort, d.id
+    </select>
+
+    <select id="selectFirstStageEventTime" resultType="java.time.LocalDateTime">
+        SELECT MIN(e.occurred_at)
+        FROM crm_lead_stage_event e
+        INNER JOIN crm_lead l ON l.id = e.lead_id
+        WHERE e.tenant_id = #{ctx.tenantId} AND e.deleted = 0
+        <include refid="leadScope"/>
+    </select>
+
+    <select id="selectStageCustomers" resultType="com.zhehang.erp.modules.crm.domain.vo.SalesStageCustomerVO">
+        SELECT q.leadId, q.companyName, q.ownerId, q.ownerName, q.deptId, q.deptName,
+               q.stageCode,
+               CASE q.stageCode
+                   WHEN 'LEAD_RECEIVED' THEN '线索接收'
+                   WHEN 'NEEDS_COMMUNICATION' THEN '需求沟通'
+                   WHEN 'NEEDS_CLARIFICATION' THEN '需求答疑'
+                   WHEN 'SIGNING_PAYMENT' THEN '签单收款'
+                   WHEN 'HANDOFF_DELIVERY' THEN '移交结束交付'
+               END AS stageName,
+               q.stageEnteredAt,
+               DATEDIFF(CURDATE(), DATE(COALESCE(q.stageEnteredAt, q.createTime))) AS stageAgeDays,
+               q.nextActionType, q.nextActionTime, q.lastFollowTime, q.expectedAmount,
+               CASE WHEN q.nextActionTime &lt; #{ctx.now} THEN TRUE ELSE FALSE END AS overdue,
+               q.customerLevel
+        FROM (
+            SELECT l.id AS leadId,
+                   l.company AS companyName,
+                   l.owner_id AS ownerId,
+                   COALESCE(NULLIF(u.nickname,''), u.username) AS ownerName,
+                   l.dept_id AS deptId,
+                   d.dept_name AS deptName,
+                   CASE
+                       WHEN l.status = 3 THEN 'HANDOFF_DELIVERY'
+                       WHEN l.follow_status = '线索接收' THEN 'LEAD_RECEIVED'
+                       WHEN l.follow_status = '需求沟通' THEN 'NEEDS_COMMUNICATION'
+                       WHEN l.follow_status = '需求答疑' THEN 'NEEDS_CLARIFICATION'
+                       WHEN l.follow_status = '签单收款' THEN 'SIGNING_PAYMENT'
+                       WHEN l.follow_status = '移交结束交付' THEN 'HANDOFF_DELIVERY'
+                       WHEN l.status = 2 THEN 'NEEDS_COMMUNICATION'
+                       ELSE 'LEAD_RECEIVED'
+                   END AS stageCode,
+                   se.stageEnteredAt,
+                   l.create_time AS createTime,
+                   l.next_action_type AS nextActionType,
+                   COALESCE(l.next_action_time, TIMESTAMP(l.next_follow_time)) AS nextActionTime,
+                   l.last_follow_time AS lastFollowTime,
+                   COALESCE(l.deal_amount, l.quoted_price, 0) AS expectedAmount,
+                   COALESCE(NULLIF(l.intent_level, ''), l.customer_level) AS customerLevel
+            FROM crm_lead l
+            LEFT JOIN sys_user u ON u.id = l.owner_id AND u.deleted = 0
+            LEFT JOIN sys_dept d ON d.id = l.dept_id AND d.deleted = 0
+            LEFT JOIN (
+                SELECT lead_id, MAX(occurred_at) AS stageEnteredAt
+                FROM crm_lead_stage_event
+                WHERE tenant_id = #{ctx.tenantId} AND deleted = 0 AND to_stage_code = #{stageCode}
+                GROUP BY lead_id
+            ) se ON se.lead_id = l.id
+            WHERE l.status IN (1,2,3)
+            <include refid="leadScope"/>
+        ) q
+        WHERE q.stageCode = #{stageCode}
+        <if test="keyword != null and keyword != ''">
+            AND (q.companyName LIKE CONCAT('%', #{keyword}, '%') OR q.ownerName LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY CASE WHEN q.nextActionTime &lt; #{ctx.now} THEN 0 ELSE 1 END,
+                 q.nextActionTime, q.stageEnteredAt, q.leadId DESC
+    </select>
+
+</mapper>

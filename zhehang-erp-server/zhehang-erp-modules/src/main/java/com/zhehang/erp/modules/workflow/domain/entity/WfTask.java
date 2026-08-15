@@ -18,14 +18,22 @@ public class WfTask extends BaseEntity {
     private Long instanceId;
     /** 节点名称 */
     private String nodeName;
-    /** 节点类型（start/approval/condition/end） */
+    /** 流程节点ID(引擎按ID流转,防节点改名把在途单打死;老数据可能为空需回退按名字找) */
+    private String nodeId;
+    /** 节点类型（start/approval/condition/end/cc） */
     private String nodeType;
     /** 处理人ID */
     private Long assigneeId;
-    /** 状态（0待处理 1已通过 2已拒绝 3已转交） */
+    /** 状态（0待处理 1已通过 2已拒绝 3已转交 4已抄送 5已作废(或签他人已办/撤销) 6已退回(要求发起人修改)） */
     private Integer status;
     /** 审批意见 */
     private String comment;
     /** 处理时间 */
     private LocalDateTime handleTime;
+    /** 审批时限(按节点timeoutHours生成;空=不限时) */
+    private LocalDateTime deadline;
+    /** 超时提醒已发:0否 1是(防重复提醒) */
+    private Integer timeoutNotified;
+    /** 抄送已读:0未读 1已读(仅 node_type=cc 有意义) */
+    private Integer readFlag;
 }

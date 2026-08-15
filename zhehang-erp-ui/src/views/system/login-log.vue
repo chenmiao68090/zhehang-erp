@@ -24,13 +24,37 @@
       </el-form>
     </el-card>
 
+    <div class="log-overview">
+      <div class="overview-item">
+        <span>当前筛选记录</span>
+        <b>{{ total }}</b>
+      </div>
+      <div class="overview-item success">
+        <span>当前页成功</span>
+        <b>{{ successCount }}</b>
+      </div>
+      <div class="overview-item danger">
+        <span>当前页失败</span>
+        <b>{{ failCount }}</b>
+      </div>
+      <el-alert
+        v-if="!loading && total === 0"
+        class="overview-tip"
+        title="登录日志已接入，从下一次登录开始自动记录成功/失败、IP、浏览器和操作系统。"
+        type="info"
+        show-icon
+        :closable="false"
+      />
+    </div>
+
     <el-card shadow="never" class="table-card">
       <template #header>
         <div class="card-header">
           <span>{{ $t('system.loginLog.title') }}</span>
           <div class="toolbar-btns">
-            <el-button type="warning" v-hasPermi="['system:log:export']" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
-            <el-button type="danger" v-hasPermi="['system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
+            <el-button @click="getList"><el-icon><Refresh /></el-icon>刷新</el-button>
+            <el-button type="warning" v-hasPermi="['log:login:export', 'system:log:export']" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
+            <el-button type="danger" v-hasPermi="['log:login:remove', 'system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
           </div>
         </div>
       </template>
@@ -56,10 +80,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { loginLogApi } from '@/api/system'
+import { downloadBlob } from '@/utils/download'
 
 const { t } = useI18n()
 
@@ -74,6 +99,8 @@ const dateRange = ref<string[]>([])
 const loading = ref(false)
 const total = ref(0)
 const logList = ref<any[]>([])
+const successCount = computed(() => logList.value.filter(item => item.status === 0).length)
+const failCount = computed(() => logList.value.filter(item => item.status === 1).length)
 
 onMounted(() => {
   getList()
@@ -108,8 +135,10 @@ function resetQuery() {
   handleQuery()
 }
 
-function handleExport() {
-  loginLogApi.export(queryParams)
+async function handleExport() {
+  const data = await loginLogApi.export(buildQueryParams())
+  downloadBlob(data as Blob, `login-logs-${Date.now()}.csv`)
+  ElMessage.success(t('common.success'))
 }
 
 function handleClean() {
@@ -123,6 +152,15 @@ function handleClean() {
     getList()
   }).catch(() => {})
 }
+
+function buildQueryParams() {
+  const params: any = { ...queryParams }
+  if (dateRange.value && dateRange.value.length === 2) {
+    params.beginTime = dateRange.value[0]
+    params.endTime = dateRange.value[1]
+  }
+  return params
+}
 </script>
 
 <style lang="scss" scoped>
@@ -131,6 +169,47 @@ function handleClean() {
 }
 .search-card {
   margin-bottom: 16px;
+}
+.log-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 180px)) minmax(280px, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: stretch;
+}
+.overview-item {
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  span {
+    color: #667085;
+    font-size: 13px;
+  }
+
+  b {
+    color: #101828;
+    font-size: 26px;
+    line-height: 1.2;
+    margin-top: 4px;
+  }
+
+  &.success b {
+    color: #16a34a;
+  }
+
+  &.danger b {
+    color: #dc2626;
+  }
+}
+.overview-tip {
+  min-height: 72px;
+  align-items: center;
 }
 .table-card {
   .card-header {
@@ -147,5 +226,14 @@ function handleClean() {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 960px) {
+  .log-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .overview-tip {
+    grid-column: 1 / -1;
+  }
 }
 </style>

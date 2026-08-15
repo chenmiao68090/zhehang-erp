@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.finance.mapper.CashAccountLedgerMapper">
+
+  <sql id="receiptWhere">
+    j.deleted = 0
+    AND j.tenant_id = #{tenantId}
+    AND j.record_status = 'active'
+    AND (j.cash_account_id = #{accountId}
+      OR (j.cash_account_id IS NULL AND j.receive_account = #{accountName}))
+    <if test="dateStart != null">AND j.receipt_date &gt;= #{dateStart}</if>
+    <if test="dateEnd != null">AND j.receipt_date &lt;= #{dateEnd}</if>
+  </sql>
+
+  <sql id="adjustmentWhere">
+    a.deleted = 0
+    AND a.tenant_id = #{tenantId}
+    AND a.account_id = #{accountId}
+    AND a.status IN ('active', 'reversed')
+    <if test="dateStart != null">AND a.adjustment_date &gt;= #{dateStart}</if>
+    <if test="dateEnd != null">AND a.adjustment_date &lt;= #{dateEnd}</if>
+  </sql>
+
+  <select id="sumReceipts" resultType="java.math.BigDecimal">
+    SELECT COALESCE(SUM(j.amount), 0)
+    FROM fin_cash_journal j
+    WHERE <include refid="receiptWhere" />
+  </select>
+
+  <select id="sumAdjustments" resultType="java.math.BigDecimal">
+    SELECT COALESCE(SUM(CASE WHEN a.direction = 'in' THEN a.amount ELSE -a.amount END), 0)
+    FROM fin_cash_account_adjustment a
+    WHERE <include refid="adjustmentWhere" />
+  </select>
+
+  <select id="countLedger" resultType="long">
+    SELECT COUNT(*) FROM (
+      SELECT j.id
+      FROM fin_cash_journal j
+      WHERE <include refid="receiptWhere" />
+      UNION ALL
+      SELECT a.id
+      FROM fin_cash_account_adjustment a
+      WHERE <include refid="adjustmentWhere" />
+    ) ledger_count
+  </select>
+
+  <select id="selectLedger" resultType="com.zhehang.erp.modules.finance.domain.vo.CashAccountLedgerVO">
+    SELECT ledger.* FROM (
+      SELECT
+        j.id AS source_id,
+        'receipt' AS source_type,
+        j.receipt_date AS business_date,
+        COALESCE(j.receipt_time, j.create_time) AS business_time,
+        j.amount AS inflow_amount,
+        0.00 AS outflow_amount,
+        j.receipt_no AS reference_no,
+        j.payer_name AS counterparty,
+        COALESCE(j.summary, j.remark) AS summary,
+        CONCAT(j.record_status, '/', j.review_status) AS status,
+        j.create_by AS operator_id,
+        j.owner_name AS operator_name,
+        NULL AS reversal_of_id
+      FROM fin_cash_journal j
+      WHERE <include refid="receiptWhere" />
+      UNION ALL
+      SELECT
+        a.id AS source_id,
+        'adjustment' AS source_type,
+        a.adjustment_date AS business_date,
+        a.adjustment_time AS business_time,
+        CASE WHEN a.direction = 'in' THEN a.amount ELSE 0.00 END AS inflow_amount,
+        CASE WHEN a.direction = 'out' THEN a.amount ELSE 0.00 END AS outflow_amount,
+        a.adjustment_no AS reference_no,
+        a.adjustment_type AS counterparty,
+        a.reason AS summary,
+        a.status AS status,
+        a.operator_id AS operator_id,
+        a.operator_name AS operator_name,
+        a.reversal_of_id AS reversal_of_id
+      FROM fin_cash_account_adjustment a
+      WHERE <include refid="adjustmentWhere" />
+    ) ledger
+    ORDER BY ledger.business_date DESC, ledger.business_time DESC, ledger.source_id DESC
+    LIMIT #{offset}, #{pageSize}
+  </select>
+</mapper>

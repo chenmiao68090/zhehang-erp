@@ -14,6 +14,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/finance/invoice")
 @RequiredArgsConstructor
+@org.springframework.security.access.prepost.PreAuthorize("@perm.hasModule('finance')")
 public class FinanceInvoiceController {
 
     private final FinanceInvoiceServiceImpl invoiceService;
@@ -33,22 +34,25 @@ public class FinanceInvoiceController {
     @Log(module = "Finance Invoice", type = Log.OperationType.INSERT)
     public R<Void> add(@RequestBody FinanceInvoice invoice) {
         invoice.setStatus(1);
-        invoiceService.save(invoice);
-        return R.ok();
+        return invoiceService.save(invoice)
+                ? R.ok()
+                : R.fail(500, "发票新增失败");
     }
 
     @PutMapping
     @Log(module = "Finance Invoice", type = Log.OperationType.UPDATE)
     public R<Void> update(@RequestBody FinanceInvoice invoice) {
-        invoiceService.updateById(invoice);
-        return R.ok();
+        return invoiceService.updateById(invoice)
+                ? R.ok()
+                : R.fail(404, "发票不存在或已删除");
     }
 
     @DeleteMapping("/{id}")
     @Log(module = "Finance Invoice", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
-        invoiceService.removeById(id);
-        return R.ok();
+        return invoiceService.removeById(id)
+                ? R.ok()
+                : R.fail(404, "发票不存在或已删除");
     }
 
     @GetMapping("/stats")

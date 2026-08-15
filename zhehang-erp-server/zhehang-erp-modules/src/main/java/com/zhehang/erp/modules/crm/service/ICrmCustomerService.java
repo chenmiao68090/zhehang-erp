@@ -6,6 +6,8 @@ import com.zhehang.erp.modules.crm.domain.entity.CrmCustomer;
 
 public interface ICrmCustomerService extends IService<CrmCustomer> {
     IPage<CrmCustomer> selectPage(int pageNum, int pageSize, String name, String level, Integer status, Long ownerId);
+    void updateAccessible(CrmCustomer customer);
+    void removeAccessible(Long id);
     void toPool(Long id, String reason);
     void claimFromPool(Long customerId, Long ownerId);
 }

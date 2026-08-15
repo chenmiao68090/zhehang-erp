@@ -22,6 +22,14 @@ public class WfProcessDef extends BaseEntity {
     private Integer version;
     /** 描述 */
     private String description;
+    /** 发起卡片图标(Element Plus 图标组件名) */
+    private String icon;
+    /** 同分组内排序(小在前) */
+    private Integer sort;
+    /** 发起目录分组:attendance假勤/finance财务/admin行政/hr人事/biz业务/other其他 */
+    private String groupName;
+    /** 是否作为设计器"使用模板"的模板:0否 1是 */
+    private Integer isTemplate;
     /** 表单配置（JSON） */
     private String formConfig;
     /** 流程配置（JSON） */

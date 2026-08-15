@@ -32,7 +32,8 @@
         <div class="card-header">
           <span>{{ $t('system.operLog.title') }}</span>
           <div class="toolbar-btns">
-            <el-button type="danger" v-hasPermi="['system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
+            <el-button type="warning" v-hasPermi="['log:oper:export', 'system:log:export']" @click="handleExport"><el-icon><Download /></el-icon>{{ $t('common.export') }}</el-button>
+            <el-button type="danger" v-hasPermi="['log:oper:remove', 'system:log:remove']" @click="handleClean"><el-icon><Delete /></el-icon>{{ $t('common.clean') }}</el-button>
           </div>
         </div>
       </template>
@@ -41,10 +42,18 @@
         <el-table-column :label="$t('system.operLog.module')" prop="module" min-width="120" />
         <el-table-column :label="$t('system.operLog.operType')" prop="operType" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="getOperTypeTag(row.operType)">{{ row.operType }}</el-tag>
+            <el-tag :type="getOperTypeTag(row.operType)">{{ getOperTypeLabel(row.operType) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="$t('system.operLog.operator')" prop="operator" min-width="120" />
+        <el-table-column label="身份视角" min-width="190">
+          <template #default="{ row }">
+            <span v-if="!row.impersonationSessionId" class="normal-identity">本人操作</span>
+            <el-tag v-else type="warning" effect="plain">
+              {{ row.actorUsername || row.operator || '超级管理员' }} → {{ row.effectiveUsername || row.effectiveUserId || '员工' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column :label="$t('system.operLog.ipAddr')" prop="ipAddr" min-width="140" />
         <el-table-column :label="$t('system.operLog.operTime')" prop="operTime" width="180" align="center" />
         <el-table-column :label="$t('system.operLog.status')" prop="status" width="100" align="center">
@@ -66,9 +75,20 @@
     <el-dialog v-model="detailVisible" :title="$t('system.operLog.detail')" width="800px">
       <el-descriptions :column="2" border>
         <el-descriptions-item :label="$t('system.operLog.module')">{{ detailData.module }}</el-descriptions-item>
-        <el-descriptions-item :label="$t('system.operLog.operType')">{{ detailData.operType }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('system.operLog.operType')">{{ getOperTypeLabel(detailData.operType) }}</el-descriptions-item>
         <el-descriptions-item :label="$t('system.operLog.operator')">{{ detailData.operator }}</el-descriptions-item>
         <el-descriptions-item :label="$t('system.operLog.ipAddr')">{{ detailData.ipAddr }}</el-descriptions-item>
+        <template v-if="detailData.impersonationSessionId">
+          <el-descriptions-item label="实际操作人">
+            {{ detailData.actorUsername || detailData.operator }}（ID：{{ detailData.actorUserId || detailData.operatorId }}）
+          </el-descriptions-item>
+          <el-descriptions-item label="被模拟员工">
+            {{ detailData.effectiveUsername || '-' }}（ID：{{ detailData.effectiveUserId || '-' }}）
+          </el-descriptions-item>
+          <el-descriptions-item label="代登录会话" :span="2">
+            <code>{{ detailData.impersonationSessionId }}</code>
+          </el-descriptions-item>
+        </template>
         <el-descriptions-item :label="$t('system.operLog.requestUri')" :span="2">{{ detailData.requestUri }}</el-descriptions-item>
         <el-descriptions-item :label="$t('system.operLog.requestMethod')" :span="2">{{ detailData.requestMethod }}</el-descriptions-item>
         <el-descriptions-item :label="$t('system.operLog.requestParams')" :span="2">
@@ -97,7 +117,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import { operLogApi } from '@/api/system'
+import { downloadBlob } from '@/utils/download'
 
 const { t } = useI18n()
 
@@ -149,6 +171,12 @@ function resetQuery() {
   handleQuery()
 }
 
+async function handleExport() {
+  const data = await operLogApi.export(buildQueryParams())
+  downloadBlob(data as Blob, `operation-logs-${Date.now()}.csv`)
+  ElMessage.success(t('common.success'))
+}
+
 async function handleRowClick(row: any) {
   try {
     const res: any = await operLogApi.detail(row.id)
@@ -171,6 +199,15 @@ function handleClean() {
   }).catch(() => {})
 }
 
+function buildQueryParams() {
+  const params: any = { ...queryParams }
+  if (dateRange.value && dateRange.value.length === 2) {
+    params.beginTime = dateRange.value[0]
+    params.endTime = dateRange.value[1]
+  }
+  return params
+}
+
 function getOperTypeTag(type: string): string {
   const map: Record<string, string> = {
     INSERT: 'success',
@@ -182,7 +219,26 @@ function getOperTypeTag(type: string): string {
   }
   return map[type] || 'info'
 }
+
+function getOperTypeLabel(type: string): string {
+  const map: Record<string, string> = {
+    INSERT: t('system.operLog.typeInsert'),
+    UPDATE: t('system.operLog.typeUpdate'),
+    DELETE: t('system.operLog.typeDelete'),
+    EXPORT: t('system.operLog.typeExport'),
+    QUERY: t('system.operLog.typeQuery'),
+    OTHER: t('system.operLog.typeOther')
+  }
+  return map[type] || type || '-'
+}
 </script>
+
+<style scoped>
+.normal-identity {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+</style>
 
 <style lang="scss" scoped>
 .page-container {

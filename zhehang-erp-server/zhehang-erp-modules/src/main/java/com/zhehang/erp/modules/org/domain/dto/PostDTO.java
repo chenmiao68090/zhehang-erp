@@ -8,7 +8,6 @@ import lombok.Data;
 public class PostDTO {
     private Long id;
 
-    @NotBlank(message = "岗位编码不能为空")
     @Size(max = 64, message = "岗位编码长度不能超过64")
     private String postCode;
 

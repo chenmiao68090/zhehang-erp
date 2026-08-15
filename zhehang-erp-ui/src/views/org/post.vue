@@ -1,30 +1,31 @@
 <template>
   <div class="page-container">
     <!-- 搜索栏 -->
-    <div class="search-bar">
-      <el-form :model="queryParams" inline>
-        <el-form-item :label="$t('org.postName')">
-          <el-input v-model="queryParams.postName" :placeholder="$t('org.inputPostName')" clearable @keyup.enter="handleSearch" />
-        </el-form-item>
-        <el-form-item :label="$t('org.status')">
-          <el-select v-model="queryParams.status" :placeholder="$t('org.selectStatus')" clearable style="width: 120px">
-            <el-option :label="$t('org.statusNormal')" :value="0" />
-            <el-option :label="$t('org.statusDisabled')" :value="1" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">{{ $t('common.search') }}</el-button>
-          <el-button @click="handleReset">{{ $t('common.reset') }}</el-button>
-        </el-form-item>
-      </el-form>
-      <el-button type="primary" @click="handleAdd">
-        <el-icon><Plus /></el-icon>{{ $t('common.add') }}
-      </el-button>
-    </div>
+    <el-card shadow="never" class="search-card">
+      <div class="search-bar">
+        <el-form :model="queryParams" inline>
+          <el-form-item :label="$t('org.postName')">
+            <el-input v-model="queryParams.postName" :placeholder="$t('org.inputPostName')" clearable @keyup.enter="handleSearch" />
+          </el-form-item>
+          <el-form-item :label="$t('org.status')">
+            <el-select v-model="queryParams.status" :placeholder="$t('org.selectStatus')" clearable style="width: 120px">
+              <el-option :label="$t('org.statusNormal')" :value="0" />
+              <el-option :label="$t('org.statusDisabled')" :value="1" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="handleSearch">{{ $t('common.search') }}</el-button>
+            <el-button @click="handleReset">{{ $t('common.reset') }}</el-button>
+          </el-form-item>
+        </el-form>
+        <el-button type="primary" @click="handleAdd">
+          <el-icon><Plus /></el-icon>{{ $t('common.add') }}
+        </el-button>
+      </div>
+    </el-card>
 
     <!-- 数据表格 -->
     <el-table :data="tableData" v-loading="loading" stripe border>
-      <el-table-column prop="postCode" :label="$t('org.postCode')" width="150" />
       <el-table-column prop="postName" :label="$t('org.postName')" min-width="150" />
       <el-table-column prop="headcount" :label="$t('org.headcount')" width="100" align="center" />
       <el-table-column prop="sort" :label="$t('org.sort')" width="80" align="center" />
@@ -58,11 +59,8 @@
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px" destroy-on-close>
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
-        <el-form-item :label="$t('org.postCode')" prop="postCode">
-          <el-input v-model="formData.postCode" :placeholder="$t('org.inputPostCode')" />
-        </el-form-item>
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px" class="post-dialog" destroy-on-close>
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="112px" class="post-form">
         <el-form-item :label="$t('org.postName')" prop="postName">
           <el-input v-model="formData.postName" :placeholder="$t('org.inputPostName')" />
         </el-form-item>
@@ -73,7 +71,7 @@
           <el-input-number v-model="formData.headcount" :min="0" controls-position="right" />
         </el-form-item>
         <el-form-item :label="$t('org.responsibilities')">
-          <el-input v-model="formData.responsibilities" type="textarea" :rows="3" :placeholder="$t('org.inputResponsibilities')" />
+          <el-input v-model="formData.responsibilities" type="textarea" :rows="7" :placeholder="$t('org.inputResponsibilities')" />
         </el-form-item>
         <el-form-item :label="$t('org.status')">
           <el-radio-group v-model="formData.status">
@@ -124,7 +122,6 @@ const formData = ref({
 })
 
 const rules = {
-  postCode: [{ required: true, message: t('org.inputPostCode'), trigger: 'blur' }],
   postName: [{ required: true, message: t('org.inputPostName'), trigger: 'blur' }]
 }
 
@@ -136,7 +133,7 @@ const loadData = async () => {
     tableData.value = data.records || data.list || []
     total.value = data.total || 0
   } catch (e) {
-    console.error(e)
+    // ignore
   } finally {
     loading.value = false
   }
@@ -190,7 +187,7 @@ const submitForm = async () => {
     dialogVisible.value = false
     loadData()
   } catch (e) {
-    console.error(e)
+    // ignore
   }
 }
 
@@ -198,11 +195,13 @@ loadData()
 </script>
 
 <style scoped>
+.search-card {
+  margin-bottom: 16px;
+}
 .search-bar {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -210,5 +209,30 @@ loadData()
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+:deep(.post-dialog) {
+  max-width: calc(100vw - 32px);
+}
+
+:deep(.post-dialog .el-dialog__body) {
+  padding: 22px 28px 10px;
+}
+
+:deep(.post-dialog .el-dialog__footer) {
+  padding: 14px 28px 24px;
+}
+
+.post-form {
+  max-width: 680px;
+}
+
+.post-form :deep(.el-input-number) {
+  width: 180px;
+}
+
+.post-form :deep(.el-textarea__inner) {
+  min-height: 168px !important;
+  line-height: 1.7;
 }
 </style>

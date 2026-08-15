@@ -15,6 +15,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/finance/voucher")
 @RequiredArgsConstructor
+@org.springframework.security.access.prepost.PreAuthorize("@perm.hasModule('finance')")
 public class FinanceVoucherController {
 
     private final FinanceVoucherServiceImpl voucherService;
@@ -101,9 +102,15 @@ public class FinanceVoucherController {
             e.setSubjectCode((String) m.get("subjectCode"));
             e.setSubjectName((String) m.get("subjectName"));
             e.setSummary((String) m.get("summary"));
-            e.setDebitAmount(new java.math.BigDecimal(m.getOrDefault("debitAmount", "0").toString()));
-            e.setCreditAmount(new java.math.BigDecimal(m.getOrDefault("creditAmount", "0").toString()));
+            e.setDebitAmount(toAmount(m.get("debitAmount")));
+            e.setCreditAmount(toAmount(m.get("creditAmount")));
             return e;
         }).collect(java.util.stream.Collectors.toList());
+    }
+
+    private java.math.BigDecimal toAmount(Object v) {
+        if (v == null) return java.math.BigDecimal.ZERO;
+        String s = v.toString().trim();
+        return s.isEmpty() ? java.math.BigDecimal.ZERO : new java.math.BigDecimal(s);
     }
 }

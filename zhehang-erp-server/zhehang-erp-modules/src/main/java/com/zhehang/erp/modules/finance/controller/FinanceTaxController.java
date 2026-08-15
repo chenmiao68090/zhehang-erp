@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/finance/tax")
 @RequiredArgsConstructor
+@org.springframework.security.access.prepost.PreAuthorize("@perm.hasModule('finance')")
 public class FinanceTaxController {
 
     private final FinanceTaxServiceImpl taxService;
@@ -57,6 +58,6 @@ public class FinanceTaxController {
 
     @GetMapping("/summary")
     public R<?> summary(@RequestParam(required = false) String period) {
-        return R.ok(taxService.list());
+        return R.ok(taxService.summary(period));
     }
 }

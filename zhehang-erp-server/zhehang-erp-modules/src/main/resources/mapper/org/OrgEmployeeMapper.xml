@@ -13,11 +13,18 @@
         <result column="phone" property="phone"/>
         <result column="email" property="email"/>
         <result column="address" property="address"/>
+        <result column="household_location" property="householdLocation"/>
+        <result column="household_type" property="householdType"/>
+        <result column="native_place" property="nativePlace"/>
+        <result column="ethnicity" property="ethnicity"/>
+        <result column="political_status" property="politicalStatus"/>
+        <result column="marital_status" property="maritalStatus"/>
         <result column="dept_id" property="deptId"/>
         <result column="dept_name" property="deptName"/>
         <result column="post_id" property="postId"/>
         <result column="post_name" property="postName"/>
         <result column="hire_date" property="hireDate"/>
+        <result column="resign_date" property="resignDate"/>
         <result column="regular_date" property="regularDate"/>
         <result column="contract_start" property="contractStart"/>
         <result column="contract_end" property="contractEnd"/>
@@ -28,14 +35,31 @@
         <result column="emergency_phone" property="emergencyPhone"/>
         <result column="status" property="status"/>
         <result column="remark" property="remark"/>
+        <result column="avatar" property="avatar"/>
+        <result column="annual_leave_total" property="annualLeaveTotal"/>
+        <result column="annual_leave_used" property="annualLeaveUsed"/>
+        <result column="manager_id" property="managerId"/>
+        <result column="manager_name" property="managerName"/>
+        <result column="hr_docs" property="hrDocs"/>
+        <result column="resume_file_id" property="resumeFileId"/>
+        <result column="resume_file_name" property="resumeFileName"/>
+        <result column="education_cert_file_id" property="educationCertFileId"/>
+        <result column="education_cert_file_name" property="educationCertFileName"/>
+        <result column="skill_cert_file_id" property="skillCertFileId"/>
+        <result column="skill_cert_file_name" property="skillCertFileName"/>
+        <result column="id_card_front_file_id" property="idCardFrontFileId"/>
+        <result column="id_card_front_file_name" property="idCardFrontFileName"/>
+        <result column="id_card_back_file_id" property="idCardBackFileId"/>
+        <result column="id_card_back_file_name" property="idCardBackFileName"/>
         <result column="create_time" property="createTime"/>
     </resultMap>
 
     <select id="selectEmployeePage" resultMap="EmployeeVOMap">
-        SELECT e.*, d.dept_name, p.post_name
+        SELECT e.*, d.dept_name, p.post_name, mgr.name AS manager_name
         FROM org_employee e
         LEFT JOIN sys_dept d ON e.dept_id = d.id AND d.deleted = 0
         LEFT JOIN org_post p ON e.post_id = p.id AND p.deleted = 0
+        LEFT JOIN org_employee mgr ON mgr.user_id = e.manager_id AND mgr.deleted = 0
         WHERE e.deleted = 0
         <if test="name != null and name != ''">
             AND e.name LIKE CONCAT('%', #{name}, '%')
@@ -49,20 +73,66 @@
         <if test="status != null">
             AND e.status = #{status}
         </if>
+        <if test="status == null and excludeResigned != null and excludeResigned">
+            AND e.status &lt;&gt; 3
+        </if>
         ORDER BY e.create_time DESC
     </select>
 
     <select id="selectEmployeeById" resultMap="EmployeeVOMap">
-        SELECT e.*, d.dept_name, p.post_name
+        SELECT e.*, d.dept_name, p.post_name, mgr.name AS manager_name
         FROM org_employee e
         LEFT JOIN sys_dept d ON e.dept_id = d.id AND d.deleted = 0
         LEFT JOIN org_post p ON e.post_id = p.id AND p.deleted = 0
+        LEFT JOIN org_employee mgr ON mgr.user_id = e.manager_id AND mgr.deleted = 0
         WHERE e.id = #{id} AND e.deleted = 0
+    </select>
+
+    <!-- 全员花名册:只取 id/姓名/部门/岗位/状态,绝不 SELECT 身份证/手机等 PII 列 -->
+    <select id="selectRoster" resultType="com.zhehang.erp.modules.org.domain.vo.EmployeeRosterVO">
+        SELECT e.id, e.user_id, e.name, e.dept_id, d.dept_name, e.post_id, p.post_name, e.status
+        FROM org_employee e
+        LEFT JOIN sys_dept d ON e.dept_id = d.id AND d.deleted = 0
+        LEFT JOIN org_post p ON e.post_id = p.id AND p.deleted = 0
+        WHERE e.deleted = 0
+        ORDER BY e.dept_id, e.name
+    </select>
+
+    <!-- 全员选人专用：只返回引用标识/姓名/部门/岗位/状态，不得改为 SELECT e.* -->
+    <select id="selectActiveOptions" resultType="com.zhehang.erp.modules.org.domain.vo.EmployeeRosterVO">
+        SELECT e.id, e.user_id, e.name, e.dept_id, d.dept_name, e.post_id, p.post_name, e.status
+        FROM org_employee e
+        LEFT JOIN sys_dept d ON e.dept_id = d.id AND d.deleted = 0
+        LEFT JOIN org_post p ON e.post_id = p.id AND p.deleted = 0
+        WHERE e.deleted = 0 AND e.status IN (1, 2)
+        ORDER BY e.dept_id, e.name
+    </select>
+
+    <!-- 合同到期提醒只取页面展示字段，不返回任何 PII/附件/账号信息 -->
+    <select id="selectContractExpiring" resultType="com.zhehang.erp.modules.org.domain.vo.EmployeeContractExpiryVO">
+        SELECT e.id, e.name, e.dept_id, d.dept_name, e.post_id, p.post_name,
+               e.contract_start, e.contract_end, e.status
+        FROM org_employee e
+        LEFT JOIN sys_dept d ON e.dept_id = d.id AND d.deleted = 0
+        LEFT JOIN org_post p ON e.post_id = p.id AND p.deleted = 0
+        WHERE e.deleted = 0
+          AND e.status = 1
+          AND e.contract_end IS NOT NULL
+          AND e.contract_end BETWEEN #{from} AND #{to}
+        ORDER BY e.contract_end ASC
     </select>
 
     <select id="countByDeptId" resultType="int">
         SELECT COUNT(*) FROM org_employee
         WHERE dept_id = #{deptId} AND deleted = 0 AND status != 3
+    </select>
+
+    <!-- 一次性统计所有部门在职人数(替代逐部门 countByDeptId,消除组织树 N+1) -->
+    <select id="selectMemberCountGroupByDept" resultType="java.util.Map">
+        SELECT dept_id AS deptId, COUNT(*) AS cnt
+        FROM org_employee
+        WHERE deleted = 0 AND status != 3
+        GROUP BY dept_id
     </select>
 
 </mapper>

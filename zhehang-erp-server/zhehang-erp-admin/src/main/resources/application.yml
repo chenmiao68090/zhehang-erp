@@ -6,10 +6,15 @@ server:
 spring:
   profiles:
     active: dev
+  servlet:
+    multipart:
+      # 前端单文件上限 30MB(合同/身份证扫描件常见),后端需≥前端;请求体留富余
+      max-file-size: 30MB
+      max-request-size: 50MB
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/zhehang_erp?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
     username: ${DB_USER:root}
-    password: ${DB_PASSWORD:123456}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       minimum-idle: 5
@@ -29,6 +34,12 @@ spring:
     time-zone: Asia/Shanghai
     serialization:
       write-dates-as-timestamps: false
+  # 定时任务线程池:默认单线程会让好友全量同步(从2020爬到今)阻塞消息数/聊天同步,扩到4线程并行
+  task:
+    scheduling:
+      pool:
+        size: 4
+      thread-name-prefix: sched-
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
@@ -43,17 +54,67 @@ mybatis-plus:
       id-type: assign_id
 
 jwt:
-  secret: zhehang-erp-256-bit-secret-key-change-in-production-env
-  access-token-expiration: 7200000
+  # 生产用环境变量 JWT_SECRET 覆盖(默认值仅供本地开发,切勿用于生产)
+  secret: ${JWT_SECRET:zhehang-erp-256-bit-secret-key-change-in-production-env}
+  access-token-expiration: 900000
   refresh-token-expiration: 604800000
 
+security:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
+  auth:
+    refresh-cookie:
+      name: ${AUTH_REFRESH_COOKIE_NAME:zhehang_refresh}
+      path: ${AUTH_REFRESH_COOKIE_PATH:/api/auth}
+      secure: false
+      same-site: Strict
+
+upload:
+  security:
+    virus-scan:
+      enabled: false
+      host: ${CLAMAV_HOST:localhost}
+      port: ${CLAMAV_PORT:3310}
+      connect-timeout-ms: 3000
+      read-timeout-ms: 120000
+
+account-security:
+  mfa:
+    # 临时运维总闸门，默认必须开启；短信MFA尚未就绪时才允许显式暂停。
+    enforcement-enabled: ${MFA_ENFORCEMENT_ENABLED:true}
+    # 必须是 Base64 编码的 32 字节随机值；只允许通过环境变量注入，严禁提交真实密钥。
+    encryption-key: ${MFA_ENCRYPTION_KEY:}
+    required-roles: ${MFA_REQUIRED_ROLES:boss,super_admin,finance_hq}
+
+im:
+  edit-window-minutes: 15
+  recall-window-minutes: 120
+  max-text-length: 10000
+  max-file-size: 20971520
+  upload-path: ${IM_UPLOAD_PATH:upload/im}
+
+training:
+  video:
+    # 前端按8MB分片上传，单请求仍低于全局30MB限制；总文件默认最多2GB。
+    chunk-size-bytes: ${TRAINING_VIDEO_CHUNK_SIZE:8388608}
+    max-file-size-bytes: ${TRAINING_VIDEO_MAX_FILE_SIZE:2147483648}
+    upload-session-hours: ${TRAINING_VIDEO_UPLOAD_SESSION_HOURS:24}
+    # 播放地址是Redis短时票据，不暴露原始文件ID或磁盘路径。
+    play-ticket-minutes: ${TRAINING_VIDEO_PLAY_TICKET_MINUTES:45}
+
 ai:
-  provider: openai
+  provider: ${AI_PROVIDER:openai}
+  # 防止外部模型网络半开时接口长时间转圈；代码会把配置限制在安全范围内。
+  connect-timeout-millis: ${AI_CONNECT_TIMEOUT_MILLIS:5000}
+  read-timeout-millis: ${AI_READ_TIMEOUT_MILLIS:30000}
   openai:
     api-key: ${OPENAI_API_KEY:}
-    base-url: https://api.openai.com/v1
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    model: ${OPENAI_MODEL:gpt-4}
+    transcription-model: ${OPENAI_TRANSCRIPTION_MODEL:gpt-4o-mini-transcribe}
   qwen:
     api-key: ${QWEN_API_KEY:}
+    model: ${QWEN_MODEL:qwen-turbo}
 
 logging:
   level:

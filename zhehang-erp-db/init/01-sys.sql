@@ -2,7 +2,7 @@ SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
 -- ============================================================
--- 浙杭企服ERP系统 - 系统管理模块
+-- 浙杭集团ERP系统 - 系统管理模块
 -- ============================================================
 
 USE `zhehang_erp`;
@@ -24,6 +24,11 @@ CREATE TABLE `sys_user` (
   `login_date`  DATETIME     DEFAULT NULL            COMMENT '最后登录时间',
   `dept_id`     BIGINT       DEFAULT NULL            COMMENT '部门ID',
   `remark`      VARCHAR(500) DEFAULT NULL            COMMENT '备注',
+  `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '首次登录是否强制改密',
+  `password_changed_at` DATETIME DEFAULT NULL COMMENT '最近改密时间',
+  `mfa_enabled` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否启用MFA',
+  `mfa_secret` VARCHAR(512) DEFAULT NULL COMMENT '加密后的MFA密钥',
+  `mfa_enrolled_at` DATETIME DEFAULT NULL COMMENT 'MFA启用时间',
   `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP           COMMENT '创建时间',
   `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `create_by`   BIGINT       DEFAULT NULL            COMMENT '创建人',
@@ -72,7 +77,7 @@ CREATE TABLE `sys_menu` (
   `path`        VARCHAR(200) DEFAULT NULL            COMMENT '路由地址',
   `component`   VARCHAR(200) DEFAULT NULL            COMMENT '组件路径',
   `menu_type`   CHAR(1)      DEFAULT 'C'             COMMENT '菜单类型（M目录 C菜单 F按钮）',
-  `visible`     TINYINT(1)   DEFAULT 0               COMMENT '是否可见（0显示 1隐藏）',
+  `visible`     TINYINT(1)   DEFAULT 1               COMMENT '是否可见（1显示 0隐藏）',
   `status`      TINYINT(1)   DEFAULT 0               COMMENT '状态（0正常 1禁用）',
   `perms`       VARCHAR(200) DEFAULT NULL            COMMENT '权限标识',
   `icon`        VARCHAR(100) DEFAULT NULL            COMMENT '菜单图标',
@@ -166,6 +171,11 @@ CREATE TABLE `sys_oper_log` (
   `request_method` VARCHAR(10)   DEFAULT NULL            COMMENT '请求方式',
   `oper_type`      TINYINT       DEFAULT 0               COMMENT '操作类别',
   `oper_name`      VARCHAR(64)   DEFAULT NULL            COMMENT '操作人员',
+  `actor_user_id`  BIGINT        DEFAULT NULL            COMMENT '实际操作人用户ID',
+  `actor_username` VARCHAR(64)   DEFAULT NULL            COMMENT '实际操作人用户名快照',
+  `effective_user_id` BIGINT     DEFAULT NULL            COMMENT '请求有效身份用户ID',
+  `effective_username` VARCHAR(64) DEFAULT NULL          COMMENT '请求有效身份用户名快照',
+  `impersonation_session_id` VARCHAR(64) DEFAULT NULL    COMMENT '代登录会话ID',
   `dept_name`      VARCHAR(64)   DEFAULT NULL            COMMENT '部门名称',
   `oper_url`       VARCHAR(500)  DEFAULT NULL            COMMENT '请求URL',
   `oper_ip`        VARCHAR(128)  DEFAULT NULL            COMMENT '操作IP',
@@ -178,8 +188,44 @@ CREATE TABLE `sys_oper_log` (
   KEY `idx_module` (`module`),
   KEY `idx_business_type` (`business_type`),
   KEY `idx_oper_time` (`oper_time`),
+  KEY `idx_impersonation_session` (`impersonation_session_id`, `oper_time`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';
+
+-- 超级管理员员工视角（代登录）会话审计；不保存令牌和密码。
+CREATE TABLE `sys_impersonation_session` (
+  `session_id`           VARCHAR(64)  NOT NULL COMMENT '代登录会话ID',
+  `tenant_id`            BIGINT       NOT NULL COMMENT '租户ID',
+  `actor_user_id`        BIGINT       NOT NULL COMMENT '实际操作人用户ID',
+  `actor_username`       VARCHAR(64)  NOT NULL COMMENT '实际操作人用户名快照',
+  `effective_user_id`    BIGINT       NOT NULL COMMENT '被模拟员工用户ID',
+  `effective_username`   VARCHAR(100) NOT NULL COMMENT '被模拟员工姓名快照',
+  `effective_dept_id`    BIGINT       DEFAULT NULL COMMENT '被模拟员工部门ID快照',
+  `effective_dept_name`  VARCHAR(100) DEFAULT NULL COMMENT '被模拟员工部门名称快照',
+  `effective_role_names` TEXT         DEFAULT NULL COMMENT '角色名称JSON快照',
+  `effective_role_count` INT          NOT NULL DEFAULT 0 COMMENT '有效角色数量',
+  `reason`               VARCHAR(500) NOT NULL COMMENT '代登录原因',
+  `start_time`           DATETIME(3)  NOT NULL COMMENT '开始时间',
+  `expire_time`          DATETIME(3)  NOT NULL COMMENT '强制到期时间',
+  `end_time`             DATETIME(3)  DEFAULT NULL COMMENT '实际结束时间',
+  `status`               VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/ENDED/EXPIRED/REVOKED',
+  `end_reason`           VARCHAR(500) DEFAULT NULL COMMENT '结束原因',
+  `ip_addr`              VARCHAR(128) DEFAULT NULL COMMENT 'IP地址',
+  `user_agent`           VARCHAR(500) DEFAULT NULL COMMENT '设备UA',
+  `device_info`          VARCHAR(200) DEFAULT NULL COMMENT '设备摘要',
+  `tab_id`               VARCHAR(64)  NOT NULL COMMENT '浏览器标签页标识',
+  `active_tab_guard`     TINYINT GENERATED ALWAYS AS
+                         (CASE WHEN `status` = 'ACTIVE' THEN 1 ELSE NULL END) STORED
+                         COMMENT '同一管理员标签页只允许一个活动会话',
+  `create_time`          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time`          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`session_id`),
+  KEY `idx_imp_tenant_actor_start` (`tenant_id`, `actor_user_id`, `start_time`),
+  KEY `idx_imp_tenant_effective_start` (`tenant_id`, `effective_user_id`, `start_time`),
+  KEY `idx_imp_status_expire` (`status`, `expire_time`),
+  UNIQUE KEY `uk_imp_active_actor_tab`
+             (`tenant_id`, `actor_user_id`, `tab_id`, `active_tab_guard`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='超级管理员代登录会话审计';
 
 -- -----------------------------------------------------------
 -- 9. 异常日志表

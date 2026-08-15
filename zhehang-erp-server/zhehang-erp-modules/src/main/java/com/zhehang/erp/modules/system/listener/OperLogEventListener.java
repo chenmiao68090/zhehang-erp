@@ -28,6 +28,34 @@ public class OperLogEventListener {
             operLog.setModule((String) logData.get("module"));
             operLog.setOperType((String) logData.get("operType"));
             operLog.setOperator((String) logData.get("operator"));
+            Object operatorId = logData.get("operatorId");
+            if (operatorId instanceof Number number) {
+                operLog.setOperatorId(number.longValue());
+            }
+            Object actorUserId = logData.get("actorUserId");
+            if (actorUserId instanceof Number number) {
+                operLog.setActorUserId(number.longValue());
+            }
+            Object actorUsername = logData.get("actorUsername");
+            if (actorUsername instanceof String value && !value.isBlank()) {
+                operLog.setActorUsername(value);
+            }
+            Object effectiveUserId = logData.get("effectiveUserId");
+            if (effectiveUserId instanceof Number number) {
+                operLog.setEffectiveUserId(number.longValue());
+            }
+            Object effectiveUsername = logData.get("effectiveUsername");
+            if (effectiveUsername instanceof String value && !value.isBlank()) {
+                operLog.setEffectiveUsername(value);
+            }
+            Object impersonationSessionId = logData.get("impersonationSessionId");
+            if (impersonationSessionId instanceof String value && !value.isBlank()) {
+                operLog.setImpersonationSessionId(value);
+            }
+            Object tenantId = logData.get("tenantId");
+            if (tenantId instanceof Number number) {
+                operLog.setTenantId(number.longValue());
+            }
             operLog.setMethod((String) logData.get("method"));
             operLog.setRequestUri((String) logData.get("requestUri"));
             operLog.setRequestMethod((String) logData.get("requestMethod"));

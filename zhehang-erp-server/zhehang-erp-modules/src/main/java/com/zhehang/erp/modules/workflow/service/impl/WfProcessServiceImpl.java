@@ -1,11 +1,19 @@
 package com.zhehang.erp.modules.workflow.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.workflow.domain.dto.WfProcessDefDTO;
 import com.zhehang.erp.modules.workflow.domain.entity.WfProcessDef;
+import com.zhehang.erp.modules.workflow.domain.entity.WfProcessVersion;
 import com.zhehang.erp.modules.workflow.domain.vo.WfProcessDefVO;
 import com.zhehang.erp.modules.workflow.mapper.WfProcessDefMapper;
+import com.zhehang.erp.modules.workflow.mapper.WfProcessVersionMapper;
+import com.zhehang.erp.modules.workflow.service.IWfInstanceService;
 import com.zhehang.erp.modules.workflow.service.IWfProcessService;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -19,6 +27,8 @@ import java.util.stream.Collectors;
 public class WfProcessServiceImpl implements IWfProcessService {
 
     private final WfProcessDefMapper processDefMapper;
+    private final WfProcessVersionMapper versionMapper;
+    private final IWfInstanceService instanceService;
 
     @Override
     public List<WfProcessDefVO> list(String name, String category, Integer status) {
@@ -66,14 +76,31 @@ public class WfProcessServiceImpl implements IWfProcessService {
     }
 
     @Override
+    @Transactional
     public void publishProcess(Long defId) {
         WfProcessDef entity = processDefMapper.selectById(defId);
         if (entity == null) {
             throw new RuntimeException("流程定义不存在");
         }
+        // 发布预检:任一审批节点解析不到人则禁止发布,并指明是哪个节点缺什么
+        List<String> problems = instanceService.precheckProcessDef(defId);
+        if (!problems.isEmpty()) {
+            throw new BusinessException("发布被阻止,审批链存在解析不到审批人的节点:" + String.join(";", problems));
+        }
         entity.setStatus(1);
         entity.setVersion(entity.getVersion() + 1);
         processDefMapper.updateById(entity);
+
+        // 定格发布版本快照:此后发起的实例绑定本快照,再改定义/改节点名不影响在途单
+        WfProcessVersion snapshot = new WfProcessVersion();
+        snapshot.setProcessDefId(entity.getId());
+        snapshot.setVersion(entity.getVersion());
+        snapshot.setName(entity.getName());
+        snapshot.setFormConfig(entity.getFormConfig());
+        snapshot.setProcessConfig(entity.getProcessConfig());
+        snapshot.setPublishBy(SecurityUtils.getCurrentUserId());
+        snapshot.setPublishTime(LocalDateTime.now());
+        versionMapper.insert(snapshot);
     }
 
     @Override
@@ -87,31 +114,37 @@ public class WfProcessServiceImpl implements IWfProcessService {
     }
 
     @Override
-    public List<Map<String, Object>> getTemplates() {
-        List<Map<String, Object>> templates = new ArrayList<>();
-        templates.add(buildTemplate("leave", "请假审批", "attendance",
-                "[{\"field\":\"leaveType\",\"label\":\"请假类型\",\"type\":\"select\",\"options\":[\"事假\",\"病假\",\"年假\",\"调休\"]},{\"field\":\"days\",\"label\":\"请假天数\",\"type\":\"number\"},{\"field\":\"reason\",\"label\":\"请假事由\",\"type\":\"textarea\"}]",
-                "{\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"name\":\"开始\"},{\"id\":\"node1\",\"type\":\"approval\",\"name\":\"部门主管审批\",\"assigneeType\":\"role\",\"assigneeValue\":\"dept_leader\"},{\"id\":\"end\",\"type\":\"end\",\"name\":\"结束\"}],\"edges\":[{\"from\":\"start\",\"to\":\"node1\"},{\"from\":\"node1\",\"to\":\"end\"}]}"));
-        templates.add(buildTemplate("expense", "报销审批", "finance",
-                "[{\"field\":\"amount\",\"label\":\"报销金额\",\"type\":\"number\"},{\"field\":\"expenseType\",\"label\":\"费用类型\",\"type\":\"select\",\"options\":[\"交通费\",\"餐饮费\",\"住宿费\",\"办公用品\",\"其他\"]},{\"field\":\"description\",\"label\":\"费用说明\",\"type\":\"textarea\"}]",
-                "{\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"name\":\"开始\"},{\"id\":\"node1\",\"type\":\"approval\",\"name\":\"部门主管审批\",\"assigneeType\":\"role\",\"assigneeValue\":\"dept_leader\"},{\"id\":\"condition1\",\"type\":\"condition\",\"name\":\"金额判断\",\"conditions\":[{\"expression\":\"amount > 5000\",\"nextNode\":\"node2\"},{\"expression\":\"amount <= 5000\",\"nextNode\":\"end\"}]},{\"id\":\"node2\",\"type\":\"approval\",\"name\":\"总经理审批\",\"assigneeType\":\"role\",\"assigneeValue\":\"general_manager\"},{\"id\":\"end\",\"type\":\"end\",\"name\":\"结束\"}],\"edges\":[{\"from\":\"start\",\"to\":\"node1\"},{\"from\":\"node1\",\"to\":\"condition1\"},{\"from\":\"condition1\",\"to\":\"node2\"},{\"from\":\"condition1\",\"to\":\"end\"},{\"from\":\"node2\",\"to\":\"end\"}]}"));
-        templates.add(buildTemplate("purchase", "采购审批", "supply",
-                "[{\"field\":\"item\",\"label\":\"采购物品\",\"type\":\"text\"},{\"field\":\"amount\",\"label\":\"采购金额\",\"type\":\"number\"},{\"field\":\"quantity\",\"label\":\"数量\",\"type\":\"number\"},{\"field\":\"reason\",\"label\":\"采购说明\",\"type\":\"textarea\"}]",
-                "{\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"name\":\"开始\"},{\"id\":\"node1\",\"type\":\"approval\",\"name\":\"部门主管审批\",\"assigneeType\":\"role\",\"assigneeValue\":\"dept_leader\"},{\"id\":\"node2\",\"type\":\"approval\",\"name\":\"采购部审批\",\"assigneeType\":\"role\",\"assigneeValue\":\"purchase_manager\"},{\"id\":\"end\",\"type\":\"end\",\"name\":\"结束\"}],\"edges\":[{\"from\":\"start\",\"to\":\"node1\"},{\"from\":\"node1\",\"to\":\"node2\"},{\"from\":\"node2\",\"to\":\"end\"}]}"));
-        templates.add(buildTemplate("seal", "用章审批", "admin",
-                "[{\"field\":\"sealType\",\"label\":\"印章类型\",\"type\":\"select\",\"options\":[\"公章\",\"合同章\",\"财务章\",\"法人章\"]},{\"field\":\"usage\",\"label\":\"用途说明\",\"type\":\"textarea\"},{\"field\":\"copies\",\"label\":\"份数\",\"type\":\"number\"}]",
-                "{\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"name\":\"开始\"},{\"id\":\"node1\",\"type\":\"approval\",\"name\":\"部门主管审批\",\"assigneeType\":\"role\",\"assigneeValue\":\"dept_leader\"},{\"id\":\"node2\",\"type\":\"approval\",\"name\":\"行政主管审批\",\"assigneeType\":\"role\",\"assigneeValue\":\"admin_manager\"},{\"id\":\"end\",\"type\":\"end\",\"name\":\"结束\"}],\"edges\":[{\"from\":\"start\",\"to\":\"node1\"},{\"from\":\"node1\",\"to\":\"node2\"},{\"from\":\"node2\",\"to\":\"end\"}]}"));
-        return templates;
+    public void removeProcess(Long defId) {
+        WfProcessDef entity = processDefMapper.selectById(defId);
+        if (entity == null) {
+            throw new RuntimeException("流程定义不存在");
+        }
+        // 逻辑删除(deleted=1,可恢复),不物理删数据
+        processDefMapper.deleteById(defId);
     }
 
-    private Map<String, Object> buildTemplate(String key, String name, String category, String formConfig, String processConfig) {
-        Map<String, Object> tpl = new HashMap<>();
-        tpl.put("key", key);
-        tpl.put("name", name);
-        tpl.put("category", category);
-        tpl.put("formConfig", formConfig);
-        tpl.put("processConfig", processConfig);
-        return tpl;
+    /**
+     * 模板走库:返回被标记为模板(is_template=1)且已发布(status=1)的真实流程定义。
+     * 好处:模板本身就是过了发布预检的真实流程,审批人角色天然可解析,
+     * 不再有旧硬编码模板引用 general_manager/purchase_manager/admin_manager 等不存在角色的死模板。
+     */
+    @Override
+    public List<Map<String, Object>> getTemplates() {
+        List<WfProcessDef> defs = processDefMapper.selectList(new LambdaQueryWrapper<WfProcessDef>()
+                .eq(WfProcessDef::getIsTemplate, 1)
+                .eq(WfProcessDef::getStatus, 1)
+                .orderByAsc(WfProcessDef::getSort).orderByAsc(WfProcessDef::getId));
+        List<Map<String, Object>> templates = new ArrayList<>();
+        for (WfProcessDef d : defs) {
+            Map<String, Object> tpl = new HashMap<>();
+            tpl.put("key", d.getProcessKey());
+            tpl.put("name", d.getName());
+            tpl.put("category", d.getCategory());
+            tpl.put("formConfig", d.getFormConfig());
+            tpl.put("processConfig", d.getProcessConfig());
+            templates.add(tpl);
+        }
+        return templates;
     }
 
     private WfProcessDefVO toVO(WfProcessDef entity) {

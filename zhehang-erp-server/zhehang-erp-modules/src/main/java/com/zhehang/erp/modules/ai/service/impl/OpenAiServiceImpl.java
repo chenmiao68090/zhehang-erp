@@ -2,8 +2,9 @@ package com.zhehang.erp.modules.ai.service.impl;
 
 import com.zhehang.erp.modules.ai.config.AiConfig;
 import com.zhehang.erp.modules.ai.service.AiService;
-import lombok.RequiredArgsConstructor;
+import com.zhehang.erp.common.core.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -13,12 +14,21 @@ import java.util.*;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @ConditionalOnProperty(name = "ai.provider", havingValue = "openai", matchIfMissing = true)
 public class OpenAiServiceImpl implements AiService {
 
     private final AiConfig aiConfig;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    @Autowired
+    public OpenAiServiceImpl(AiConfig aiConfig) {
+        this(aiConfig, AiHttpClientFactory.create(aiConfig));
+    }
+
+    OpenAiServiceImpl(AiConfig aiConfig, RestTemplate restTemplate) {
+        this.aiConfig = aiConfig;
+        this.restTemplate = restTemplate;
+    }
 
     @Override
     public String chat(String prompt, Map<String, Object> context) {
@@ -39,17 +49,23 @@ public class OpenAiServiceImpl implements AiService {
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
-            if (response.getBody() != null) {
-                List<Map> choices = (List<Map>) response.getBody().get("choices");
-                if (choices != null && !choices.isEmpty()) {
-                    Map message = (Map) choices.get(0).get("message");
-                    return (String) message.get("content");
+            Map responseBody = response.getBody();
+            if (responseBody != null) {
+                Object choicesValue = responseBody.get("choices");
+                if (choicesValue instanceof List<?> choices && !choices.isEmpty()
+                        && choices.get(0) instanceof Map<?, ?> choice
+                        && choice.get("message") instanceof Map<?, ?> message
+                        && message.get("content") instanceof String content
+                        && !content.isBlank()) {
+                    return content;
                 }
             }
-            return "AI service unavailable";
+            throw new BusinessException(SERVICE_UNAVAILABLE_MESSAGE);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("OpenAI call failed: {}", e.getMessage());
-            return "AI service error: " + e.getMessage();
+            log.error("OpenAI call failed", e);
+            throw new BusinessException(SERVICE_UNAVAILABLE_MESSAGE);
         }
     }
 

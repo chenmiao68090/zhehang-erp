@@ -10,6 +10,7 @@ import com.zhehang.erp.modules.sales.domain.entity.SalesQuotation;
 import com.zhehang.erp.modules.sales.mapper.SalesOrderMapper;
 import com.zhehang.erp.modules.sales.mapper.SalesQuotationMapper;
 import com.zhehang.erp.modules.sales.service.ISalesOrderService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,10 +25,13 @@ public class SalesOrderServiceImpl extends ServiceImpl<SalesOrderMapper, SalesOr
 
     private final SalesOrderMapper orderMapper;
     private final SalesQuotationMapper quotationMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<SalesOrder> selectPage(int pageNum, int pageSize, String orderNo, Long customerId, Integer status, String deliveryDate) {
         LambdaQueryWrapper<SalesOrder> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:销售订单按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, SalesOrder::getCreateBy);
         wrapper.like(StringUtils.hasText(orderNo), SalesOrder::getOrderNo, orderNo)
                .eq(customerId != null, SalesOrder::getCustomerId, customerId)
                .eq(status != null, SalesOrder::getStatus, status)
@@ -70,6 +74,10 @@ public class SalesOrderServiceImpl extends ServiceImpl<SalesOrderMapper, SalesOr
         }
         if (quotation.getStatus() != 2) {
             throw new BusinessException("只有已确认的报价单可以转化为订单");
+        }
+        Long existed = orderMapper.selectCount(new LambdaQueryWrapper<SalesOrder>().eq(SalesOrder::getQuotationId, quotationId));
+        if (existed != null && existed > 0) {
+            throw new BusinessException("该报价单已生成订单,请勿重复转化");
         }
         SalesOrder order = new SalesOrder();
         order.setOrderNo(generateNo());

@@ -249,8 +249,8 @@ function getArticleSummary(content: string): string {
 }
 
 .article-card:hover {
-  border-color: #F26522;
-  box-shadow: 0 2px 8px rgba(242, 101, 34, 0.1);
+  border-color: #3370ff;
+  box-shadow: 0 2px 8px rgba(51, 112, 255, 0.1);
 }
 
 .article-card__header {

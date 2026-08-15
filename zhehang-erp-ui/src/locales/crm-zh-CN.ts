@@ -1,9 +1,9 @@
 // CRM 模块中文国际化
 export default {
   crm: {
-    // 线索管理
+    // 公司资源库
     lead: {
-      title: '线索管理',
+      title: '公司资源库',
       name: '公司名称',
       company: '联系人',
       phone: '联系电话',
@@ -18,10 +18,10 @@ export default {
       convertConfirm: '确定将此线索转化为客户？',
       convertSuccess: '线索转化成功',
       sourceOptions: {
-        tianyancha: '天眼查平台',
-        referral: '老客户转介绍',
-        meituan: '运营-美团',
-        douyin: '运营-抖音',
+        tianyancha: '工商公开名单',
+        referral: '客户转介绍',
+        meituan: '运营投流·美团',
+        douyin: '运营投流·抖音',
         offline: '线下来客'
       },
       statusOptions: {
@@ -272,7 +272,142 @@ export default {
       returnTime: '退回时间',
       returnBy: '退回人',
       claim: '认领',
-      claimConfirm: '确定认领此客户？'
+      claimConfirm: '确定认领此客户？',
+      // 公海池类型
+      telemarketing: '电销公海池',
+      online: '线上获客公海池',
+      collaboration: '协作公海池',
+      recycle: '回收公海池',
+      new_leads: '新线索池',
+      treasure: '藏金阁',
+      frozen: '冻结库'
+    },
+    // 客户状态机
+    leadStatus: {
+      new_assign: '新分配',
+      first_contact: '首次触达',
+      need_confirm: '需求确认',
+      quote: '方案报价',
+      negotiation: '谈判签约',
+      closed_won: '已成交',
+      service_delivery: '服务交付',
+      renewal: '续签跟进',
+      return_pool: '退回公海',
+      frozen: '已冻结'
+    },
+    // 客户来源细分
+    sourceDetail: {
+      cold_call: '陌拜/cold call',
+      search_tool: '搜客宝/企业名单',
+      referral: '客户转介绍',
+      baidu: '百度推广',
+      douyin: '抖音/短视频',
+      xiaohongshu: '小红书',
+      fiftyeight: '58同城/赶集',
+      website: '官网咨询',
+      wechat_eco: '微信生态',
+      zhihu: '知乎/自媒体',
+      exhibition: '线下展会',
+      partner: '异业合作',
+      walk_in: '主动上门',
+      other: '其他渠道'
+    },
+    // 杭州区域
+    region: {
+      shangcheng: '上城区',
+      gongshu: '拱墅区',
+      xihu: '西湖区',
+      binjiang: '滨江区',
+      xiaoshan: '萧山区',
+      yuhang: '余杭区',
+      linping: '临平区',
+      qiantang: '钱塘区',
+      fuyang: '富阳区',
+      linan: '临安区',
+      tonglu: '桐庐县',
+      chunan: '淳安县',
+      jiande: '建德市'
+    },
+    // 预警级别
+    warningLevel: {
+      green: '绿灯提醒',
+      yellow: '黄灯预警',
+      red: '红灯警告'
+    },
+    // 分配模式
+    distributeMode: {
+      auto: '自动分配(加权轮询)',
+      manual: '主管手动分配',
+      grab: '主动抢单',
+      approval: '审批制领取'
+    },
+    // 客户类型(财务行业)
+    customerType: {
+      bookkeeping: '代理记账',
+      registration: '工商注册',
+      tax_planning: '税务筹划',
+      qualification: '资质代办',
+      audit: '审计评估',
+      other: '其他企业服务'
+    },
+    // 服务类型
+    serviceType: {
+      bookkeeping: '代理记账',
+      tax_filing: '纳税申报',
+      biz_change: '工商变更',
+      register_company: '注册公司',
+      cancel_company: '注销公司',
+      tax_planning: '税务筹划',
+      audit_report: '审计报告',
+      qualification: '资质代办'
+    },
+    // 角色类型
+    roleType: {
+      telemarketing_junior: '电销初级',
+      telemarketing_mid: '电销中级',
+      telemarketing_senior: '电销高级',
+      online_staff: '线上专员',
+      online_manager: '线上主管',
+      sales_manager: '销售主管'
+    },
+    // 回收规则
+    recycleRule: {
+      no_follow_15d: '15天未跟进',
+      new_lead_3d: '新入库3天超期',
+      grab_no_follow_3d: '抢单后3天未跟进',
+      no_deal_60d: '领取60天未成交',
+      quote_stall_30d: '报价后30天停滞',
+      telemarketing_7d: '电销7天无触达'
+    },
+    // 撞单类型
+    collisionType: {
+      same_time: '同时跟进同一客户',
+      cross_channel: '跨渠道重复',
+      duplicate: '重复录入',
+      grab_conflict: '并发抢单冲突'
+    },
+    // 联系人角色
+    contactRole: {
+      decision_maker: '决策人',
+      influencer: '影响人',
+      user: '使用人',
+      irrelevant: '无关人'
+    },
+    // 跟进方式
+    followMethod: {
+      phone: '电话',
+      wechat: '微信',
+      meeting: '面谈',
+      email: '邮件',
+      other: '其他'
+    },
+    // 客户反馈
+    followFeedback: {
+      positive: '积极',
+      neutral: '中性',
+      negative: '消极',
+      rejected: '拒绝',
+      lost_contact: '失联'
     }
   }
 }

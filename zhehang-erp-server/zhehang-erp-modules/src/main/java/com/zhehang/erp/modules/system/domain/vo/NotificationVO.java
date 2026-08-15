@@ -13,4 +13,5 @@ public class NotificationVO {
     private String link;
     private LocalDateTime createTime;
     private String sender;
+    private String eventId;
 }

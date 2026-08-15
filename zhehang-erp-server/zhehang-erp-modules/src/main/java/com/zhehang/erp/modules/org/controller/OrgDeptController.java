@@ -6,6 +6,7 @@ import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.system.domain.entity.SysDept;
 import com.zhehang.erp.modules.system.mapper.SysDeptMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -36,20 +37,39 @@ public class OrgDeptController {
     }
 
     @PostMapping
+    @PreAuthorize("@perm.hasAnyRole('hr', 'boss', 'super_admin', 'sys_admin')")
     @Log(module = "部门管理", type = Log.OperationType.INSERT)
     public R<Void> add(@RequestBody SysDept dept) {
+        // 写入祖级列表,保证部门主管"本部门及以下"数据范围对新部门生效(否则 ancestors 为空 → 找不到子孙)
+        dept.setAncestors(computeAncestors(dept.getParentId()));
         deptMapper.insert(dept);
         return R.ok();
     }
 
     @PutMapping
+    @PreAuthorize("@perm.hasAnyRole('hr', 'boss', 'super_admin', 'sys_admin')")
     @Log(module = "部门管理", type = Log.OperationType.UPDATE)
     public R<Void> edit(@RequestBody SysDept dept) {
+        dept.setAncestors(computeAncestors(dept.getParentId()));
         deptMapper.updateById(dept);
         return R.ok();
     }
 
+    /** 计算祖级列表:根部门(无父)= "0";子部门 = 父的 ancestors + "," + 父ID */
+    private String computeAncestors(Long parentId) {
+        if (parentId == null || parentId == 0L) {
+            return "0";
+        }
+        SysDept parent = deptMapper.selectById(parentId);
+        if (parent == null) {
+            return "0";
+        }
+        String pa = parent.getAncestors();
+        return (pa == null || pa.isEmpty() ? "0" : pa) + "," + parentId;
+    }
+
     @DeleteMapping("/{id}")
+    @PreAuthorize("@perm.hasAnyRole('hr', 'boss', 'super_admin', 'sys_admin')")
     @Log(module = "部门管理", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
         // 检查是否有子部门

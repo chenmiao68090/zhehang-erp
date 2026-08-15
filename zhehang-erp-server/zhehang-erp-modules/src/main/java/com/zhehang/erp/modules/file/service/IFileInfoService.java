@@ -13,6 +13,7 @@ public interface IFileInfoService extends IService<FileInfo> {
     IPage<FileInfo> getFileList(Integer pageNum, Integer pageSize, Long folderId, String keyword);
     FileInfo uploadFile(MultipartFile file, Long folderId);
     Map<String, Object> downloadFile(Long id);
+    Map<String, Object> readFile(Long id);
     Map<String, Object> previewFile(Long id);
     void deleteFile(Long id);
     void moveFile(Long id, Long targetFolderId);

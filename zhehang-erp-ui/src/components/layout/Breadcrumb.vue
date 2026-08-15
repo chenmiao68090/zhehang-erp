@@ -16,7 +16,7 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 
 const breadcrumbs = computed(() => {
-  return route.matched.filter((item) => item.meta?.title)
+  return route.matched.filter((item) => item.meta?.title && item.meta?.breadcrumb !== false)
 })
 </script>
 

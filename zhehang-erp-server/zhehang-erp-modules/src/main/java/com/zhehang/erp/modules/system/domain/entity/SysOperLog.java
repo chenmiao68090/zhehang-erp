@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 public class SysOperLog implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(type = IdType.ASSIGN_ID)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     /** Module name */
@@ -26,6 +26,21 @@ public class SysOperLog implements Serializable {
 
     /** Operator ID */
     private Long operatorId;
+
+    /** 实际发起操作的账号 ID；代登录时固定为平台超级管理员 */
+    private Long actorUserId;
+
+    /** 实际发起操作的账号名；用于审计快照，避免账号改名后无法还原当时责任人 */
+    private String actorUsername;
+
+    /** 实际承载业务权限和数据范围的账号 ID；代登录时为目标员工 */
+    private Long effectiveUserId;
+
+    /** 实际承载业务权限和数据范围的账号名 */
+    private String effectiveUsername;
+
+    /** 代登录审计会话 ID；普通请求为空 */
+    private String impersonationSessionId;
 
     /** Request method (class.method) */
     private String method;
@@ -42,7 +57,7 @@ public class SysOperLog implements Serializable {
     /** Response result */
     private String responseResult;
 
-    /** Operation status (0=success, 1=fail) */
+    /** Operation status (0=success, 1=fail, 2=impersonation audit processing) */
     private Integer status;
 
     /** Error message */

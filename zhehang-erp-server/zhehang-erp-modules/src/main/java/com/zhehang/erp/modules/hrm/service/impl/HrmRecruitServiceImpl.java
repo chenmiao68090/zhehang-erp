@@ -6,11 +6,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmRecruit;
+import com.zhehang.erp.modules.hrm.domain.vo.HrmColleagueVO;
 import com.zhehang.erp.modules.hrm.mapper.HrmRecruitMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmRecruitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +39,14 @@ public class HrmRecruitServiceImpl extends ServiceImpl<HrmRecruitMapper, HrmRecr
             throw new BusinessException("招聘需求不存在");
         }
         recruit.setStatus(status);
+        if (Integer.valueOf(1).equals(status) && recruit.getPublishDate() == null) {
+            recruit.setPublishDate(LocalDate.now());
+        }
         recruitMapper.updateById(recruit);
+    }
+
+    @Override
+    public List<HrmColleagueVO> listColleagues() {
+        return recruitMapper.selectColleagues();
     }
 }

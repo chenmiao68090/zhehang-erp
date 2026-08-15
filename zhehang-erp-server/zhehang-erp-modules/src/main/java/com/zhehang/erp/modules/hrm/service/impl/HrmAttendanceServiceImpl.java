@@ -6,16 +6,24 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.hrm.domain.entity.HrmAttendance;
+import com.zhehang.erp.modules.hrm.domain.entity.HrmLeave;
+import com.zhehang.erp.modules.hrm.domain.entity.SysHoliday;
 import com.zhehang.erp.modules.hrm.mapper.HrmAttendanceMapper;
+import com.zhehang.erp.modules.hrm.mapper.HrmLeaveMapper;
+import com.zhehang.erp.modules.hrm.mapper.SysHolidayMapper;
 import com.zhehang.erp.modules.hrm.service.IHrmAttendanceService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
@@ -26,11 +34,27 @@ import java.util.Map;
 public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, HrmAttendance> implements IHrmAttendanceService {
 
     private final HrmAttendanceMapper attendanceMapper;
+    private final HrmLeaveMapper leaveMapper;
+    private final SysHolidayMapper holidayMapper;
+    private final DataScopeHelper dataScopeHelper;
     private static final LocalTime WORK_START = LocalTime.of(9, 0);
     private static final LocalTime WORK_END = LocalTime.of(18, 0);
+    // 节假日日历 day_type:1=放假(应出勤减一天),2=补班(落在周末时应出勤加一天)
+    private static final int HOLIDAY_TYPE_OFF = 1;
+    private static final int HOLIDAY_TYPE_MAKEUP = 2;
+    // 请假类型枚举(与前端 attendance.vue 选项保持一致):2=病假,3=事假
+    private static final int LEAVE_TYPE_SICK = 2;
+    private static final int LEAVE_TYPE_PERSONAL = 3;
+    // 请假审批状态:1=已通过(只统计已通过的请假)
+    private static final int LEAVE_STATUS_APPROVED = 1;
 
     @Override
     public IPage<HrmAttendance> selectPage(int pageNum, int pageSize, Long employeeId, String month) {
+        // 数据权限:非HR/管理员只能看自己的考勤记录
+        if (!dataScopeHelper.isHrOrAdmin()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         LambdaQueryWrapper<HrmAttendance> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(employeeId != null, HrmAttendance::getEmployeeId, employeeId)
                .likeRight(StringUtils.hasText(month), HrmAttendance::getAttendanceDate, month)
@@ -40,6 +64,11 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
 
     @Override
     public HrmAttendance clockIn(Long employeeId) {
+        // 越权防护:非HR/管理员/老板,强制只能给自己打卡(覆盖前端传入值)
+        if (!dataScopeHelper.isHrAdminOrBoss()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         LocalDate today = LocalDate.now();
         LambdaQueryWrapper<HrmAttendance> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(HrmAttendance::getEmployeeId, employeeId)
@@ -66,6 +95,11 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
 
     @Override
     public HrmAttendance clockOut(Long employeeId) {
+        // 越权防护:非HR/管理员/老板,强制只能给自己打卡(覆盖前端传入值)
+        if (!dataScopeHelper.isHrAdminOrBoss()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         LocalDate today = LocalDate.now();
         LambdaQueryWrapper<HrmAttendance> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(HrmAttendance::getEmployeeId, employeeId)
@@ -89,6 +123,11 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
 
     @Override
     public Map<String, Object> monthlyStats(Long employeeId, String month) {
+        // 越权防护:非HR/管理员/老板,只能查本人统计(覆盖前端传入的他人employeeId)
+        if (!dataScopeHelper.isHrAdminOrBoss()) {
+            Long myEmp = dataScopeHelper.currentEmployeeId();
+            employeeId = (myEmp != null ? myEmp : -1L);
+        }
         LambdaQueryWrapper<HrmAttendance> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(HrmAttendance::getEmployeeId, employeeId)
                .likeRight(HrmAttendance::getAttendanceDate, month);
@@ -108,6 +147,132 @@ public class HrmAttendanceServiceImpl extends ServiceImpl<HrmAttendanceMapper, H
         stats.put("early", early);
         stats.put("absent", absent);
         stats.put("total", list.size());
+        // 月份(便于前端按行展示与员工个人视角识别)
+        stats.put("month", month);
+        // 新增字段:应出勤天数(当月工作日:周一~周五,按 sys_holiday 调整)
+        stats.put("expectedDays", workdaysOfMonth(month));
+        // 新增字段:法定节假日带薪天数(当月被法定假冲掉的工作日数)
+        stats.put("paidHolidayDays", paidHolidayDaysOfMonth(month));
+        // 新增字段:事假/病假天数(关联 hrm_leave,仅统计已通过且开始时间落在当月的请假)
+        stats.put("personalLeave", leaveDaysOfMonth(employeeId, month, LEAVE_TYPE_PERSONAL));
+        stats.put("sickLeave", leaveDaysOfMonth(employeeId, month, LEAVE_TYPE_SICK));
         return stats;
+    }
+
+    /**
+     * 计算指定月份的应出勤天数。
+     * <p>口径:基础为当月周一~周五;再依据 sys_holiday 节假日日历调整:</p>
+     * <ul>
+     *   <li>减去 day_type=1(放假)且落在工作日(周一~周五)的法定节假日;</li>
+     *   <li>加上 day_type=2(补班)且落在周六/周日的调休补班日。</li>
+     * </ul>
+     * month 形如 "2026-06";解析失败时返回 0,保证接口不抛异常。
+     * 节假日数据缺失时,等价于退化为纯周一~周五计数,不影响接口可用性。
+     */
+    private int workdaysOfMonth(String month) {
+        YearMonth ym;
+        try {
+            ym = YearMonth.parse(month);
+        } catch (Exception e) {
+            return 0;
+        }
+        // 1) 基础:当月周一~周五计数
+        int count = 0;
+        LocalDate cursor = ym.atDay(1);
+        LocalDate end = ym.atEndOfMonth();
+        while (!cursor.isAfter(end)) {
+            DayOfWeek dow = cursor.getDayOfWeek();
+            if (dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) {
+                count++;
+            }
+            cursor = cursor.plusDays(1);
+        }
+        // 2) 按 sys_holiday 调整:查当月([月初, 月末])节假日列表
+        LambdaQueryWrapper<SysHoliday> wrapper = new LambdaQueryWrapper<>();
+        wrapper.ge(SysHoliday::getHolidayDate, ym.atDay(1))
+               .le(SysHoliday::getHolidayDate, ym.atEndOfMonth());
+        List<SysHoliday> holidays = holidayMapper.selectList(wrapper);
+        for (SysHoliday h : holidays) {
+            LocalDate d = h.getHolidayDate();
+            Integer type = h.getDayType();
+            if (d == null || type == null) {
+                continue;
+            }
+            DayOfWeek dow = d.getDayOfWeek();
+            boolean isWeekend = dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
+            if (type == HOLIDAY_TYPE_OFF && !isWeekend) {
+                // 放假且原本是工作日 -> 应出勤减一天
+                count--;
+            } else if (type == HOLIDAY_TYPE_MAKEUP && isWeekend) {
+                // 补班且落在周末 -> 应出勤加一天
+                count++;
+            }
+        }
+        return count < 0 ? 0 : count;
+    }
+
+    /**
+     * 统计指定月份的"法定节假日带薪天数"。
+     * <p>口径:sys_holiday 中 day_type=1(放假)且原本落在工作日(周一~周五)的天数,
+     * 即被法定节假日冲掉、带薪不上班的工作日数。与 workdaysOfMonth 使用同一查询口径,
+     * 月份解析失败或节假日数据缺失时返回 0,保证接口不抛异常。</p>
+     */
+    private int paidHolidayDaysOfMonth(String month) {
+        YearMonth ym;
+        try {
+            ym = YearMonth.parse(month);
+        } catch (Exception e) {
+            return 0;
+        }
+        LambdaQueryWrapper<SysHoliday> wrapper = new LambdaQueryWrapper<>();
+        wrapper.ge(SysHoliday::getHolidayDate, ym.atDay(1))
+               .le(SysHoliday::getHolidayDate, ym.atEndOfMonth());
+        List<SysHoliday> holidays = holidayMapper.selectList(wrapper);
+        int count = 0;
+        for (SysHoliday h : holidays) {
+            LocalDate d = h.getHolidayDate();
+            Integer type = h.getDayType();
+            if (d == null || type == null) {
+                continue;
+            }
+            DayOfWeek dow = d.getDayOfWeek();
+            boolean isWeekend = dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
+            if (type == HOLIDAY_TYPE_OFF && !isWeekend) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 统计某员工在指定月份、指定请假类型下已通过的请假天数(累加 hrm_leave.duration)。
+     * 以请假开始时间(startTime)是否落在当月为口径。
+     */
+    private BigDecimal leaveDaysOfMonth(Long employeeId, String month, int leaveType) {
+        if (employeeId == null) {
+            return BigDecimal.ZERO;
+        }
+        YearMonth ym;
+        try {
+            ym = YearMonth.parse(month);
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+        LocalDateTime monthStart = ym.atDay(1).atStartOfDay();
+        LocalDateTime monthEnd = ym.atEndOfMonth().atTime(LocalTime.MAX);
+        LambdaQueryWrapper<HrmLeave> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(HrmLeave::getEmployeeId, employeeId)
+               .eq(HrmLeave::getLeaveType, leaveType)
+               .eq(HrmLeave::getStatus, LEAVE_STATUS_APPROVED)
+               .ge(HrmLeave::getStartTime, monthStart)
+               .le(HrmLeave::getStartTime, monthEnd);
+        List<HrmLeave> leaves = leaveMapper.selectList(wrapper);
+        BigDecimal total = BigDecimal.ZERO;
+        for (HrmLeave l : leaves) {
+            if (l.getDuration() != null) {
+                total = total.add(l.getDuration());
+            }
+        }
+        return total;
     }
 }

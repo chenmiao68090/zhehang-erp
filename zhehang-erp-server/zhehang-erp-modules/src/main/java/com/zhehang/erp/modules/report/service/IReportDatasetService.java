@@ -8,7 +8,7 @@ import java.util.Map;
 
 public interface IReportDatasetService extends IService<ReportDataset> {
     /** Execute report query (preset or custom SQL). */
-    List<Map<String, Object>> executeReport(Long reportId, Map<String, Object> params);
+    List<Map<String, Object>> executeReport(Long reportId);
 
     /** List preset data sources. */
     List<Map<String, Object>> listPresetDataSources();

@@ -8,6 +8,7 @@ import com.zhehang.erp.modules.org.domain.vo.PostVO;
 import com.zhehang.erp.modules.org.service.IOrgPostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,6 +40,7 @@ public class OrgPostController {
     }
 
     @PostMapping
+    @PreAuthorize("@perm.hasAnyRole('hr', 'boss', 'super_admin', 'sys_admin')")
     @Log(module = "岗位管理", type = Log.OperationType.INSERT)
     public R<Void> add(@Valid @RequestBody PostDTO dto) {
         postService.createPost(dto);
@@ -46,6 +48,7 @@ public class OrgPostController {
     }
 
     @PutMapping
+    @PreAuthorize("@perm.hasAnyRole('hr', 'boss', 'super_admin', 'sys_admin')")
     @Log(module = "岗位管理", type = Log.OperationType.UPDATE)
     public R<Void> edit(@Valid @RequestBody PostDTO dto) {
         postService.updatePost(dto);
@@ -53,6 +56,7 @@ public class OrgPostController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@perm.hasAnyRole('hr', 'boss', 'super_admin', 'sys_admin')")
     @Log(module = "岗位管理", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
         postService.deletePost(id);

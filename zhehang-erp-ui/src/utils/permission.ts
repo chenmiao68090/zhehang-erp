@@ -6,9 +6,14 @@ import { useUserStore } from '@/stores/user'
 export function hasPermission(permissions: string[]): boolean {
   const userStore = useUserStore()
   const userPermissions = userStore.permissions
+  const userRoles = userStore.roles
   const allPermission = '*:*:*'
+  const superAdmin = 'admin'
 
   if (permissions && permissions.length > 0) {
+    if (userRoles.includes(superAdmin)) {
+      return true
+    }
     return userPermissions.some((perm) => {
       return allPermission === perm || permissions.includes(perm)
     })

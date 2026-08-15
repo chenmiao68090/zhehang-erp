@@ -11,25 +11,23 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class LoginService {
 
     private final AuthenticationManager authenticationManager;
-    private final TokenService tokenService;
 
-    public Map<String, String> login(String username, String password) {
+    /** 仅完成主密码认证，不在MFA/首次改密通过前签发任何令牌。 */
+    public LoginUser authenticate(String username, String password) {
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, password)
             );
             LoginUser loginUser = (LoginUser) authentication.getPrincipal();
-            return tokenService.createToken(loginUser);
+            return loginUser;
         } catch (AuthenticationException e) {
-            log.warn("鐧诲綍澶辫触: username={}, error={}", username, e.getMessage());
+            log.warn("登录失败: username={}, error={}", username, e.getMessage());
             throw new BusinessException(ErrorCode.USER_PASSWORD_ERROR);
         }
     }

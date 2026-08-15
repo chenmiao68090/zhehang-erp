@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.im.mapper.ImTaskQueryMapper">
+
+    <sql id="taskColumns">
+        d.task_id,
+        d.conversation_id,
+        d.source_message_id,
+        d.card_message_id,
+        d.title,
+        d.workflow_state,
+        CASE
+            WHEN d.workflow_state IN ('completed', 'rejected', 'cancelled') THEN d.workflow_state
+            WHEN d.overdue_at IS NOT NULL THEN 'overdue'
+            ELSE d.workflow_state
+        END AS status,
+        CASE WHEN d.overdue_at IS NOT NULL AND d.workflow_state NOT IN ('completed', 'cancelled') THEN 1 ELSE 0 END AS overdue,
+        d.priority,
+        d.dept_id,
+        dept.dept_name,
+        d.deadline_at,
+        d.acceptance_standard,
+        CAST(d.reminder_config_json AS CHAR) AS reminder_config_json,
+        d.customer_id,
+        d.business_type,
+        d.business_id,
+        d.creator_id,
+        COALESCE(creator_emp.name, creator.nickname, creator.username, '已离职员工') AS creator_name,
+        d.reviewer_id,
+        COALESCE(reviewer_emp.name, reviewer.nickname, reviewer.username, '已离职员工') AS reviewer_name,
+        d.result_text,
+        d.reject_reason,
+        d.accepted_at,
+        d.submitted_at,
+        d.completed_at,
+        d.cancelled_at,
+        d.overdue_at,
+        d.created_at,
+        d.updated_at
+    </sql>
+
+    <sql id="taskJoins">
+        FROM im_task_detail d
+        JOIN biz_task b ON b.id = d.task_id AND b.deleted = 0
+        LEFT JOIN sys_dept dept ON dept.id = d.dept_id AND dept.deleted = 0
+        LEFT JOIN sys_user creator ON creator.id = d.creator_id AND creator.deleted = 0
+        LEFT JOIN org_employee creator_emp ON creator_emp.user_id = d.creator_id AND creator_emp.deleted = 0
+        LEFT JOIN sys_user reviewer ON reviewer.id = d.reviewer_id AND reviewer.deleted = 0
+        LEFT JOIN org_employee reviewer_emp ON reviewer_emp.user_id = d.reviewer_id AND reviewer_emp.deleted = 0
+    </sql>
+
+    <sql id="taskScope">
+        <choose>
+            <when test="scope == 'responsible'">
+                AND EXISTS (
+                    SELECT 1 FROM im_task_participant p
+                    WHERE p.company_id = d.company_id AND p.task_id = d.task_id
+                      AND p.user_id = #{userId} AND p.participant_role = 'responsible'
+                )
+            </when>
+            <when test="scope == 'created'">
+                AND d.creator_id = #{userId}
+            </when>
+            <when test="scope == 'participating'">
+                AND EXISTS (
+                    SELECT 1 FROM im_task_participant p
+                    WHERE p.company_id = d.company_id AND p.task_id = d.task_id AND p.user_id = #{userId}
+                )
+            </when>
+            <when test="scope == 'department'">
+                AND d.dept_id IN
+                <foreach collection="deptIds" item="deptId" open="(" separator="," close=")">#{deptId}</foreach>
+            </when>
+            <when test="scope == 'company'">
+                <!-- 公司范围已在 Service 层验证为老板/超管。 -->
+            </when>
+            <otherwise>
+                AND (
+                    d.creator_id = #{userId}
+                    OR d.reviewer_id = #{userId}
+                    OR EXISTS (
+                        SELECT 1 FROM im_task_participant p
+                        WHERE p.company_id = d.company_id AND p.task_id = d.task_id AND p.user_id = #{userId}
+                    )
+                )
+            </otherwise>
+        </choose>
+    </sql>
+
+    <select id="taskById" resultType="com.zhehang.erp.modules.im.domain.ImModels$WorkTask">
+        SELECT <include refid="taskColumns"/>
+        <include refid="taskJoins"/>
+        WHERE d.task_id = #{taskId} AND d.tenant_id = #{tenantId} AND d.company_id = #{tenantId}
+        LIMIT 1
+    </select>
+
+    <select id="tasksByIds" resultType="com.zhehang.erp.modules.im.domain.ImModels$WorkTask">
+        SELECT <include refid="taskColumns"/>
+        <include refid="taskJoins"/>
+        WHERE d.tenant_id = #{tenantId} AND d.company_id = #{tenantId}
+          AND d.task_id IN
+          <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+    </select>
+
+    <select id="listTasks" resultType="com.zhehang.erp.modules.im.domain.ImModels$WorkTask">
+        SELECT <include refid="taskColumns"/>
+        <include refid="taskJoins"/>
+        WHERE d.tenant_id = #{tenantId} AND d.company_id = #{tenantId}
+        <include refid="taskScope"/>
+        <if test="state != null and state != '' and state != 'all'">
+            <choose>
+                <when test="state == 'overdue'">
+                    AND d.overdue_at IS NOT NULL AND d.workflow_state NOT IN ('completed', 'cancelled')
+                </when>
+                <otherwise>
+                    AND d.workflow_state = #{state}
+                </otherwise>
+            </choose>
+        </if>
+        <if test="cursorTime != null and cursorTaskId != null">
+            AND (d.updated_at &lt; #{cursorTime} OR (d.updated_at = #{cursorTime} AND d.task_id &lt; #{cursorTaskId}))
+        </if>
+        ORDER BY d.updated_at DESC, d.task_id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="participantsByTaskIds" resultType="com.zhehang.erp.modules.im.domain.ImModels$TaskParticipant">
+        SELECT
+            p.task_id,
+            p.user_id,
+            COALESCE(e.name, u.nickname, u.username, '已离职员工') AS name,
+            COALESCE(e.avatar, u.avatar) AS avatar,
+            COALESCE(e.dept_id, u.dept_id) AS dept_id,
+            dept.dept_name,
+            p.participant_role AS role,
+            p.participant_status AS status
+        FROM im_task_participant p
+        LEFT JOIN sys_user u ON u.id = p.user_id AND u.deleted = 0
+        LEFT JOIN org_employee e ON e.user_id = p.user_id AND e.deleted = 0
+        LEFT JOIN sys_dept dept ON dept.id = COALESCE(e.dept_id, u.dept_id) AND dept.deleted = 0
+        WHERE p.tenant_id = #{tenantId} AND p.company_id = #{tenantId}
+          AND p.task_id IN
+          <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+        ORDER BY FIELD(p.participant_role, 'responsible', 'collaborator'), p.id
+    </select>
+
+    <select id="timeline" resultType="com.zhehang.erp.modules.im.domain.ImModels$TaskTimeline">
+        SELECT
+            t.id,
+            t.operator_id,
+            COALESCE(e.name, u.nickname, u.username,
+                     CASE WHEN t.operator_id = 0 THEN '系统' ELSE '已离职员工' END) AS operator_name,
+            t.action_type,
+            t.from_state,
+            t.to_state,
+            t.comment,
+            t.created_at
+        FROM im_task_timeline t
+        LEFT JOIN sys_user u ON u.id = t.operator_id AND u.deleted = 0
+        LEFT JOIN org_employee e ON e.user_id = t.operator_id AND e.deleted = 0
+        WHERE t.tenant_id = #{tenantId} AND t.company_id = #{tenantId} AND t.task_id = #{taskId}
+        ORDER BY t.created_at ASC, t.id ASC
+    </select>
+
+    <select id="taskAttachments" resultType="com.zhehang.erp.modules.im.domain.ImModels$Attachment">
+        SELECT
+            a.id,
+            a.message_id,
+            a.original_name,
+            a.mime_type,
+            a.file_size,
+            CASE WHEN a.mime_type LIKE 'image/%' THEN 1 ELSE 0 END AS image,
+            CONCAT('/im/attachments/', a.id, '/inline') AS preview_url,
+            CONCAT('/im/attachments/', a.id, '/download') AS download_url,
+            CASE WHEN a.thumbnail_key IS NULL THEN NULL ELSE CONCAT('/im/attachments/', a.id, '/thumbnail') END AS thumbnail_url,
+            a.created_at
+        FROM im_task_attachment ta
+        JOIN im_message_attachment a ON a.id = ta.attachment_id
+        WHERE ta.tenant_id = #{tenantId} AND ta.company_id = #{tenantId} AND ta.task_id = #{taskId}
+        ORDER BY ta.created_at ASC, ta.id ASC
+    </select>
+
+    <select id="taskStats" resultType="com.zhehang.erp.modules.im.domain.ImModels$TaskStats">
+        SELECT
+            COALESCE(SUM(CASE WHEN d.workflow_state = 'pending_accept' THEN 1 ELSE 0 END), 0) AS pending_accept,
+            COALESCE(SUM(CASE WHEN d.workflow_state = 'in_progress' THEN 1 ELSE 0 END), 0) AS in_progress,
+            COALESCE(SUM(CASE WHEN d.workflow_state = 'pending_review' THEN 1 ELSE 0 END), 0) AS pending_review,
+            COALESCE(SUM(CASE WHEN d.workflow_state = 'completed' THEN 1 ELSE 0 END), 0) AS completed,
+            COALESCE(SUM(CASE WHEN d.workflow_state = 'rejected' THEN 1 ELSE 0 END), 0) AS rejected,
+            COALESCE(SUM(CASE WHEN d.overdue_at IS NOT NULL AND d.workflow_state NOT IN ('completed', 'cancelled') THEN 1 ELSE 0 END), 0) AS overdue
+        FROM im_task_detail d
+        WHERE d.tenant_id = #{tenantId} AND d.company_id = #{tenantId}
+        <include refid="taskScope"/>
+    </select>
+
+    <select id="departmentManagerIds" resultType="java.lang.Long">
+        SELECT DISTINCT u.id
+        FROM sys_user u
+        JOIN sys_user_role ur ON ur.user_id = u.id
+        JOIN sys_role r ON r.id = ur.role_id AND r.deleted = 0 AND r.status = 0
+        WHERE u.tenant_id = #{tenantId}
+          AND r.tenant_id = #{tenantId}
+          AND u.deleted = 0
+          AND u.status = 0
+          AND u.dept_id = #{deptId}
+          AND (r.role_key = 'dept_manager'
+               OR LEFT(r.role_key, CHAR_LENGTH('dept_manager') + 2) = CONCAT('dept_manager', '__'))
+    </select>
+
+    <select id="activeUserIdsByRoleKeys" resultType="java.lang.Long">
+        SELECT DISTINCT u.id
+        FROM sys_user u
+        JOIN sys_user_role ur ON ur.user_id = u.id
+        JOIN sys_role r ON r.id = ur.role_id AND r.deleted = 0 AND r.status = 0
+        WHERE u.tenant_id = #{tenantId}
+          AND r.tenant_id = #{tenantId}
+          AND u.deleted = 0
+          AND u.status = 0
+          AND
+          <choose>
+            <when test="roleKeys != null and roleKeys.size() > 0">
+              (
+                <foreach collection="roleKeys" item="roleKey" separator=" OR ">
+                  (r.role_key = #{roleKey}
+                   OR (#{roleKey} NOT IN ('boss', 'admin', 'super_admin', 'sys_admin')
+                       AND LEFT(r.role_key, CHAR_LENGTH(#{roleKey}) + 2) = CONCAT(#{roleKey}, '__')))
+                </foreach>
+              )
+            </when>
+            <otherwise>1 = 0</otherwise>
+          </choose>
+        ORDER BY u.id
+    </select>
+
+    <update id="syncSentReminderStatus">
+        UPDATE im_task_reminder r
+        JOIN im_notification_outbox o
+          ON o.company_id = r.company_id AND o.event_id = r.event_id
+        SET r.status = 'sent',
+            r.sent_at = COALESCE(r.sent_at, o.processed_at, CURRENT_TIMESTAMP(3)),
+            r.last_error = NULL,
+            r.updated_at = CURRENT_TIMESTAMP(3)
+        WHERE r.status IN ('pending', 'queued', 'failed') AND o.status = 'sent'
+    </update>
+
+    <update id="syncFailedReminderStatus">
+        UPDATE im_task_reminder r
+        JOIN im_notification_outbox o
+          ON o.company_id = r.company_id AND o.event_id = r.event_id
+        SET r.status = 'failed',
+            r.last_error = LEFT(o.last_error, 500),
+            r.updated_at = CURRENT_TIMESTAMP(3)
+        WHERE r.status IN ('pending', 'queued') AND o.status = 'dead'
+    </update>
+</mapper>

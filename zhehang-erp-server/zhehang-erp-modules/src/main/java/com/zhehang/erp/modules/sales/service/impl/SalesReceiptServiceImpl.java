@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.modules.sales.domain.entity.SalesReceipt;
 import com.zhehang.erp.modules.sales.mapper.SalesReceiptMapper;
 import com.zhehang.erp.modules.sales.service.ISalesReceiptService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,10 +22,13 @@ import java.util.Map;
 public class SalesReceiptServiceImpl extends ServiceImpl<SalesReceiptMapper, SalesReceipt> implements ISalesReceiptService {
 
     private final SalesReceiptMapper receiptMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<SalesReceipt> selectPage(int pageNum, int pageSize, Long customerId, Integer status, String startDate, String endDate) {
         LambdaQueryWrapper<SalesReceipt> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:销售回款按创建人收敛;管理员/财务部(data_scope=1)看全部
+        dataScopeHelper.applyCreatorScope(wrapper, SalesReceipt::getCreateBy);
         wrapper.eq(customerId != null, SalesReceipt::getCustomerId, customerId)
                .eq(status != null, SalesReceipt::getStatus, status)
                .ge(startDate != null, SalesReceipt::getReceiptDate, startDate)
@@ -36,8 +40,11 @@ public class SalesReceiptServiceImpl extends ServiceImpl<SalesReceiptMapper, Sal
     @Override
     public List<SalesReceipt> overdueList() {
         LambdaQueryWrapper<SalesReceipt> wrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(wrapper, SalesReceipt::getCreateBy); // 逾期回款同样按创建人收敛
         wrapper.lt(true, SalesReceipt::getDueDate, LocalDate.now())
                .ne(SalesReceipt::getStatus, 2)
+               // 已全额收款(余额<=0)的不算逾期,避免逾期列表/账龄出现误报
+               .apply("(amount - COALESCE(received_amount, 0)) > 0")
                .orderByAsc(SalesReceipt::getDueDate);
         return receiptMapper.selectList(wrapper);
     }
@@ -49,13 +56,16 @@ public class SalesReceiptServiceImpl extends ServiceImpl<SalesReceiptMapper, Sal
 
         // 本月应收
         LambdaQueryWrapper<SalesReceipt> dueWrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyCreatorScope(dueWrapper, SalesReceipt::getCreateBy); // 统计同样按创建人收敛
         dueWrapper.ge(SalesReceipt::getDueDate, firstDay).le(SalesReceipt::getDueDate, now);
         List<SalesReceipt> dueList = receiptMapper.selectList(dueWrapper);
         BigDecimal totalDue = dueList.stream().map(SalesReceipt::getAmount).filter(a -> a != null).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 本月已收
         LambdaQueryWrapper<SalesReceipt> receivedWrapper = new LambdaQueryWrapper<>();
-        receivedWrapper.ge(SalesReceipt::getReceiptDate, firstDay).le(SalesReceipt::getReceiptDate, now).eq(SalesReceipt::getStatus, 2);
+        dataScopeHelper.applyCreatorScope(receivedWrapper, SalesReceipt::getCreateBy); // 统计同样按创建人收敛
+        // status 1=部分回款 / 2=已回款,两者都有真实已收额(前端 receipt.vue 确认 1=partial),都计入"本月已收",否则低报现金流
+        receivedWrapper.ge(SalesReceipt::getReceiptDate, firstDay).le(SalesReceipt::getReceiptDate, now).in(SalesReceipt::getStatus, 1, 2);
         List<SalesReceipt> receivedList = receiptMapper.selectList(receivedWrapper);
         BigDecimal totalReceived = receivedList.stream().map(SalesReceipt::getReceivedAmount).filter(a -> a != null).reduce(BigDecimal.ZERO, BigDecimal::add);
 

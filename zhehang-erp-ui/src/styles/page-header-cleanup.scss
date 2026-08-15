@@ -1,0 +1,457 @@
+/*
+ * Logged-in business pages already expose their location in the global breadcrumb.
+ * Remove only the repeated content-area title/copy, while keeping operational controls.
+ * Keep this list deliberately page-scoped: never hide generic h1/h2, dialog, drawer,
+ * article, report preview, login, error or public-form titles.
+ */
+
+/* Compact the former title shells so retained controls become a normal toolbar. */
+:where(
+  .acc-workspace > .acc-head,
+  .asset-mgr > .am-head,
+  .hr-expense-page > .he-head,
+  .seal-use > .su-head,
+  .adm-supply > .as-head,
+  .analysis-page > .ap-head,
+  .tele-board > .board-head,
+  .tele-workbench > .today-head,
+  .collab-contacts > .page-header,
+  .ci > .ci-head,
+  .lead-import-page > .page-header,
+  .lead-page > .resource-header,
+  .rank-page > .sales-header,
+  .culture-page > .culture-hero,
+  .cr > .cr-head,
+  .portfolio-page > .resource-header,
+  .wf > .wf-head,
+  .ws > .ws-head,
+  .wv > .wv-head,
+  .yk > .yk-head,
+  .yum > .yum-head,
+  .biz-perf > .result-page-head,
+  .bc-page > .bc-head,
+  .cockpit-page > .cockpit-header,
+  .memo-page > .memo-hero,
+  .sales-operating-console > .console-header,
+  .suite-page > .page-head,
+  .active-staff > .as-head,
+  .contract-expiring > .ce-header,
+  .labor-contract > .lc-head,
+  .leave-mgmt > .lm-header,
+  .my-payslip > .mp-head,
+  .payslip > .ps-head,
+  .recruit-page > .recruit-hero,
+  .offboarding-center > .page-head,
+  .self-service > .ss-head,
+  .social-fund-page > .sf-head,
+  .collision-page > .page-heading,
+  .rule-page > .page-head,
+  .pdp > .pdp-head,
+  .ops-center-page > .ops-hero,
+  .ao-page > .ao-head,
+  .order-bill > .page-header,
+  .bk-page > .bk-head,
+  .contract-mgmt > .page-header,
+  .finance-check > .page-header,
+  .gss-page > .gss-head,
+  .review-center > .page-head,
+  .partner > .pt-head,
+  .seal-board > .sb-head,
+  .seal-cost > .sc-head,
+  .seal-inv > .si-head,
+  .seal-new-sign > .sns-head,
+  .out-region > .or-head,
+  .seal-reg > .sr-head,
+  .task-workbench > .page-head,
+  .task-workbench > .page-heading,
+  .workflow-designer .flow-list-view > .flow-list-hero
+) {
+  min-height: 0 !important;
+  margin: 0 0 16px !important;
+  padding: 0 !important;
+  justify-content: flex-end !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Most business headers put title, badge and description in the first child. */
+:where(
+  .acc-workspace > .acc-head,
+  .asset-mgr > .am-head,
+  .hr-expense-page > .he-head,
+  .seal-use > .su-head,
+  .adm-supply > .as-head,
+  .analysis-page > .ap-head,
+  .tele-board > .board-head,
+  .tele-workbench > .today-head,
+  .ci > .ci-head,
+  .lead-page > .resource-header,
+  .culture-page > .culture-hero,
+  .cr > .cr-head,
+  .portfolio-page > .resource-header,
+  .wf > .wf-head,
+  .ws > .ws-head,
+  .wv > .wv-head,
+  .yk > .yk-head,
+  .yum > .yum-head,
+  .biz-perf > .result-page-head,
+  .bc-page > .bc-head,
+  .cockpit-page > .cockpit-header,
+  .memo-page > .memo-hero,
+  .suite-page > .page-head,
+  .active-staff > .as-head,
+  .contract-expiring > .ce-header,
+  .labor-contract > .lc-head,
+  .leave-mgmt > .lm-header,
+  .my-payslip > .mp-head,
+  .payslip > .ps-head,
+  .recruit-page > .recruit-hero,
+  .self-service > .ss-head,
+  .social-fund-page > .sf-head,
+  .collision-page > .page-heading,
+  .rule-page > .page-head,
+  .pdp > .pdp-head,
+  .ops-center-page > .ops-hero,
+  .ao-page > .ao-head,
+  .bk-page > .bk-head,
+  .gss-page > .gss-head,
+  .review-center > .page-head,
+  .partner > .pt-head,
+  .seal-board > .sb-head,
+  .seal-cost > .sc-head,
+  .seal-inv > .si-head,
+  .seal-new-sign > .sns-head,
+  .out-region > .or-head,
+  .seal-reg > .sr-head,
+  .task-workbench > .page-head,
+  .task-workbench > .page-heading,
+  .workflow-designer .flow-list-view > .flow-list-hero
+) > :first-child {
+  display: none !important;
+}
+
+/* Editorial-style headers have decorative/title siblings before their actions. */
+.collab-contacts > .page-header > :not(.header-actions),
+.order-bill > .page-header > :not(.header-actions),
+.contract-mgmt > .page-header > :not(.header-actions),
+.finance-check > .page-header > :not(.header-actions) {
+  display: none !important;
+}
+
+/* Import page: retain Back and Download, remove only its title copy. */
+.lead-import-page > .page-header > .header-main > div:last-child {
+  display: none !important;
+}
+
+/* Ranking page: retain period controls and refresh actions. */
+.rank-page > .sales-header > .sh-eyebrow,
+.rank-page > .sales-header > .sh-main > :first-child {
+  display: none !important;
+}
+
+.rank-page > .sales-header > .sh-main {
+  justify-content: flex-end !important;
+}
+
+/* Sales console: the mobile Back action lives beside the title. */
+.sales-operating-console > .console-header > .title-group > .title-line > :not(.mobile-back),
+.sales-operating-console > .console-header > .title-group > p {
+  display: none !important;
+}
+
+/* Offboarding: keep Back plus all right-side actions. */
+.offboarding-center > .page-head > .head-copy > .title-row {
+  display: none !important;
+}
+
+/* Department page is already a toolbar; remove only its duplicated identity. */
+.dept-page > .dept-topbar > .dept-topbar-title {
+  display: none !important;
+}
+
+.dept-page > .dept-topbar {
+  justify-content: flex-end !important;
+}
+
+/* IM title shares a row with create/task actions; keep the actions and presence filters. */
+.im-shell .conversation-head .conversation-title-row > :first-child {
+  display: none !important;
+}
+
+.im-shell .conversation-head .conversation-title-row {
+  justify-content: flex-end !important;
+}
+
+/* V226: the host layout owns the only outer gutter. Legacy pages used to add a
+ * second 18-32px page padding, which became obvious after their title was removed. */
+:where(
+  .acc-workspace,
+  .asset-mgr,
+  .hr-expense-page,
+  .seal-use,
+  .adm-supply,
+  .analysis-page,
+  .tele-board,
+  .tele-workbench,
+  .collab-contacts,
+  .ci,
+  .lead-import-page,
+  .lead-page,
+  .rank-page,
+  .culture-page,
+  .cr,
+  .portfolio-page,
+  .wf,
+  .ws,
+  .wv,
+  .yk,
+  .yum,
+  .biz-perf,
+  .bc-page,
+  .cockpit-page,
+  .memo-page,
+  .sales-operating-console,
+  .suite-page,
+  .active-staff,
+  .contract-expiring,
+  .labor-contract,
+  .leave-mgmt,
+  .my-payslip,
+  .payslip,
+  .recruit-page,
+  .offboarding-center,
+  .self-service,
+  .social-fund-page,
+  .collision-page,
+  .rule-page,
+  .pdp,
+  .ops-center-page,
+  .ao-page,
+  .order-bill,
+  .bk-page,
+  .contract-mgmt,
+  .finance-check,
+  .gss-page,
+  .review-center,
+  .partner,
+  .seal-board,
+  .seal-cost,
+  .seal-inv,
+  .seal-new-sign,
+  .out-region,
+  .seal-reg,
+  .task-workbench
+) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Empty former headers must consume no height. Keep a shell only when it still
+ * owns a real operation, range picker or mobile back action. */
+:where(
+  .acc-workspace > .acc-head,
+  .asset-mgr > .am-head,
+  .hr-expense-page > .he-head,
+  .seal-use > .su-head,
+  .adm-supply > .as-head,
+  .analysis-page > .ap-head,
+  .tele-board > .board-head,
+  .tele-workbench > .today-head,
+  .collab-contacts > .page-header,
+  .ci > .ci-head,
+  .lead-import-page > .page-header,
+  .lead-page > .resource-header,
+  .rank-page > .sales-header,
+  .culture-page > .culture-hero,
+  .cr > .cr-head,
+  .portfolio-page > .resource-header,
+  .wf > .wf-head,
+  .ws > .ws-head,
+  .wv > .wv-head,
+  .yk > .yk-head,
+  .yum > .yum-head,
+  .biz-perf > .result-page-head,
+  .bc-page > .bc-head,
+  .cockpit-page > .cockpit-header,
+  .memo-page > .memo-hero,
+  .sales-operating-console > .console-header,
+  .active-staff > .as-head,
+  .contract-expiring > .ce-header,
+  .labor-contract > .lc-head,
+  .leave-mgmt > .lm-header,
+  .my-payslip > .mp-head,
+  .payslip > .ps-head,
+  .recruit-page > .recruit-hero,
+  .offboarding-center > .page-head,
+  .self-service > .ss-head,
+  .social-fund-page > .sf-head,
+  .collision-page > .page-heading,
+  .rule-page > .page-head,
+  .pdp > .pdp-head,
+  .ops-center-page > .ops-hero,
+  .ao-page > .ao-head,
+  .order-bill > .page-header,
+  .bk-page > .bk-head,
+  .contract-mgmt > .page-header,
+  .finance-check > .page-header,
+  .gss-page > .gss-head,
+  .review-center > .page-head,
+  .partner > .pt-head,
+  .seal-board > .sb-head,
+  .seal-cost > .sc-head,
+  .seal-inv > .si-head,
+  .seal-new-sign > .sns-head,
+  .out-region > .or-head,
+  .seal-reg > .sr-head,
+  .task-workbench > .page-head,
+  .task-workbench > .page-heading,
+  .workflow-designer .flow-list-view > .flow-list-hero
+):not(:has(button, .el-button, input, select, .el-input, .el-select, .el-date-editor, .mobile-back)) {
+  display: none !important;
+}
+
+/* Retained operations become the first row of the business surface instead of
+ * floating in a title band. The matching first panel is pulled up to the row. */
+:where(
+  .acc-workspace > .acc-head,
+  .asset-mgr > .am-head,
+  .hr-expense-page > .he-head,
+  .seal-use > .su-head,
+  .adm-supply > .as-head,
+  .analysis-page > .ap-head,
+  .tele-board > .board-head,
+  .tele-workbench > .today-head,
+  .collab-contacts > .page-header,
+  .ci > .ci-head,
+  .lead-import-page > .page-header,
+  .lead-page > .resource-header,
+  .rank-page > .sales-header,
+  .culture-page > .culture-hero,
+  .cr > .cr-head,
+  .portfolio-page > .resource-header,
+  .wf > .wf-head,
+  .ws > .ws-head,
+  .wv > .wv-head,
+  .yk > .yk-head,
+  .yum > .yum-head,
+  .biz-perf > .result-page-head,
+  .bc-page > .bc-head,
+  .cockpit-page > .cockpit-header,
+  .memo-page > .memo-hero,
+  .sales-operating-console > .console-header,
+  .active-staff > .as-head,
+  .contract-expiring > .ce-header,
+  .labor-contract > .lc-head,
+  .leave-mgmt > .lm-header,
+  .my-payslip > .mp-head,
+  .payslip > .ps-head,
+  .recruit-page > .recruit-hero,
+  .offboarding-center > .page-head,
+  .self-service > .ss-head,
+  .social-fund-page > .sf-head,
+  .collision-page > .page-heading,
+  .rule-page > .page-head,
+  .pdp > .pdp-head,
+  .ops-center-page > .ops-hero,
+  .ao-page > .ao-head,
+  .order-bill > .page-header,
+  .bk-page > .bk-head,
+  .contract-mgmt > .page-header,
+  .finance-check > .page-header,
+  .gss-page > .gss-head,
+  .review-center > .page-head,
+  .partner > .pt-head,
+  .seal-board > .sb-head,
+  .seal-cost > .sc-head,
+  .seal-inv > .si-head,
+  .seal-new-sign > .sns-head,
+  .out-region > .or-head,
+  .seal-reg > .sr-head,
+  .task-workbench > .page-head,
+  .task-workbench > .page-heading,
+  .workflow-designer .flow-list-view > .flow-list-hero
+):has(button, .el-button, input, select, .el-input, .el-select, .el-date-editor, .mobile-back) {
+  min-height: 58px !important;
+  margin: 0 !important;
+  padding: 9px 14px !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  background: #fff !important;
+  border: 1px solid var(--fs-border, #dee0e3) !important;
+  border-bottom: 0 !important;
+  border-radius: 8px 8px 0 0 !important;
+  box-shadow: none !important;
+}
+
+:where(
+  .tele-workbench > .today-head,
+  .order-bill > .page-header,
+  .task-workbench > .page-head,
+  .task-workbench > .page-heading,
+  .review-center > .page-head,
+  .offboarding-center > .page-head,
+  .analysis-page > .ap-head
+) + :is(.tw-layout, .stat-row, .page-card, .summary-grid, .ap-tabs) {
+  margin-top: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+@media (max-width: 768px) {
+  :where(
+    .acc-workspace,
+    .asset-mgr,
+    .hr-expense-page,
+    .seal-use,
+    .adm-supply,
+    .analysis-page,
+    .tele-board,
+    .tele-workbench,
+    .ci,
+    .lead-import-page,
+    .lead-page,
+    .rank-page,
+    .culture-page,
+    .portfolio-page,
+    .biz-perf,
+    .bc-page,
+    .cockpit-page,
+    .memo-page,
+    .sales-operating-console,
+    .suite-page,
+    .active-staff,
+    .contract-expiring,
+    .labor-contract,
+    .leave-mgmt,
+    .payslip,
+    .recruit-page,
+    .offboarding-center,
+    .self-service,
+    .social-fund-page,
+    .collision-page,
+    .rule-page,
+    .ops-center-page,
+    .ao-page,
+    .order-bill,
+    .bk-page,
+    .contract-mgmt,
+    .finance-check,
+    .gss-page,
+    .review-center,
+    .partner,
+    .seal-board,
+    .seal-cost,
+    .seal-inv,
+    .seal-new-sign,
+    .out-region,
+    .seal-reg,
+    .task-workbench
+  ) {
+    padding: 0 !important;
+  }
+}

@@ -2,7 +2,7 @@ SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
 -- ============================================================
--- 浙杭企服ERP系统 - 客户管理（CRM）模块
+-- 浙杭集团ERP系统 - 客户管理（CRM）模块
 -- ============================================================
 
 USE `zhehang_erp`;
@@ -14,12 +14,24 @@ CREATE TABLE `crm_lead` (
   `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '线索ID',
   `name`        VARCHAR(100) NOT NULL                COMMENT '线索名称',
   `company`     VARCHAR(200) DEFAULT NULL            COMMENT '公司名称',
+  `legal_person` VARCHAR(100) DEFAULT NULL           COMMENT '法定代表人/联系人',
   `phone`       VARCHAR(20)  DEFAULT NULL            COMMENT '电话',
+  `company_phone` VARCHAR(50) DEFAULT NULL           COMMENT '企业联系电话',
   `email`       VARCHAR(128) DEFAULT NULL            COMMENT '邮箱',
-  `source`      TINYINT      DEFAULT 1               COMMENT '来源（1网站 2电话 3推荐 4广告）',
+  `register_status` VARCHAR(50) DEFAULT NULL         COMMENT '登记状态',
+  `source`      TINYINT      DEFAULT 1               COMMENT '来源（1工商公开名单 2客户转介绍 3美团投流 4抖音投流 5线下来客 6其他投流 7名单采购/电销 8渠道合作 9私域二开 10其他）',
   `status`      TINYINT      DEFAULT 1               COMMENT '状态（1新建 2跟进中 3已转化 4无效）',
   `owner_id`    BIGINT       DEFAULT NULL            COMMENT '负责人ID',
-  `remark`      VARCHAR(500) DEFAULT NULL            COMMENT '备注',
+  `enterprise_type` VARCHAR(100) DEFAULT NULL        COMMENT '企业类型',
+  `paid_capital` VARCHAR(100) DEFAULT NULL           COMMENT '实缴资本',
+  `approved_date` DATE DEFAULT NULL                  COMMENT '核准日期',
+  `credit_code` VARCHAR(64) DEFAULT NULL             COMMENT '统一社会信用代码',
+  `insured_count` VARCHAR(20) DEFAULT NULL           COMMENT '参保人数',
+  `insured_year` VARCHAR(20) DEFAULT NULL            COMMENT '参保人数所属年报',
+  `register_address` VARCHAR(500) DEFAULT NULL       COMMENT '注册地址',
+  `latest_address` VARCHAR(500) DEFAULT NULL         COMMENT '最新地址',
+  `business_scope` TEXT                              COMMENT '经营范围',
+  `remark`      TEXT                                  COMMENT '备注',
   `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP           COMMENT '创建时间',
   `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `create_by`   BIGINT       DEFAULT NULL            COMMENT '创建人',

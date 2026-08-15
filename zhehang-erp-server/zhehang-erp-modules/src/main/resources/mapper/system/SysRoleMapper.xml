@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhehang.erp.modules.system.mapper.SysRoleMapper">
+
+    <insert id="insertRoleMenus">
+        INSERT INTO sys_role_menu (role_id, menu_id)
+        VALUES
+        <foreach collection="menuIds" item="menuId" separator=",">
+            (#{roleId}, #{menuId})
+        </foreach>
+    </insert>
+
+    <delete id="deleteRoleMenus">
+        DELETE FROM sys_role_menu WHERE role_id = #{roleId}
+    </delete>
+
+    <select id="selectMenuIdsByRoleId" resultType="java.lang.Long">
+        SELECT menu_id
+        FROM sys_role_menu
+        WHERE role_id = #{roleId}
+        ORDER BY menu_id
+    </select>
+
+    <insert id="insertUserRoles">
+        INSERT INTO sys_user_role (user_id, role_id)
+        VALUES
+        <foreach collection="roleIds" item="roleId" separator=",">
+            (#{userId}, #{roleId})
+        </foreach>
+    </insert>
+
+    <delete id="deleteUserRoles">
+        DELETE FROM sys_user_role WHERE user_id = #{userId}
+    </delete>
+
+    <!-- ===== 角色成员(角色 ↔ 用户)管理 ===== -->
+    <!-- sys_user_role 不含 tenant_id(已在 IGNORE_TABLES);关联 sys_user 时仍显式传 tenantId 做纵深隔离。
+         不 join sys_dept:LEFT JOIN 下部门表也会被拼 tenant_id,会把无部门的用户误过滤掉。 -->
+    <select id="selectRoleMembers" resultType="java.util.Map">
+        SELECT u.id AS userId, u.username, u.nickname, u.phone, u.dept_id AS deptId, u.status
+        FROM sys_user_role ur
+        JOIN sys_user u ON u.id = ur.user_id
+            AND u.tenant_id = #{tenantId}
+            AND u.deleted = 0
+        WHERE ur.role_id = #{roleId}
+        ORDER BY u.id
+    </select>
+
+    <select id="selectMemberCandidates" resultType="java.util.Map">
+        SELECT u.id AS userId, u.username, u.nickname, u.phone, u.dept_id AS deptId
+        FROM sys_user u
+        WHERE u.tenant_id = #{tenantId}
+          AND u.deleted = 0
+          AND u.status = 0
+        <if test="keyword != null and keyword != ''">
+            AND (u.nickname LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.phone LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY u.id
+        LIMIT 100
+    </select>
+
+    <insert id="insertRoleMemberIfAbsent">
+        INSERT INTO sys_user_role (user_id, role_id)
+        SELECT #{userId}, #{roleId} FROM DUAL
+        WHERE NOT EXISTS (
+            SELECT 1 FROM sys_user_role WHERE user_id = #{userId} AND role_id = #{roleId}
+        )
+    </insert>
+
+    <delete id="deleteRoleMember">
+        DELETE FROM sys_user_role WHERE role_id = #{roleId} AND user_id = #{userId}
+    </delete>
+
+    <select id="selectUserIdsByRoleId" resultType="java.lang.Long">
+        SELECT ur.user_id
+        FROM sys_user_role ur
+        JOIN sys_user u ON u.id = ur.user_id
+            AND u.tenant_id = #{tenantId}
+            AND u.deleted = 0
+        WHERE ur.role_id = #{roleId}
+        ORDER BY ur.user_id
+    </select>
+
+    <select id="selectRoleForUpdate" resultType="com.zhehang.erp.modules.system.domain.entity.SysRole">
+        SELECT id, role_name, role_key, sort, status, remark, data_scope, visible_modules,
+               tenant_id, deleted, create_time, update_time, create_by, update_by
+        FROM sys_role
+        WHERE id = #{roleId}
+          AND tenant_id = #{tenantId}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <select id="countRoleMemberRelations" resultType="int">
+        SELECT COUNT(1)
+        FROM sys_user_role
+        WHERE role_id = #{roleId}
+    </select>
+
+    <select id="countDeletedRoleMemberRelations" resultType="int">
+        SELECT COUNT(1)
+        FROM sys_user_role ur
+        JOIN sys_user u ON u.id = ur.user_id
+            AND u.tenant_id = #{tenantId}
+            AND u.deleted = 1
+        WHERE ur.role_id = #{roleId}
+    </select>
+
+    <delete id="deleteRoleMembers">
+        DELETE FROM sys_user_role WHERE role_id = #{roleId}
+    </delete>
+
+</mapper>

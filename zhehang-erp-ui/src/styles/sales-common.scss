@@ -1,0 +1,366 @@
+// ============================================================
+// 销售体系统一样式
+// 既可被销售页局部 @use，也会在 index.scss 中全局引入。
+// 全局增强只挂在 .content-area.sales-system 下，避免影响会计、工商、人事等其它模块。
+// ============================================================
+
+// —— 销售体系全局尺寸规范:只作用于 /customer/* ——
+.content-area.sales-system {
+  padding: 24px;
+  font-size: 15px;
+
+  :where(.sales-page, .lead-page, .my-leads-page, .tele-workbench, .tele-board, .guide) {
+    min-width: 0;
+  }
+
+  :where(h1, h2) {
+    font-size: 26px;
+    line-height: 1.25;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  :where(h3) {
+    font-size: 18px;
+    line-height: 1.35;
+    font-weight: 750;
+    letter-spacing: 0;
+  }
+
+  :where(p, span, em, small, div) {
+    letter-spacing: 0;
+  }
+
+  .el-button {
+    min-height: 40px;
+    padding-inline: 16px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+  }
+
+  .el-button--large {
+    min-height: 44px;
+    padding-inline: 20px;
+    font-size: 16px;
+  }
+
+  .el-button.is-link,
+  .el-button.is-text {
+    min-height: 32px;
+    padding-inline: 6px;
+    font-size: 15px;
+  }
+
+  .el-input__wrapper,
+  .el-select__wrapper,
+  .el-date-editor.el-input__wrapper {
+    min-height: 40px;
+    font-size: 15px;
+    border-radius: 8px;
+  }
+
+  .el-input__inner,
+  .el-select__placeholder,
+  .el-select__selected-item,
+  .el-textarea__inner {
+    font-size: 15px;
+  }
+
+  .el-form-item__label {
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--text-body);
+  }
+
+  .el-table {
+    font-size: 15px;
+    --el-table-header-bg-color: var(--bg-soft);
+    --el-table-row-hover-bg-color: var(--el-color-primary-light-9);
+  }
+
+  .el-table th.el-table__cell {
+    padding: 11px 0;
+    background: var(--bg-soft);
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 750;
+  }
+
+  .el-table td.el-table__cell {
+    padding: 11px 0;
+    color: var(--text-body);
+  }
+
+  .el-table .cell {
+    line-height: 22px;
+  }
+
+  .el-table .el-button + .el-button {
+    margin-left: 10px;
+  }
+
+  .el-tag {
+    min-height: 24px;
+    padding-inline: 9px;
+    font-size: 13px;
+    font-weight: 650;
+    border-radius: 7px;
+  }
+
+  .el-pagination {
+    gap: 6px;
+    font-size: 14px;
+    --el-pagination-button-width: 34px;
+    --el-pagination-button-height: 34px;
+  }
+
+  .el-pagination .el-select .el-select__wrapper {
+    min-height: 34px;
+  }
+
+  .el-empty__description {
+    font-size: 14px;
+  }
+
+  .filter-bar,
+  .panel-tools,
+  .head-actions,
+  .tw-actions,
+  .sales-toolbar {
+    gap: 12px;
+  }
+
+  .link-text,
+  .company-name,
+  .rank-name,
+  .agent-cell,
+  .cust-info h3,
+  .lead-item b {
+    font-weight: 750;
+  }
+
+  .company-name,
+  .link-text {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+body .content-area.sales-system {
+  padding: 24px;
+}
+
+// —— 页面容器:纵向堆叠、统一间距 ——
+.sales-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+// —— 页头:飞书渐变卡 ——
+.sales-header {
+  position: relative;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, rgba(51, 112, 255, 0.08), rgba(0, 180, 42, 0.05)), #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(51, 112, 255, 0.06), transparent 40%);
+    pointer-events: none;
+  }
+
+  .sh-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    position: relative;
+    z-index: 1;
+    font-size: 13px;
+    color: var(--brand-primary);
+
+    .she-tag {
+      padding: 3px 10px;
+      border: 1px solid var(--border-gold-hover);
+      border-radius: 999px;
+      background: var(--el-color-primary-light-9);
+      font-weight: 600;
+    }
+    .she-line { width: 22px; height: 1px; background: var(--border-gold-hover); }
+    .she-time { color: var(--text-muted); }
+  }
+
+  .sh-main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .sh-title {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 0 0 8px;
+    .sht-cn { font-size: 27px; font-weight: 800; color: var(--text-primary); }
+    .sht-en { font-size: 13px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; }
+  }
+  .sh-desc { margin: 0; font-size: 15px; color: var(--text-muted); }
+  .sh-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+}
+
+// —— 指标条:响应式网格 ——
+.sales-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.sales-metric {
+  position: relative;
+  min-height: 104px;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  transition: transform .18s ease, box-shadow .18s ease;
+  overflow: hidden;
+
+  &:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
+
+  // 左侧强调彩条(按语义加 is-* 类)
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 14px; bottom: 14px;
+    width: 3px; border-radius: 0 3px 3px 0;
+    background: var(--brand-primary);
+    opacity: 0;
+    transition: opacity .18s;
+  }
+  &.is-primary::before { background: var(--brand-primary); opacity: 1; }
+  &.is-success::before { background: var(--success); opacity: 1; }
+  &.is-warning::before { background: var(--warning); opacity: 1; }
+  &.is-danger::before  { background: var(--danger);  opacity: 1; }
+
+  .sm-label { font-size: 15px; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .sm-value { font-size: 32px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .sm-value.c-primary { color: var(--brand-primary); }
+  .sm-value.c-success { color: var(--success); }
+  .sm-value.c-warning { color: var(--warning); }
+  .sm-value.c-danger  { color: var(--danger); }
+  .sm-unit { font-size: 14px; font-weight: 500; color: var(--text-muted); margin-left: 3px; }
+  .sm-foot { margin-top: 8px; font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+}
+
+// 升降趋势(环比等)
+.sm-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  &.up { color: var(--success); }
+  &.down { color: var(--danger); }
+  &.flat { color: var(--text-muted); }
+}
+
+// —— 工具栏:筛选 + 搜索 + 按钮 ——
+.sales-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  .stb-spacer { margin-left: auto; }
+}
+
+// —— 通用卡片(带标题竖条) ——
+.sales-card {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+
+  .sc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    .sch-title {
+      font-size: 18px;
+      font-weight: 750;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      &::before { content: ''; width: 3px; height: 14px; border-radius: 2px; background: var(--brand-primary); }
+    }
+    .sch-extra { font-size: 14px; color: var(--text-muted); }
+  }
+  .sc-body { padding: 18px 20px; }
+  .sc-body.is-flush { padding: 0; }
+}
+
+// —— Element 表格增强(斑马纹/hover/表头) ——
+.sales-table {
+  .el-table { --el-table-border-color: var(--border-soft); --el-table-header-bg-color: var(--bg-soft); }
+  .el-table th.el-table__cell { background: var(--bg-soft); color: var(--text-primary); font-size: 15px; font-weight: 750; }
+  .el-table td.el-table__cell { color: var(--text-body); font-size: 15px; padding: 11px 0; }
+  .el-table__row:hover > td.el-table__cell { background: var(--el-color-primary-light-9); }
+}
+
+// —— 空状态 ——
+.sales-empty {
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  .se-icon { font-size: 40px; color: var(--text-subtle); margin-bottom: 10px; }
+  .se-text { font-size: 15px; }
+  .se-hint { font-size: 13px; margin-top: 4px; color: var(--text-subtle); }
+}
+
+// —— 客资分级标签(A红 B橙 C蓝 D灰 F浅) ——
+.lvl-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  &.lvl-A { background: var(--el-color-danger-light-9);  color: var(--danger); }
+  &.lvl-B { background: var(--el-color-warning-light-9); color: var(--warning); }
+  &.lvl-C { background: var(--el-color-primary-light-9); color: var(--brand-primary); }
+  &.lvl-D { background: var(--el-fill-color);            color: var(--text-muted); }
+  &.lvl-F { background: var(--el-fill-color-light);      color: var(--text-subtle); }
+}
+
+// —— 响应式 ——
+@media (max-width: 768px) {
+  body .content-area.sales-system { padding: 16px; }
+  .sales-header .sh-main { flex-direction: column; align-items: flex-start; }
+  .sales-metrics { grid-template-columns: repeat(2, 1fr); }
+}

@@ -1,0 +1,35 @@
+-- =============================================================================
+-- V94  绩效考核任务(完整流程):下发→自评→上级评价→校准→结果确认→申诉
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `hrm_perf_task` (
+  `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `template_id`    BIGINT       DEFAULT NULL COMMENT '来源考核模板ID',
+  `task_name`      VARCHAR(128) DEFAULT NULL COMMENT '考核名称(如:2026年6月销售月度KPI)',
+  `period`         VARCHAR(32)  DEFAULT NULL COMMENT '考核周期(2026-06/2026Q2 等)',
+  `employee_id`    BIGINT       DEFAULT NULL COMMENT '被考核员工ID',
+  `employee_name`  VARCHAR(64)  DEFAULT NULL COMMENT '被考核员工姓名',
+  `dept`           VARCHAR(64)  DEFAULT NULL COMMENT '部门',
+  `evaluator_id`   BIGINT       DEFAULT NULL COMMENT '上级评价人ID',
+  `evaluator_name` VARCHAR(64)  DEFAULT NULL COMMENT '上级评价人姓名',
+  `status`         VARCHAR(16)  DEFAULT 'self_eval' COMMENT '状态:self_eval待自评/manager_eval待上级评价/calibrate待校准/confirm待确认/done已完成/appeal申诉中',
+  `self_score`     DECIMAL(6,2) DEFAULT NULL COMMENT '自评总分',
+  `manager_score`  DECIMAL(6,2) DEFAULT NULL COMMENT '上级评分',
+  `calibrate_score` DECIMAL(6,2) DEFAULT NULL COMMENT '校准后分',
+  `final_score`    DECIMAL(6,2) DEFAULT NULL COMMENT '最终得分',
+  `grade`          VARCHAR(8)   DEFAULT NULL COMMENT '等级 S/A/B/C/D',
+  `self_comment`   TEXT         COMMENT '自评总结',
+  `manager_comment` TEXT        COMMENT '上级评语',
+  `calibrate_comment` TEXT      COMMENT '校准说明',
+  `appeal_reason`  TEXT         COMMENT '申诉理由',
+  `appeal_reply`   TEXT         COMMENT '申诉答复',
+  `create_by`      BIGINT       DEFAULT NULL,
+  `update_by`      BIGINT       DEFAULT NULL,
+  `create_time`    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  `update_time`    DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `tenant_id`      BIGINT       DEFAULT NULL,
+  `deleted`        TINYINT      DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_emp` (`employee_id`),
+  KEY `idx_eval` (`evaluator_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='绩效考核任务';

@@ -17,10 +17,10 @@ export default {
       convertConfirm: 'Confirm converting this lead to customer?',
       convertSuccess: 'Lead converted successfully',
       sourceOptions: {
-        tianyancha: 'Tianyancha',
+        tianyancha: 'Public Company Registry',
         referral: 'Customer Referral',
-        meituan: 'Meituan Ops',
-        douyin: 'Douyin Ops',
+        meituan: 'Paid Acquisition · Meituan',
+        douyin: 'Paid Acquisition · Douyin',
         offline: 'Walk-in'
       },
       statusOptions: {

@@ -5,10 +5,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.report.domain.entity.ReportDefinition;
 import com.zhehang.erp.modules.report.mapper.ReportDefinitionMapper;
 import com.zhehang.erp.modules.report.service.IReportDefinitionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -28,6 +30,7 @@ public class ReportDefinitionServiceImpl extends ServiceImpl<ReportDefinitionMap
                .eq(StringUtils.hasText(category), ReportDefinition::getCategory, category)
                .eq(StringUtils.hasText(type), ReportDefinition::getType, type)
                .eq(status != null, ReportDefinition::getStatus, status)
+               .eq(!isPlatformAdmin(), ReportDefinition::getDataSourceType, "preset")
                .orderByDesc(ReportDefinition::getCreateTime);
         return this.baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }
@@ -36,6 +39,7 @@ public class ReportDefinitionServiceImpl extends ServiceImpl<ReportDefinitionMap
     public List<ReportDefinition> listByCategory(String category) {
         LambdaQueryWrapper<ReportDefinition> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StringUtils.hasText(category), ReportDefinition::getCategory, category)
+               .eq(!isPlatformAdmin(), ReportDefinition::getDataSourceType, "preset")
                .orderByDesc(ReportDefinition::getCreateTime);
         return this.list(wrapper);
     }
@@ -43,6 +47,9 @@ public class ReportDefinitionServiceImpl extends ServiceImpl<ReportDefinitionMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long copyReport(Long sourceId) {
+        if (!isPlatformAdmin()) {
+            throw new AccessDeniedException("仅平台管理员可复制报表定义");
+        }
         ReportDefinition source = this.getById(sourceId);
         if (source == null) {
             throw new BusinessException("Source report not found");
@@ -60,5 +67,9 @@ public class ReportDefinitionServiceImpl extends ServiceImpl<ReportDefinitionMap
         copy.setDescription(source.getDescription());
         this.save(copy);
         return copy.getId();
+    }
+
+    private boolean isPlatformAdmin() {
+        return Long.valueOf(1L).equals(SecurityUtils.getCurrentUserId());
     }
 }

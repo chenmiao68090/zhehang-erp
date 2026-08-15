@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhehang.erp.modules.crm.domain.entity.CrmOpportunity;
 import com.zhehang.erp.modules.crm.mapper.CrmOpportunityMapper;
 import com.zhehang.erp.modules.crm.service.ICrmOpportunityService;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 public class CrmOpportunityServiceImpl extends ServiceImpl<CrmOpportunityMapper, CrmOpportunity> implements ICrmOpportunityService {
 
     private final CrmOpportunityMapper opportunityMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     private static final Map<Integer, String> STAGE_NAMES = Map.of(
             1, "初步接触", 2, "需求确认", 3, "方案报价", 4, "谈判", 5, "赢单", 6, "输单"
@@ -28,6 +30,8 @@ public class CrmOpportunityServiceImpl extends ServiceImpl<CrmOpportunityMapper,
     @Override
     public IPage<CrmOpportunity> selectPage(int pageNum, int pageSize, String name, Integer stage, Long customerId, Long ownerId) {
         LambdaQueryWrapper<CrmOpportunity> wrapper = new LambdaQueryWrapper<>();
+        // 数据权限:商机按负责人(owner_id=用户)收敛;管理员/data_scope=1看全部
+        dataScopeHelper.applyCreatorScope(wrapper, CrmOpportunity::getOwnerId);
         wrapper.like(StringUtils.hasText(name), CrmOpportunity::getName, name)
                .eq(stage != null, CrmOpportunity::getStage, stage)
                .eq(customerId != null, CrmOpportunity::getCustomerId, customerId)
@@ -38,9 +42,11 @@ public class CrmOpportunityServiceImpl extends ServiceImpl<CrmOpportunityMapper,
 
     @Override
     public List<Map<String, Object>> funnelData() {
-        List<CrmOpportunity> all = opportunityMapper.selectList(
-                new LambdaQueryWrapper<CrmOpportunity>().in(CrmOpportunity::getStage, 1, 2, 3, 4, 5)
-        );
+        LambdaQueryWrapper<CrmOpportunity> wrapper = new LambdaQueryWrapper<CrmOpportunity>()
+                .in(CrmOpportunity::getStage, 1, 2, 3, 4, 5);
+        // 数据权限:非管理员/data_scope!=1 仅统计本人负责的商机,避免漏斗越权汇总他人数据;口径与列表(owner_id)统一
+        dataScopeHelper.applyCreatorScope(wrapper, CrmOpportunity::getOwnerId);
+        List<CrmOpportunity> all = opportunityMapper.selectList(wrapper);
         Map<Integer, List<CrmOpportunity>> grouped = all.stream()
                 .collect(Collectors.groupingBy(CrmOpportunity::getStage));
 

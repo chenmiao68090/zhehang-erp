@@ -1,0 +1,1 @@
+import{Ot as e,Q as t,ot as n,wt as r}from"./vendor-CR_3PVfi.js";var i=n({__name:`index`,setup(n){return(n,i)=>{let a=e(`router-view`);return r(),t(a)}}});export{i as default};

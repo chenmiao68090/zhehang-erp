@@ -173,7 +173,8 @@ public class ReportDatasetServiceImpl extends ServiceImpl<ReportDatasetMapper, R
         if (!trimmed.startsWith("select")) {
             throw new BusinessException("Only SELECT statements are supported");
         }
-        if (trimmed.contains(";") && !trimmed.endsWith(";")) {
+        // 任何分号都拒绝:单 SELECT 语句不需要分号,结尾分号是多语句注入的典型绕过手段
+        if (trimmed.contains(";")) {
             throw new BusinessException("Multiple statements are not supported");
         }
         // SQL 注释是绕过关键词校验的主要手段,报表查询不应包含注释
@@ -182,6 +183,7 @@ public class ReportDatasetServiceImpl extends ServiceImpl<ReportDatasetMapper, R
         }
         String[] forbidden = {" insert ", " update ", " delete ", " drop ", " alter ",
                 " truncate ", " grant ", " revoke ", " create ",
+                " show ", " set ", " call ", " describe ", " rename ", " handler ", " use ",
                 // 文件读写、系统库、延时盲注:报表无正当用途,挡掉防数据泄露/RCE
                 "into outfile", "into dumpfile", "load_file", "load data",
                 "information_schema", "performance_schema", "mysql.", "sys.",

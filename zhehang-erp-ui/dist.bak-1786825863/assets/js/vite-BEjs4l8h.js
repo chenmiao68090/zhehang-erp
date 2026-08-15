@@ -1,0 +1,1 @@
+var e=`/vite.svg`;export{e as t};

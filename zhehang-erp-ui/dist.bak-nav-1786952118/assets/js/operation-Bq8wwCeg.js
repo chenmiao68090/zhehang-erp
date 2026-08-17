@@ -1,0 +1,1 @@
+import{y as e}from"./vendor-Cg8Zn4Hj.js";import{n as r,r as n}from"./request-gIjebA4E.js";var s={recent:(n=30)=>{const s="number"==typeof n?{days:n}:e({days:30},n);return r("/op/channel-metric/recent",s)},save:e=>n("/op/channel-metric/save",e),sync:e=>n(`/op/channel-metric/sync/${e}`,{},{silentError:!0})};export{s as t};

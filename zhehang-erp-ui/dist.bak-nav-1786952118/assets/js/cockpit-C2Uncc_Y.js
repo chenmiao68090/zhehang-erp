@@ -1,0 +1,1 @@
+import{n as r}from"./request-gIjebA4E.js";function t(t){return r("/dashboard/cockpit/sales-rank",t)}var e={getBizPerf:function(t,e){return r("/dashboard/cockpit/biz-perf",{period:t,scope:e})},getPerfRank:function(t,e){return r("/dashboard/cockpit/perf-rank",{startDate:t,endDate:e})}};export{t as n,e as t};

@@ -1,0 +1,1 @@
+import{Ot as t,tt as s,ut as a}from"./vendor-Cg8Zn4Hj.js";import{t as e}from"./audit-task-list-ayBnSQ-T.js";var p=a({__name:"project-dept-task",setup:a=>(a,p)=>(t(),s(e,{"task-type":"project_dept",title:"项目部门任务",description:"按项目部门和项目负责人审核跨部门交付，保留完整订单与流程追溯。"}))});export{p as default};

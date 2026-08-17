@@ -20,11 +20,10 @@ export const NAV_GROUPS: { name: string; icon: string; color: string }[] = [
   { name: '人事中心', icon: 'Avatar', color: '#ef4444' },
   { name: '工资管理', icon: 'Coin', color: '#16a34a' },
   { name: '报销管理', icon: 'Document', color: '#ea580c' },
-  { name: '系统管理', icon: 'Setting', color: '#64748b' },
   { name: '中台监控', icon: 'View', color: '#0d9488' },
   { name: '审批中心', icon: 'Stamp', color: '#f59e0b' },
-  { name: '运营体系', icon: 'TrendCharts', color: '#ec4899' },
-  { name: '印章体系', icon: 'Stamp', color: '#f97316' }
+  { name: '印章体系', icon: 'Stamp', color: '#f97316' },
+  { name: '系统管理', icon: 'Setting', color: '#64748b' }
 ]
 
 /** 全员基础模块：不受角色“可见模块”开关收窄。 */
@@ -50,7 +49,6 @@ export const MODULE_GROUP: Record<string, string> = {
   '/feige-notice': '系统管理',
   '/inspect': '中台监控',
   '/approval': '审批中心',
-  '/operation-service': '运营体系',
   // 既有客户问题闭环仍是独立“服务工单”，但与新任务工作台并列在“任务管理”大类下。
   // NAV_GROUPS 不存在“服务工单”大类；若单独归组，受限角色会丢失原入口。
   '/customer-issue': '任务管理',
@@ -350,25 +348,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         redirect: '/customer/lead',
         meta: { title: '私域运营（已下线）', hidden: true }
       }
-    ]
-  },
-  {
-    path: '/operation-service',
-    component: Layout,
-    redirect: '/operation-service/ad-feedback',
-    meta: { title: '运营服务中心', icon: 'TrendCharts', roles: ['admin', 'boss', 'manager', 'dept_manager', 'sales', 'online_sales'] },
-    children: [
-      {
-        path: 'ad-feedback',
-        name: 'OperationServiceCenter',
-        component: () => import('@/views/operation/service-center.vue'),
-        meta: { title: '运营看板', icon: 'Odometer' }
-      },
-      { path: 'meituan', name: 'OpMeituan', component: () => import('@/views/operation/meituan-data.vue'), meta: { title: '美团数据', icon: 'Shop' } },
-      { path: 'douyin', name: 'OpDouyin', component: () => import('@/views/operation/douyin-data.vue'), meta: { title: '抖音数据', icon: 'VideoPlay' } },
-      { path: 'xiaohongshu', name: 'OpXiaohongshu', component: () => import('@/views/operation/xiaohongshu-data.vue'), meta: { title: '小红书数据', icon: 'Reading' } },
-      { path: 'shipinhao', name: 'OpShipinhao', component: () => import('@/views/operation/shipinhao-data.vue'), meta: { title: '视频号数据', icon: 'VideoCamera' } },
-      { path: 'kuaishou', name: 'OpKuaishou', component: () => import('@/views/operation/kuaishou-data.vue'), meta: { title: '快手数据', icon: 'Film' } }
     ]
   },
   {

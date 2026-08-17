@@ -1,0 +1,1 @@
+import{Ot as t,tt as s,ut as a}from"./vendor-Cg8Zn4Hj.js";import{t as e}from"./audit-task-list-ayBnSQ-T.js";var o=a({__name:"one-time-task",setup:a=>(a,o)=>(t(),s(e,{"task-type":"once",title:"一次性任务",description:"集中审核单次交付任务，核对订单、费用、流程表单和审核记录。"}))});export{o as default};

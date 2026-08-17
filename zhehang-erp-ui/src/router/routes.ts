@@ -433,7 +433,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
     path: '/order',
     component: Layout,
     redirect: '/feige-order-contract/orders',
-    meta: { title: '提单中心', icon: 'Tickets', navigationHidden: true, roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq', 'sales', 'online_sales'] },
+    meta: { title: '提单中心', icon: 'Tickets', roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq', 'sales', 'online_sales'] },
     children: [
       // —— 已上线的业务提单(排前面,彩色图标) ——
       { path: 'bookkeeping', name: 'OrderBookkeeping', component: () => import('@/views/order/bookkeeping.vue'), meta: { title: '代理记账提单', icon: 'Money' } },

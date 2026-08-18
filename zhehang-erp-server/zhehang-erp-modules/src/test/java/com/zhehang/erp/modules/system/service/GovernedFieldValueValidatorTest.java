@@ -71,7 +71,7 @@ class GovernedFieldValueValidatorTest {
                 () -> validator.validateNewValue(
                         GovernedFieldValueValidator.MEMO_CATEGORY,
                         "备忘分类", "系统优化", false));
-        assertThat(syntaxError.getSQLException()).isNotNull();
+        assertThat((Throwable) syntaxError.getSQLException()).isNotNull();
         assertThat(syntaxError.getSQLException().getErrorCode()).isEqualTo(1064);
     }
 

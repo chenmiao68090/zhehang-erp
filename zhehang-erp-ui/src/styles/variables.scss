@@ -55,6 +55,10 @@ $card-radius: 8px;
   --space-2xl: 24px;
   --space-3xl: 32px;
 
+  /* 表格密度（三档：紧凑/舒适/宽松，由 html[data-table-density] 覆盖） */
+  --table-header-height: 44px;
+  --table-row-height: 48px;
+
   /* 圆角体系 */
   --radius-sm: 4px;
   --radius-md: 8px;

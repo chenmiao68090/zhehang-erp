@@ -21,9 +21,22 @@
               :key="opt.value"
               @click="appStore.setFontScale(opt.value)"
             >
-              <span class="font-option">
+              <span class="menu-option">
                 <span>{{ opt.label }}</span>
                 <el-icon v-if="appStore.fontScale === opt.value" class="font-check"><Check /></el-icon>
+              </span>
+            </el-dropdown-item>
+          </template>
+          <el-dropdown-item v-if="!impersonationStore.active" divided :icon="Grid" disabled>表格密度</el-dropdown-item>
+          <template v-if="!impersonationStore.active">
+            <el-dropdown-item
+              v-for="opt in TABLE_DENSITY_OPTIONS"
+              :key="opt.value"
+              @click="appStore.setTableDensity(opt.value)"
+            >
+              <span class="menu-option">
+                <span>{{ opt.label }}</span>
+                <el-icon v-if="appStore.tableDensity === opt.value" class="font-check"><Check /></el-icon>
               </span>
             </el-dropdown-item>
           </template>
@@ -60,7 +73,7 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ArrowUp, Check, Lock, SwitchButton, User, View, ZoomIn } from '@element-plus/icons-vue'
+import { ArrowUp, Check, Grid, Lock, SwitchButton, User, View, ZoomIn } from '@element-plus/icons-vue'
 import { userApi } from '@/api/system'
 import MessageCenter from '@/components/MessageCenter.vue'
 import ImpersonationSwitcher from '@/components/impersonation/ImpersonationSwitcher.vue'
@@ -82,6 +95,11 @@ const FONT_OPTIONS: { value: 'standard' | 'large' | 'xlarge'; label: string }[] 
   { value: 'standard', label: '标准' },
   { value: 'large', label: '大' },
   { value: 'xlarge', label: '特大' }
+]
+const TABLE_DENSITY_OPTIONS: { value: 'compact' | 'comfortable' | 'loose'; label: string }[] = [
+  { value: 'compact', label: '紧凑' },
+  { value: 'comfortable', label: '舒适' },
+  { value: 'loose', label: '宽松' }
 ]
 const switcherVisible = ref(false)
 const canStartImpersonation = computed(() =>
@@ -219,7 +237,7 @@ async function submitPwd() {
   color: var(--text-muted, #86909c);
 }
 
-.font-option {
+.menu-option {
   display: flex;
   align-items: center;
   justify-content: space-between;

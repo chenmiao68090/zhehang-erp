@@ -419,4 +419,39 @@ html[data-font-size='xlarge'] {
   zoom: 1.25;
 }
 
+/* ===== 表格密度（信息量 vs 可读性） =====
+   由 appStore.tableDensity 驱动，挂到 <html data-table-density="compact|loose">，
+   只影响表格行高/表头高，不影响其他组件。默认「舒适」无需属性。 */
+html[data-table-density='compact'] {
+  --table-header-height: 36px;
+  --table-row-height: 40px;
+}
+
+html[data-table-density='loose'] {
+  --table-header-height: 48px;
+  --table-row-height: 56px;
+}
+
+/* ===== 空状态友好化（好上手） =====
+   列表无数据时不再只显示灰字「暂无数据」，而是图标 + 引导语，告诉新人下一步做什么。 */
+.el-table__empty-block {
+  min-height: 180px;
+}
+
+.el-table__empty-text {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.el-table__empty-text::before {
+  content: '📋';
+  font-size: 34px;
+  line-height: 1;
+  opacity: 0.55;
+}
+
 @include meta.load-css('./feishu.scss');

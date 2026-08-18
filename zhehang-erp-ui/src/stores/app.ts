@@ -12,6 +12,9 @@ export const useAppStore = defineStore('app', () => {
   const fontScale = ref<'standard' | 'large' | 'xlarge'>(
     (getStorage('fontScale') as 'standard' | 'large' | 'xlarge') || 'standard'
   )
+  const tableDensity = ref<'compact' | 'comfortable' | 'loose'>(
+    (getStorage('tableDensity') as 'compact' | 'comfortable' | 'loose') || 'comfortable'
+  )
 
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value
@@ -48,8 +51,23 @@ export const useAppStore = defineStore('app', () => {
     applyFontScale(val)
   }
 
+  function applyTableDensity(val: string) {
+    if (val === 'comfortable') {
+      document.documentElement.removeAttribute('data-table-density')
+    } else {
+      document.documentElement.setAttribute('data-table-density', val)
+    }
+  }
+
+  function setTableDensity(val: 'compact' | 'comfortable' | 'loose') {
+    tableDensity.value = val
+    setStorage('tableDensity', val)
+    applyTableDensity(val)
+  }
+
   document.documentElement.classList.toggle('dark', isDark.value)
   applyFontScale(fontScale.value)
+  applyTableDensity(tableDensity.value)
 
   return {
     sidebarCollapsed,
@@ -57,10 +75,12 @@ export const useAppStore = defineStore('app', () => {
     language,
     size,
     fontScale,
+    tableDensity,
     toggleSidebar,
     toggleDark,
     setLanguage,
     setSize,
-    setFontScale
+    setFontScale,
+    setTableDensity
   }
 })

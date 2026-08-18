@@ -79,7 +79,7 @@
   border-radius: 8px;
 
   th.el-table__cell {
-    height: 44px;
+    height: var(--table-header-height);
     color: var(--text-muted);
     font-size: 14px;
     font-weight: 600;
@@ -87,7 +87,7 @@
   }
 
   td.el-table__cell {
-    height: 48px;
+    height: var(--table-row-height);
   }
 
   .el-table__row:hover > td {

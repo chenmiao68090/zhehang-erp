@@ -1,0 +1,1 @@
+import{i as a,n as m,r as e,t as o}from"./request-gIjebA4E.js";var s={list:a=>m("/dashboard/memo/list",a),summary:()=>m("/dashboard/memo/summary"),create:a=>e("/dashboard/memo",a),update:m=>a("/dashboard/memo",m),complete:(m,e)=>a(`/dashboard/memo/${m}/complete`,{completed:e}),remove:a=>o(`/dashboard/memo/${a}`)};export{s as t};

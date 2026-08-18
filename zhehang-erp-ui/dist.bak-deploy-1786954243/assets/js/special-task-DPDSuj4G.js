@@ -1,0 +1,1 @@
+import{Ot as t,tt as s,ut as a}from"./vendor-Cg8Zn4Hj.js";import{t as e}from"./audit-task-list-ayBnSQ-T.js";var i=a({__name:"special-task",setup:a=>(a,i)=>(t(),s(e,{"task-type":"special",title:"专项任务",description:"处理疑难工商等专项交付，可审核任务并按实际分工调整工商专员。"}))});export{i as default};

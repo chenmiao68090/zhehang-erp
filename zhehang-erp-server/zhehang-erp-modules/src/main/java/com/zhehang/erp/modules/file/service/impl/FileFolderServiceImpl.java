@@ -2,6 +2,8 @@ package com.zhehang.erp.modules.file.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import com.zhehang.erp.modules.file.domain.entity.FileFolder;
 import com.zhehang.erp.modules.file.mapper.FileFolderMapper;
 import com.zhehang.erp.modules.file.service.IFileFolderService;
@@ -14,6 +16,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class FileFolderServiceImpl extends ServiceImpl<FileFolderMapper, FileFolder> implements IFileFolderService {
+
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public List<Map<String, Object>> getFolderTree() {
@@ -45,6 +49,10 @@ public class FileFolderServiceImpl extends ServiceImpl<FileFolderMapper, FileFol
     public void renameFolder(FileFolder folder) {
         FileFolder existing = getById(folder.getId());
         if (existing != null) {
+            // 越权校验:仅创建人或管理员可改文件夹
+            if (!dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+                throw new BusinessException("无权修改他人文件夹");
+            }
             existing.setName(folder.getName());
             // Update path
             String oldPath = existing.getPath();
@@ -64,6 +72,10 @@ public class FileFolderServiceImpl extends ServiceImpl<FileFolderMapper, FileFol
 
     @Override
     public void deleteFolder(Long id) {
+        FileFolder folder = getById(id);
+        if (folder != null && !dataScopeHelper.canAccess(folder.getCreateBy(), null)) {
+            throw new BusinessException("无权删除他人文件夹");
+        }
         // Check if folder has children
         long childCount = count(new LambdaQueryWrapper<FileFolder>().eq(FileFolder::getParentId, id));
         if (childCount > 0) {
@@ -76,6 +88,10 @@ public class FileFolderServiceImpl extends ServiceImpl<FileFolderMapper, FileFol
     public void moveFolder(Long id, Long targetParentId) {
         FileFolder folder = getById(id);
         if (folder != null) {
+            // 越权校验:仅创建人或管理员可移动文件夹
+            if (!dataScopeHelper.canAccess(folder.getCreateBy(), null)) {
+                throw new BusinessException("无权移动他人文件夹");
+            }
             String oldPath = folder.getPath();
             folder.setParentId(targetParentId);
             if (targetParentId == 0L) {

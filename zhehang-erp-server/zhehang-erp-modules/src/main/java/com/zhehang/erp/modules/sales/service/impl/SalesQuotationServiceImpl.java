@@ -60,6 +60,9 @@ public class SalesQuotationServiceImpl extends ServiceImpl<SalesQuotationMapper,
         if (quotation == null) {
             throw new BusinessException("报价单不存在");
         }
+        if (!dataScopeHelper.canAccess(quotation.getCreateBy(), null)) {
+            throw new BusinessException("无权操作他人记录");
+        }
         if (quotation.getStatus() != 1) {
             throw new BusinessException("只有已发送状态的报价单可以确认");
         }
@@ -73,6 +76,9 @@ public class SalesQuotationServiceImpl extends ServiceImpl<SalesQuotationMapper,
         SalesQuotation old = quotationMapper.selectById(id);
         if (old == null) {
             throw new BusinessException("报价单不存在");
+        }
+        if (!dataScopeHelper.canAccess(old.getCreateBy(), null)) {
+            throw new BusinessException("无权基于他人报价单创建新版本");
         }
         // 创建新版本
         SalesQuotation newQuotation = new SalesQuotation();

@@ -1,0 +1,1 @@
+import{n as t}from"./request-gIjebA4E.js";var s={list:s=>t("/crm/wechat-friend/list",s),stats:()=>t("/crm/wechat-friend/stats")};export{s as t};

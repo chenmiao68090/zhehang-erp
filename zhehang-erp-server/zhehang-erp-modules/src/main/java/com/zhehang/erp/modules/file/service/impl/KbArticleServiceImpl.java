@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhehang.erp.common.core.exception.BusinessException;
+import com.zhehang.erp.modules.crm.support.DataScopeHelper;
 import com.zhehang.erp.modules.file.domain.entity.KbArticle;
 import com.zhehang.erp.modules.file.mapper.KbArticleMapper;
 import com.zhehang.erp.modules.file.service.IKbArticleService;
@@ -16,6 +18,8 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 public class KbArticleServiceImpl extends ServiceImpl<KbArticleMapper, KbArticle> implements IKbArticleService {
+
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public IPage<KbArticle> getArticleList(Integer pageNum, Integer pageSize, Long categoryId, String keyword) {
@@ -63,17 +67,20 @@ public class KbArticleServiceImpl extends ServiceImpl<KbArticleMapper, KbArticle
 
     @Override
     public void updateArticle(KbArticle article) {
+        checkArticleOwner(article.getId());
         article.setContent(SafeHtmlSanitizer.sanitize(article.getContent()));
         updateById(article);
     }
 
     @Override
     public void deleteArticle(Long id) {
+        checkArticleOwner(id);
         removeById(id);
     }
 
     @Override
     public void publishArticle(Long id) {
+        checkArticleOwner(id);
         update(new LambdaUpdateWrapper<KbArticle>()
                 .eq(KbArticle::getId, id)
                 .set(KbArticle::getStatus, 1)); // 1=published
@@ -81,9 +88,18 @@ public class KbArticleServiceImpl extends ServiceImpl<KbArticleMapper, KbArticle
 
     @Override
     public void archiveArticle(Long id) {
+        checkArticleOwner(id);
         update(new LambdaUpdateWrapper<KbArticle>()
                 .eq(KbArticle::getId, id)
                 .set(KbArticle::getStatus, 2)); // 2=archived
+    }
+
+    /** 越权校验:仅文章创建人或管理员可改/删/发布/归档 */
+    private void checkArticleOwner(Long id) {
+        KbArticle existing = getById(id);
+        if (existing != null && !dataScopeHelper.canAccess(existing.getCreateBy(), null)) {
+            throw new BusinessException("无权操作他人文章");
+        }
     }
 
     @Override

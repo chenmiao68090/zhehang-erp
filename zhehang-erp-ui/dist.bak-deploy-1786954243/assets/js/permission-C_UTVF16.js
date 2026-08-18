@@ -1,0 +1,1 @@
+import{n}from"./user-e6BiCWQV.js";function s(s){const e=n().roles;return!!(s&&s.length>0)&&e.some(n=>"admin"===n||s.includes(n))}export{s as t};

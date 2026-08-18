@@ -1,0 +1,1 @@
+import{n as e}from"./request-gIjebA4E.js";function s(e){return e&&"object"==typeof e&&"data"in e?e.data:e}var t={rules:()=>e("/system/settings-governance/rules"),fields:()=>e("/system/settings-governance/fields"),options:(s,t=!1)=>e(`/system/settings-governance/options/${encodeURIComponent(s)}`,void 0,{silentError:t})};export{s as n,t};

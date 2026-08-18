@@ -1,0 +1,1 @@
+import{Ot as t,tt as r,ut as s}from"./vendor-Cg8Zn4Hj.js";import{t as a}from"./audit-task-list-ayBnSQ-T.js";var e=s({__name:"recurring-task",setup:s=>(s,e)=>(t(),r(a,{"task-type":"recurring",title:"周期任务",description:"按服务周期审核持续性交付，重点查看起止月份、费用和当前流程节点。"}))});export{e as default};

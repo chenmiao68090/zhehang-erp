@@ -103,7 +103,7 @@ public class FeigeSuiteRecordService {
         return result;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Long create(String pageCode, FeigeSuiteRequests.RecordUpsert request) {
         FeigeSuitePageRegistry.PageDefinition definition = registry.require(pageCode);
         Long ownerId = request.getOwnerId() == null ? access.currentUserId() : request.getOwnerId();
@@ -135,7 +135,7 @@ public class FeigeSuiteRecordService {
         return record.getId();
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void update(String pageCode, Long id, FeigeSuiteRequests.RecordUpsert request) {
         FeigeSuitePageRegistry.PageDefinition definition = registry.require(pageCode);
         FeigeSuiteRecord record = requireRecord(pageCode, id);
@@ -169,7 +169,7 @@ public class FeigeSuiteRecordService {
         writeLog(record, "update", oldStatus, status, "修改记录");
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void action(String pageCode, Long id, FeigeSuiteRequests.RecordAction request) {
         FeigeSuitePageRegistry.PageDefinition definition = registry.require(pageCode);
         FeigeSuiteRecord record = requireRecord(pageCode, id);
@@ -192,7 +192,7 @@ public class FeigeSuiteRecordService {
         writeLog(record, request.getAction(), oldStatus, targetStatus, trimToNull(request.getRemark()));
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(String pageCode, Long id) {
         FeigeSuitePageRegistry.PageDefinition definition = registry.require(pageCode);
         FeigeSuiteRecord record = requireRecord(pageCode, id);

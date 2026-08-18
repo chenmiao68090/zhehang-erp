@@ -92,19 +92,19 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void startProcess(String processKey, String title, Map<String, Object> formData) {
         startProcess(processKey, title, formData, null, null);
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void startProcess(String processKey, String title, Map<String, Object> formData, String bizType, Long bizId) {
         startProcessAs(processKey, title, formData, bizType, bizId, null);
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void startProcessAs(String processKey, String title, Map<String, Object> formData, String bizType, Long bizId, Long initiatorId) {
         // 查找已发布的流程定义
         LambdaQueryWrapper<WfProcessDef> wrapper = new LambdaQueryWrapper<>();
@@ -646,7 +646,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void approve(Long taskId, String comment) {
         WfTask task = taskMapper.selectById(taskId);
         if (task == null || task.getStatus() != 0) {
@@ -727,7 +727,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void reject(Long taskId, String comment) {
         WfTask task = taskMapper.selectById(taskId);
         if (task == null || task.getStatus() != 0) {
@@ -784,7 +784,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void transfer(Long taskId, Long targetUserId, String comment) {
         WfTask task = taskMapper.selectById(taskId);
         if (task == null || task.getStatus() != 0) {
@@ -847,7 +847,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
      * 实例转 status=4 待修改,本节点其余待办作废,发起人收到通知后可修改并重新提交。
      */
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void returnForRevision(Long taskId, String comment) {
         if (!StringUtils.hasText(comment)) {
             throw new BusinessException("退回必须填写修改意见,发起人才知道要改什么");
@@ -902,7 +902,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
      * 表单校验/年假预扣/附件与首次发起同一套规则;流程仍走本实例绑定的版本快照。
      */
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     @SuppressWarnings("unchecked")
     public void resubmit(Long instanceId, WfResubmitDTO dto) {
         WfInstance instance = instanceMapper.selectById(instanceId);
@@ -965,7 +965,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
 
     /** 催办:发起人提醒当前审批人;同一任务4小时内只允许催一次 */
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void urge(Long taskId) {
         WfTask task = taskMapper.selectById(taskId);
         if (task == null || task.getStatus() == null || task.getStatus() != 0) {
@@ -1092,7 +1092,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void cancel(Long instanceId) {
         WfInstance instance = instanceMapper.selectById(instanceId);
         if (instance == null) {
@@ -1138,7 +1138,7 @@ public class WfInstanceServiceImpl implements IWfInstanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeStarted(Long instanceId) {
         WfInstance instance = instanceMapper.selectById(instanceId);
         if (instance == null) {

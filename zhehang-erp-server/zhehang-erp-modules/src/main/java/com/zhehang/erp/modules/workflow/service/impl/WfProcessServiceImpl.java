@@ -76,7 +76,7 @@ public class WfProcessServiceImpl implements IWfProcessService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void publishProcess(Long defId) {
         WfProcessDef entity = processDefMapper.selectById(defId);
         if (entity == null) {

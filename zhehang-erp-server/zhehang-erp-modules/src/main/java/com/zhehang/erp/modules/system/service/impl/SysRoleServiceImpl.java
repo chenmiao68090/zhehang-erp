@@ -232,7 +232,7 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int addRoleMembers(Long roleId, List<Long> userIds) {
         SysRole role = requireCurrentTenantRoleForUpdate(roleId);
         assertPrivilegedMutationAllowed(role);
@@ -254,7 +254,7 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeRoleMember(Long roleId, Long userId) {
         SysRole role = requireCurrentTenantRoleForUpdate(roleId);
         assertPrivilegedMutationAllowed(role);

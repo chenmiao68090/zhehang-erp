@@ -19,7 +19,7 @@ public class ImpersonationAuditSinkImpl implements ImpersonationAuditSink {
     private final SysOperLogMapper operLogMapper;
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Long begin(Entry entry) {
         if (entry == null
                 || !ImpersonationPolicy.isAuthorizedActor(entry.actorUserId())
@@ -61,7 +61,7 @@ public class ImpersonationAuditSinkImpl implements ImpersonationAuditSink {
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void complete(Long auditId, int status, String errorMessage, long costTime) {
         if (auditId == null) {
             throw new IllegalArgumentException("代登录审计ID不能为空");

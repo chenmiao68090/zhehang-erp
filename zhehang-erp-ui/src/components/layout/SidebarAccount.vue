@@ -14,6 +14,19 @@
           <el-dropdown-item v-if="canStartImpersonation" :icon="View" @click="switcherVisible = true">切换员工视角</el-dropdown-item>
           <el-dropdown-item :icon="User" @click="goProfile">个人中心</el-dropdown-item>
           <el-dropdown-item v-if="!impersonationStore.active" :icon="Lock" @click="openPwdDialog">修改密码</el-dropdown-item>
+          <el-dropdown-item v-if="!impersonationStore.active" divided :icon="ZoomIn" disabled>字体大小</el-dropdown-item>
+          <template v-if="!impersonationStore.active">
+            <el-dropdown-item
+              v-for="opt in FONT_OPTIONS"
+              :key="opt.value"
+              @click="appStore.setFontScale(opt.value)"
+            >
+              <span class="font-option">
+                <span>{{ opt.label }}</span>
+                <el-icon v-if="appStore.fontScale === opt.value" class="font-check"><Check /></el-icon>
+              </span>
+            </el-dropdown-item>
+          </template>
           <el-dropdown-item v-if="!impersonationStore.active" divided :icon="SwitchButton" @click="handleLogout">退出登录</el-dropdown-item>
           <el-dropdown-item v-else divided :icon="SwitchButton" @click="impersonationStore.end">退出员工视角</el-dropdown-item>
         </el-dropdown-menu>
@@ -47,7 +60,7 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ArrowUp, Lock, SwitchButton, User, View } from '@element-plus/icons-vue'
+import { ArrowUp, Check, Lock, SwitchButton, User, View, ZoomIn } from '@element-plus/icons-vue'
 import { userApi } from '@/api/system'
 import MessageCenter from '@/components/MessageCenter.vue'
 import ImpersonationSwitcher from '@/components/impersonation/ImpersonationSwitcher.vue'
@@ -65,6 +78,11 @@ const impersonationStore = useImpersonationStore()
 const userStore = useUserStore()
 
 const displayName = computed(() => userStore.userInfo?.nickname || '管理员')
+const FONT_OPTIONS: { value: 'standard' | 'large' | 'xlarge'; label: string }[] = [
+  { value: 'standard', label: '标准' },
+  { value: 'large', label: '大' },
+  { value: 'xlarge', label: '特大' }
+]
 const switcherVisible = ref(false)
 const canStartImpersonation = computed(() =>
   Number(userStore.userInfo?.id ?? userStore.userInfo?.userId) === IMPERSONATION_ACTOR_USER_ID
@@ -199,6 +217,18 @@ async function submitPwd() {
 .account-caret {
   flex: 0 0 auto;
   color: var(--text-muted, #86909c);
+}
+
+.font-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 72px;
+
+  .font-check {
+    color: var(--brand-primary, #3370ff);
+  }
 }
 
 .sidebar-account.collapsed {

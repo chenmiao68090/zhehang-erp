@@ -37,7 +37,16 @@ $card-radius: 8px;
   --text-muted: #86909c;
   --text-subtle: #c9cdd4;
 
+  /* 字号字阶（type scale）：新增字号一律从这里取，别再硬编码 11.5px/12.5px 等非整数值 */
+  --text-xs: 12px;   /* 辅助说明、标签、表头 */
+  --text-sm: 13px;   /* 表格正文、次要信息 */
+  --text-base: 14px; /* 正文（表单、描述）—— 全局默认 */
+  --text-lg: 16px;   /* 卡片标题、区块标题 */
+  --text-xl: 18px;   /* 页面主标题 */
+
   /* 间距体系（4 的倍数，统一 padding/margin/gap） */
+  --space-3xs: 1px;  /* 仅用于发丝级分隔，慎用 */
+  --space-2xs: 2px;  /* 仅用于图标与文字的紧贴间距 */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;

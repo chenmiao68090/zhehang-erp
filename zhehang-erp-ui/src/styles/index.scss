@@ -16,7 +16,7 @@ body {
   width: 100%;
   height: 100%;
   font-family: Inter, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--text-body);
   background: var(--bg-page);
   text-rendering: optimizeLegibility;
@@ -405,6 +405,18 @@ h6,
     background: var(--brand-primary) !important;
     border-color: var(--brand-primary) !important;
   }
+}
+
+/* ===== 大字号模式（整体缩放，覆盖所有硬编码字号，含间距/图标等比放大） =====
+   由 appStore.fontScale 驱动，挂到 <html data-font-size="large|xlarge">。
+   用 zoom 而非改字号变量，是为了 100% 覆盖历史页面里散落的 13px/15px 等硬编码值，
+   放大后字、间距、图标同步变大、比例不变，视觉更协调。 */
+html[data-font-size='large'] {
+  zoom: 1.12;
+}
+
+html[data-font-size='xlarge'] {
+  zoom: 1.25;
 }
 
 @include meta.load-css('./feishu.scss');

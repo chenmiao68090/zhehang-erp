@@ -22,6 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -69,7 +70,7 @@ class DashboardMemoGovernedCategoryTest {
         existing.setId(31L);
         existing.setUserId(9L);
         existing.setCategory("旧分类");
-        when(mapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+        when(mapper.selectOne(any(Wrapper.class), anyBoolean())).thenReturn(existing);
         when(validator.validateChangedValue(
                 GovernedFieldValueValidator.MEMO_CATEGORY,
                 "备忘分类", "旧分类", "旧分类", false)).thenReturn("旧分类");
@@ -87,7 +88,7 @@ class DashboardMemoGovernedCategoryTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Wrapper<DashboardMemo>> query = ArgumentCaptor.forClass(Wrapper.class);
-        verify(mapper).selectOne(query.capture());
+        verify(mapper).selectOne(query.capture(), anyBoolean());
         assertThat(query.getValue().getSqlSegment()).contains("id", "user_id");
         verify(validator).validateChangedValue(
                 GovernedFieldValueValidator.MEMO_CATEGORY,
@@ -96,7 +97,7 @@ class DashboardMemoGovernedCategoryTest {
 
     @Test
     void updateOfAnotherUsersMemoFailsBeforeCategoryValidation() {
-        when(mapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(mapper.selectOne(any(Wrapper.class), anyBoolean())).thenReturn(null);
         DashboardMemo patch = new DashboardMemo();
         patch.setId(32L);
         patch.setContent("越权修改");

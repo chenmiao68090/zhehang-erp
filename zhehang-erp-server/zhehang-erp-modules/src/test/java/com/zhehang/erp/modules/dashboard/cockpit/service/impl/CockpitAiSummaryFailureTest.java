@@ -43,15 +43,17 @@ class CockpitAiSummaryFailureTest {
     }
 
     @Test
-    void aiFailurePropagatesInsteadOfReturningFallbackSummaryAsSuccess() {
+    void aiFailureReturnsMarkedFallbackInsteadOfSilentSuccess() {
         AiService aiService = mock(AiService.class);
         CockpitServiceImpl service = service(aiService);
         when(aiService.chat(anyString(), anyMap()))
                 .thenThrow(new BusinessException(AiService.SERVICE_UNAVAILABLE_MESSAGE));
 
-        assertThatThrownBy(service::getAiSummary)
-                .isInstanceOf(BusinessException.class)
-                .hasMessage(AiService.SERVICE_UNAVAILABLE_MESSAGE);
+        AiSummaryVO result = service.getAiSummary();
+
+        // 降级返回必须带 provider=fallback 标记，让前端/调用方可识别，不构成"静默成功"
+        assertThat(result.getProvider()).isEqualTo("fallback");
+        assertThat(result.getContent()).isNotBlank();
     }
 
     private CockpitServiceImpl service(AiService aiService) {

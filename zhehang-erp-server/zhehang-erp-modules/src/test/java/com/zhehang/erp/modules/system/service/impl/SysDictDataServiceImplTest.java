@@ -1,12 +1,15 @@
 package com.zhehang.erp.modules.system.service.impl;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.system.domain.entity.SysDictData;
 import com.zhehang.erp.modules.system.domain.entity.SysDictType;
 import com.zhehang.erp.modules.system.mapper.SysDictDataMapper;
 import com.zhehang.erp.modules.system.mapper.SysDictTypeMapper;
 import com.zhehang.erp.modules.system.service.SettingsGovernanceCatalog;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +46,10 @@ class SysDictDataServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), ""), SysDictType.class);
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), ""), SysDictData.class);
         service = new SysDictDataServiceImpl(dictTypeMapper, new SettingsGovernanceCatalog());
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
     }

@@ -1,6 +1,5 @@
 package com.zhehang.erp.modules.order.controller;
 
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.zhehang.erp.common.core.domain.R;
@@ -8,6 +7,9 @@ import com.zhehang.erp.common.core.utils.SecurityUtils;
 import com.zhehang.erp.modules.file.mapper.FileInfoMapper;
 import com.zhehang.erp.modules.order.domain.BizAddressOrder;
 import com.zhehang.erp.modules.order.mapper.BizAddressOrderMapper;
+import com.zhehang.erp.modules.review.domain.dto.ReviewCreateDTO;
+import com.zhehang.erp.modules.review.service.OrderReviewService;
+import com.zhehang.erp.modules.system.mapper.SysUserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -26,6 +28,7 @@ import static org.mockito.Mockito.when;
 class BizAddressOrderControllerWorkflowTest {
 
     private BizAddressOrderMapper orderMapper;
+    private OrderReviewService orderReviewService;
     private BizAddressOrderController controller;
 
     @BeforeEach
@@ -35,9 +38,9 @@ class BizAddressOrderControllerWorkflowTest {
                     new MapperBuilderAssistant(new MybatisConfiguration(), ""), BizAddressOrder.class);
         }
         orderMapper = mock(BizAddressOrderMapper.class);
+        orderReviewService = mock(OrderReviewService.class);
         controller = new BizAddressOrderController(orderMapper, mock(FileInfoMapper.class),
-                mock(com.zhehang.erp.modules.review.service.OrderReviewService.class),
-                mock(com.zhehang.erp.modules.system.mapper.SysUserMapper.class));
+                orderReviewService, mock(SysUserMapper.class));
     }
 
     @Test
@@ -107,37 +110,18 @@ class BizAddressOrderControllerWorkflowTest {
         draft.setCreateBy(42L);
         draft.setStatus("draft");
         when(orderMapper.selectById(10L)).thenReturn(draft);
-        when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
 
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::getCurrentUserId).thenReturn(42L);
             R<Void> result = controller.submit(10L);
 
             assertThat(result.getCode()).isEqualTo(200);
-            ArgumentCaptor<LambdaUpdateWrapper<BizAddressOrder>> wrapperCaptor =
-                    ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
-            verify(orderMapper).update(isNull(), wrapperCaptor.capture());
-            LambdaUpdateWrapper<BizAddressOrder> wrapper = wrapperCaptor.getValue();
-            assertThat(wrapper.getSqlSegment()).contains("id", "status", "IN");
-            assertThat(wrapper.getParamNameValuePairs().values()).contains("pending", 42L);
-        }
-    }
-
-    @Test
-    void concurrentStateChangeFailsClosed() {
-        BizAddressOrder draft = completeDraft();
-        draft.setId(10L);
-        draft.setCreateBy(42L);
-        draft.setStatus("draft");
-        when(orderMapper.selectById(10L)).thenReturn(draft);
-        when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
-
-        try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class)) {
-            security.when(SecurityUtils::getCurrentUserId).thenReturn(42L);
-            R<Void> result = controller.submit(10L);
-
-            assertThat(result.getCode()).isEqualTo(409);
-            assertThat(result.getMessage()).contains("状态已变化");
+            // 源单置 reviewing 由审单中心 activateFromTicket 同事务完成，不在 controller 直接 update
+            ArgumentCaptor<ReviewCreateDTO> dtoCaptor = ArgumentCaptor.forClass(ReviewCreateDTO.class);
+            verify(orderReviewService).activateFromTicket(dtoCaptor.capture());
+            assertThat(dtoCaptor.getValue().getOrderType()).isEqualTo("address");
+            assertThat(dtoCaptor.getValue().getOrderId()).isEqualTo(10L);
+            assertThat(dtoCaptor.getValue().getCustomerName()).isEqualTo("测试企业");
         }
     }
 

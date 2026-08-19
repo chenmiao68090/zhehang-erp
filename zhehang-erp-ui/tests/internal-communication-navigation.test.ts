@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { readRouterSource } from './router-source.ts'
 
-const routes = readFileSync(new URL('../src/router/routes.ts', import.meta.url), 'utf8')
+const routes = readRouterSource()
 const permissionStore = readFileSync(new URL('../src/stores/permission.ts', import.meta.url), 'utf8')
 const rolePermission = readFileSync(new URL('../src/views/system/role-permission.vue', import.meta.url), 'utf8')
 const breadcrumb = readFileSync(new URL('../src/components/layout/Breadcrumb.vue', import.meta.url), 'utf8')

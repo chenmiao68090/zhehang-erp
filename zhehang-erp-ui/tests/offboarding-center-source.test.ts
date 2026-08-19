@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { readRouterSource } from './router-source.ts'
 
 const centerView = readFileSync(new URL('../src/views/hrm/resigned-staff.vue', import.meta.url), 'utf8')
 const employeeView = readFileSync(new URL('../src/views/org/employee.vue', import.meta.url), 'utf8')
 const hrmApi = readFileSync(new URL('../src/api/hrm.ts', import.meta.url), 'utf8')
 const orgApi = readFileSync(new URL('../src/api/org.ts', import.meta.url), 'utf8')
-const routes = readFileSync(new URL('../src/router/routes.ts', import.meta.url), 'utf8')
+const routes = readRouterSource()
 const mainLayout = readFileSync(new URL('../src/components/layout/MainLayout.vue', import.meta.url), 'utf8')
 
 test('离职人员中心只消费后端中心、汇总与详情的 R.data 契约', () => {

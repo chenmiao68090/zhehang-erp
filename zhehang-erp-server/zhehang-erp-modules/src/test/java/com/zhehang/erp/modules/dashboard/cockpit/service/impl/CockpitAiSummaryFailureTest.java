@@ -2,17 +2,9 @@ package com.zhehang.erp.modules.dashboard.cockpit.service.impl;
 
 import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.ai.service.AiService;
-import com.zhehang.erp.modules.contract.mapper.BizContractMapper;
-import com.zhehang.erp.modules.crm.mapper.CrmCustomerMapper;
-import com.zhehang.erp.modules.crm.mapper.CrmLeadMapper;
 import com.zhehang.erp.modules.dashboard.cockpit.domain.vo.AiSummaryVO;
 import com.zhehang.erp.modules.dashboard.cockpit.domain.vo.AlertVO;
 import com.zhehang.erp.modules.dashboard.cockpit.domain.vo.CockpitKpiVO;
-import com.zhehang.erp.modules.order.mapper.BizOrderMapper;
-import com.zhehang.erp.modules.org.mapper.OrgEmployeeMapper;
-import com.zhehang.erp.modules.receipt.mapper.BizReceiptMapper;
-import com.zhehang.erp.modules.system.mapper.SysDeptMapper;
-import com.zhehang.erp.modules.task.mapper.BizTaskMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -59,14 +51,9 @@ class CockpitAiSummaryFailureTest {
     private CockpitServiceImpl service(AiService aiService) {
         CockpitServiceImpl service = spy(new CockpitServiceImpl(
                 aiService,
-                mock(CrmCustomerMapper.class),
-                mock(CrmLeadMapper.class),
-                mock(BizOrderMapper.class),
-                mock(BizReceiptMapper.class),
-                mock(BizContractMapper.class),
-                mock(BizTaskMapper.class),
-                mock(OrgEmployeeMapper.class),
-                mock(SysDeptMapper.class)));
+                mock(SalesMetricService.class),
+                mock(TaskMetricService.class),
+                mock(FinanceMetricService.class)));
         CockpitKpiVO kpi = new CockpitKpiVO();
         kpi.setTotalRevenue(BigDecimal.ZERO);
         kpi.setMonthReceipt(BigDecimal.ZERO);

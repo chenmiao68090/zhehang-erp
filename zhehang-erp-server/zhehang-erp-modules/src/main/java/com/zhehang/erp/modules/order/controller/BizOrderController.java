@@ -16,6 +16,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @deprecated 已迁移至飞哥订单系统（FeigeOrderContractController），本控制器仅保留历史数据只读访问。
+ * 新业务请使用 {@link com.zhehang.erp.modules.feigeorder.controller.FeigeOrderContractController}
+ */
+@Deprecated(since = "V237", forRemoval = false)
 @RestController
 @RequestMapping("/order")
 @RequiredArgsConstructor

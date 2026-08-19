@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
+import { readRouterSource } from './router-source.ts'
 
-const routes = readFileSync(new URL('../src/router/routes.ts', import.meta.url), 'utf8')
+const routes = readRouterSource()
 const retirementMigration = readFileSync(
   new URL('../../zhehang-erp-db/migration/V188_retire_ai_development_center.sql', import.meta.url),
   'utf8'

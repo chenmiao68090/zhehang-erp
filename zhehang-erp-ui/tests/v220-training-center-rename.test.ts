@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { readRouterSource } from './router-source.ts'
 
-const routes = readFileSync(new URL('../src/router/routes.ts', import.meta.url), 'utf8')
+const routes = readRouterSource()
 const catalog = readFileSync(new URL('../src/views/feige-suite/catalog.ts', import.meta.url), 'utf8')
 
 test('飞哥学习分组统一显示为培训中心', () => {

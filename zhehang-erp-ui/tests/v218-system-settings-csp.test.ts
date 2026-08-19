@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { readRouterSource } from './router-source.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
@@ -20,7 +21,7 @@ test('Vue-i18n uses CSP-safe JIT compilation and production verifies the emitted
 })
 
 test('system settings keeps one safe source of truth for users, permissions, dictionary, logs and files', () => {
-  const routes = read('src/router/routes.ts')
+  const routes = readRouterSource()
   const legacyStart = routes.indexOf('// 旧「系统管理」入口保留为隐藏兼容层')
   assert.notEqual(legacyStart, -1)
   const legacyRoutes = routes.slice(legacyStart)
@@ -47,7 +48,7 @@ test('system settings keeps one safe source of truth for users, permissions, dic
 })
 
 test('unsafe Feige administration consoles are not exposed by the compatibility layer', () => {
-  const routes = read('src/router/routes.ts')
+  const routes = readRouterSource()
   const legacyStart = routes.indexOf('// 旧「系统管理」入口保留为隐藏兼容层')
   const legacyRoutes = routes.slice(legacyStart)
 

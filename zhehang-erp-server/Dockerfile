@@ -18,6 +18,8 @@ ARG JAR_FILE=zhehang-erp-admin/target/zhehang-erp-admin-1.0.0-SNAPSHOT.jar
 COPY ${JAR_FILE} /app/app.jar
 
 EXPOSE 8080
+# Actuator 独立管理端口，只供本机/内网健康检查
+EXPOSE 8081
 
 # 使用 sh -c 形式展开 JAVA_OPTS 环境变量
 ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar /app/app.jar"]

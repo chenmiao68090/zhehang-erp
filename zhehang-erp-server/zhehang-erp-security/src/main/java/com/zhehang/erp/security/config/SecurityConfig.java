@@ -77,6 +77,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/seal/public/submit").permitAll()
                 // WebSocket 握手使用登录后签发的一次性票据，握手拦截器会再次校验 JWT 登录态。
                 .requestMatchers("/ws/im").permitAll()
+                // 登录页/未登录状态也会抛错，前端错误上报必须免鉴权；只放行 POST，限流器按 IP 兜住刷量。
+                // Actuator 另绑 8081 端口（独立管理上下文，不走本过滤器链，也不经 nginx），故无需在此放行。
+                .requestMatchers(HttpMethod.POST, "/frontend-error").permitAll()
                 .requestMatchers("/doc.html", "/swagger-resources/**", "/webjars/**", "/v3/api-docs/**").authenticated()
                 .requestMatchers("/favicon.ico").permitAll()
                 .anyRequest().authenticated()

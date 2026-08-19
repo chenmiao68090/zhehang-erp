@@ -17,6 +17,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @deprecated 已迁移至飞哥任务工作台（FeigeTaskController），本控制器仅保留历史数据只读访问。
+ * 新业务请使用 {@link com.zhehang.erp.modules.feigetask.controller.FeigeTaskController}
+ */
+@Deprecated(since = "V237", forRemoval = false)
 @RestController
 @RequestMapping("/task")
 @RequiredArgsConstructor

@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { readRouterSource } from './router-source.ts'
 
 const permissionStore = readFileSync(new URL('../src/stores/permission.ts', import.meta.url), 'utf8')
 const userStore = readFileSync(new URL('../src/stores/user.ts', import.meta.url), 'utf8')
 const rolePage = readFileSync(new URL('../src/views/system/role-permission.vue', import.meta.url), 'utf8')
 const employeePage = readFileSync(new URL('../src/views/org/employee.vue', import.meta.url), 'utf8')
 const systemApi = readFileSync(new URL('../src/api/system.ts', import.meta.url), 'utf8')
-const routes = readFileSync(new URL('../src/router/routes.ts', import.meta.url), 'utf8')
+const routes = readRouterSource()
 
 test('角色管理 visible_modules 是页面导航唯一来源', () => {
   assert.doesNotMatch(permissionStore, /menuApi\.getRouters/)

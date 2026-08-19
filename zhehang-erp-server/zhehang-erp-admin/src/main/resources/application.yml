@@ -116,7 +116,23 @@ ai:
     api-key: ${QWEN_API_KEY:}
     model: ${QWEN_MODEL:qwen-turbo}
 
+# 监控端点。独立绑定 8081：nginx 只反代 8080,运维端点不随业务接口暴露到公网。
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
 logging:
   level:
     com.zhehang.erp: debug
     org.springframework.security: info
+    # 前端错误上报单独成一个 logger,便于按需调整级别或分流到独立 appender
+    # 带连字符的 logger 名必须用 [] 包裹,否则松散绑定可能改写 key
+    "[frontend-error]": warn

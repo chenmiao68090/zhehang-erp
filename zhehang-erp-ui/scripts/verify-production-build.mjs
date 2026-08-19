@@ -1,7 +1,9 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const distPath = new URL('../dist/', import.meta.url).pathname
+// 必须用 fileURLToPath 而不是 .pathname:仓库路径含中文时 pathname 仍是百分号编码,readdir 会 ENOENT
+const distPath = fileURLToPath(new URL('../dist/', import.meta.url))
 const forbidden = ['/local-preview/', 'suitePreview=1', 'taskPreview=1', 'zhehangPreview=1']
 
 async function files(dir) {

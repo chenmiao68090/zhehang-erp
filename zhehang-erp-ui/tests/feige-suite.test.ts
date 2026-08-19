@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readRouterSource } from './router-source.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const uiRoot = path.resolve(here, '..')
@@ -23,7 +24,7 @@ const expectedGroups: Record<string, string[]> = {
 const allCodes = Object.values(expectedGroups).flat()
 const catalog = read('zhehang-erp-ui/src/views/feige-suite/catalog.ts')
 const routes = read('zhehang-erp-ui/src/router/feige-suite-routes.ts')
-const appRoutes = read('zhehang-erp-ui/src/router/routes.ts')
+const appRoutes = readRouterSource()
 const dataSource = read('zhehang-erp-ui/src/views/feige-suite/data-source.ts')
 const page = read('zhehang-erp-ui/src/views/feige-suite/page.vue')
 const form = read('zhehang-erp-ui/src/views/feige-suite/components/RecordFormDialog.vue')

@@ -35,7 +35,9 @@ public class SensitiveEndpointRateLimitFilter extends OncePerRequestFilter {
             new Rule("GET", "/hrm/training/courseware/materials/", 120, Duration.ofMinutes(1), true),
             new Rule("GET", "/hrm/training/courseware/video/stream/", 600, Duration.ofMinutes(1), false),
             new Rule("GET", "/call-record/recordings/stream/", 300, Duration.ofMinutes(1), false),
-            new Rule("GET", "/call-record/recordings/", 120, Duration.ofMinutes(1), true)
+            new Rule("GET", "/call-record/recordings/", 120, Duration.ofMinutes(1), true),
+            // 前端错误上报免鉴权且直写日志，必须限流；本身不再写审计日志避免重复噪声。
+            new Rule("POST", "/frontend-error", 60, Duration.ofMinutes(1), false)
     );
 
     private final StringRedisTemplate redisTemplate;

@@ -25,6 +25,7 @@ services:
     container_name: zhehang-server
     ports:
       - "127.0.0.1:8080:8080"   # 仅本机可访问,便于排查;不暴露公网
+      - "127.0.0.1:8081:8081"   # Actuator 监控端点(health/info/metrics),同样只对本机;Nginx 不反代
     volumes:
       # 上传文件持久化:后端把文件写到 /app/upload(WORKDIR=/app + file.upload.path=upload 解析成绝对路径),
       # 挂到宿主机 ./data/upload,避免每次部署 rebuild 容器时把用户上传的图片/附件冲掉。

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhehang.erp.common.core.domain.R;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -12,6 +13,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * <p>拦截范围：POST/PUT/DELETE 到 /api/order、/api/task 路径。</p>
  * <p>排除列表（这些仍在使用的子路径不拦截）见 LegacyModuleConfig 的 excludePathPatterns。</p>
  */
+@Slf4j
 @Component
 public class LegacyReadOnlyInterceptor implements HandlerInterceptor {
 
@@ -31,6 +33,7 @@ public class LegacyReadOnlyInterceptor implements HandlerInterceptor {
             return true;
         }
         // 写入操作被拦截
+        log.info("拦截旧模块写入请求: {} {}", method, request.getRequestURI());
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType("application/json;charset=UTF-8");
         R<?> result = R.fail(MESSAGE);

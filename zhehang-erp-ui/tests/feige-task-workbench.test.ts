@@ -3,13 +3,14 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readRouterSource } from './router-source.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const uiRoot = path.resolve(here, '..')
 const repoRoot = path.resolve(uiRoot, '..')
 const read = (relative: string) => fs.readFileSync(path.join(repoRoot, relative), 'utf8')
 
-const routes = read('zhehang-erp-ui/src/router/routes.ts')
+const routes = readRouterSource()
 const api = read('zhehang-erp-ui/src/api/feige-task.ts')
 const demo = read('zhehang-erp-ui/src/views/task-workbench/demo-data.ts')
 const dataSource = read('zhehang-erp-ui/src/views/task-workbench/data-source.ts')

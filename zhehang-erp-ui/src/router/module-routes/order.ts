@@ -36,10 +36,10 @@ export const orderRoutes: RouteRecordRaw[] = [
       { path: 'other-value', redirect: '/order/guide', meta: { hidden: true } },
       // —— 说明文档(垫底) ——
       { path: 'guide', name: 'OrderGuide', component: () => import('@/views/order/order-guide.vue'), meta: { title: '提单规则说明书', icon: 'Notebook' } },
-      // 合同管理:从提单中心菜单移除,保留隐藏路由(供 /contract、续签提醒等旧链接 + 合同功能仍可用)
-      { path: 'contract', name: 'ContractManage', component: () => import('@/views/order/contract.vue'), meta: { title: '合同管理', icon: 'Document', hidden: true } },
-      // 提单系统:从菜单移除(转后台),保留隐藏路由供首页/私域/转订单等旧链接使用
-      { path: 'bill', name: 'OrderBill', component: () => import('@/views/order/bill.vue'), meta: { title: '提单系统', icon: 'Tickets', hidden: true } }
+      // V238 退役旧订单系统:旧提单系统(bill)与旧合同管理(contract)页面已删除(零流量,数据源 biz_order 为空),
+      // 历史收藏统一落到飞哥订单/代理记账合同。
+      { path: 'bill', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      { path: 'contract', redirect: '/feige-order-contract/contracts', meta: { hidden: true } }
     ]
   }
 ]

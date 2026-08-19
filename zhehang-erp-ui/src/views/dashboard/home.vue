@@ -130,21 +130,13 @@
               <el-link v-if="canOpenOwnerMonitor" type="primary" :underline="false" @click="router.push('/dashboard/cockpit')">查看详情</el-link>
             </div>
           </template>
-          <div class="perf-grid">
-            <div class="perf-item">
-              <div class="perf-value">{{ perf.dealCount }}</div>
-              <div class="perf-label">成单数</div>
-            </div>
-            <div class="perf-item">
-              <div class="perf-value">{{ formatMoney(perf.dealAmount) }}</div>
-              <div class="perf-label">成交金额</div>
-            </div>
+          <div class="perf-grid perf-grid--single">
             <div class="perf-item">
               <div class="perf-value">{{ perf.conversionRate }}<em>%</em></div>
               <div class="perf-label">线索转化率</div>
             </div>
           </div>
-          <p class="perf-note">成单数 / 成交金额取我的订单中本月已完成单据聚合；转化率取我数据范围内线索转化汇总。</p>
+          <p class="perf-note">转化率取我数据范围内线索转化汇总；成单数 / 成交金额随旧提单系统退役下线。</p>
         </el-card>
 
         <!-- 4. 抄送我的 / 已完成事项 -->
@@ -305,39 +297,7 @@
       </el-col>
     </el-row>
 
-    <!-- 6. 我的订单 -->
-    <el-card class="order-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">我的订单</span>
-          <el-link type="primary" :underline="false" @click="router.push('/order/bill')">查看全部</el-link>
-        </div>
-      </template>
-      <el-table
-        :data="orderList"
-        v-loading="orderLoading"
-        size="default"
-        empty-text="暂无订单记录"
-        style="width: 100%"
-      >
-        <el-table-column prop="orderNo" label="订单编号" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="customerName" label="客户名称" min-width="140" show-overflow-tooltip />
-        <el-table-column label="业务类型" min-width="110">
-          <template #default="{ row }">{{ row.serviceTypeLabel }}</template>
-        </el-table-column>
-        <el-table-column label="金额" min-width="120" align="right">
-          <template #default="{ row }">{{ formatMoney(row.finalAmount) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.statusType" size="small" effect="light">{{ row.statusLabel }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="日期" min-width="120">
-          <template #default="{ row }">{{ (row.submitTime || row.createTime || '').slice(0, 10) || '—' }}</template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    <!-- V238 退役旧订单系统:原「我的订单」卡片取自 /order/list(biz_order),已零流量下线,订单看飞哥订单页。 -->
 
     <!-- 我的备忘录抽屉 -->
     <el-drawer v-model="memoDrawerVisible" title="我的备忘录" size="720px" class="memo-drawer">
@@ -483,9 +443,8 @@
 //   1) 个人信息：/auth/info（getUserInfoApi）→ user.nickname / roles；职位用 ROLE_LABELS 映射 roles[0]。
 //   2) 入职天数：/org/employee/list 找当前 userId 的 org_employee 取 hireDate 算天数；拿不到显示「--」。
 //   3) 流程待办：/workflow/task/{todo|started|done} total；抄送(cc) 后端无端点 → 0（见 gapsNoBackend）。
-//   4) 本月业绩：成单数/成交金额取 orderApi.stats()（本月已完成单据聚合）；转化率取 leadApi.conversionStats()。
+//   4) 本月业绩：转化率取 leadApi.conversionStats()；成单数/成交金额随旧提单系统(biz_order)退役下线。
 //   5) 已完成事项：taskApi.done 列表；抄送列表后端无端点 → 空。
-//   6) 我的订单：orderApi.list 最近 5 单。
 // 工作日报：/dashboard/daily-report 已接后端 daily_report 表,按当前登录用户保存最近 30 条。
 import { ref, computed, reactive, onMounted } from 'vue'
 import { Calendar } from '@element-plus/icons-vue'
@@ -498,7 +457,6 @@ import { taskApi } from '@/api/workflow'
 import type { TaskItem } from '@/api/workflow'
 import { get } from '@/api/request'
 import { employeeApi } from '@/api/org'
-import { orderApi, type BizOrder } from '@/api/order'
 import { leadApi } from '@/api/crm'
 import { dailyReportApi } from '@/api/daily-report'
 import { customerIssueApi } from '@/api/customer-issue'
@@ -578,7 +536,7 @@ function goApprovalCenter(tab: 'todo' | 'cc' | 'started' | 'done') {
 }
 
 // ---------- 3. 本月业绩 ----------
-const perf = reactive({ dealCount: 0, dealAmount: 0, conversionRate: 0 })
+const perf = reactive({ conversionRate: 0 })
 
 // ---------- 4. 抄送我的 / 已完成事项 ----------
 const activeTab = ref<'cc' | 'done'>('done')
@@ -974,48 +932,6 @@ async function removeReport(id: number) {
   }
 }
 
-// ---------- 6. 我的订单 ----------
-interface OrderRow extends BizOrder { serviceTypeLabel: string; statusLabel: string; statusType: FlowRow['statusType'] }
-const orderList = ref<OrderRow[]>([])
-const orderLoading = ref(false)
-
-const SERVICE_TYPE_LABELS: Record<string, string> = {
-  bookkeeping: '代理记账',
-  registration: '工商注册',
-  tax_planning: '税务筹划',
-  qualification: '资质办理',
-  audit: '审计',
-  cancellation: '注销',
-  other: '其他'
-}
-const ORDER_STATUS_LABELS: Record<string, { label: string; type: FlowRow['statusType'] }> = {
-  draft: { label: '草稿', type: 'info' },
-  pending_approval: { label: '待审批', type: 'warning' },
-  pending_finance: { label: '待财务确认', type: 'warning' },
-  pending_boss: { label: '待终审', type: 'warning' },
-  completed: { label: '已完成', type: 'success' },
-  rejected: { label: '已驳回', type: 'danger' },
-  cancelled: { label: '已取消', type: 'info' }
-}
-
-function adaptOrderRow(o: BizOrder): OrderRow {
-  const st = ORDER_STATUS_LABELS[o.status] || { label: o.status, type: 'info' as const }
-  const firstType = o.items?.[0]?.serviceType
-  return {
-    ...o,
-    serviceTypeLabel: SERVICE_TYPE_LABELS[firstType || ''] || '—',
-    statusLabel: st.label,
-    statusType: st.type
-  }
-}
-
-// ---------- 工具 ----------
-function formatMoney(n: number): string {
-  const v = Number(n || 0)
-  if (v >= 10000) return `¥${(v / 10000).toFixed(2)}万`
-  return `¥${v.toLocaleString('zh-CN')}`
-}
-
 // ---------- 各块独立加载（一块失败不影响其它块） ----------
 async function loadTenure() {
   // 优先用 /auth/info 直接返回的入职日期：可靠,不受员工列表数据范围过滤影响
@@ -1094,33 +1010,12 @@ async function loadCcList() {
 }
 
 async function loadPerformance() {
-  // 订单聚合（本月已完成单据）：成单数 = completedCount，成交金额 = monthAmount
-  try {
-    const stats = await orderApi.stats()
-    perf.dealCount = stats.completedCount || 0
-    perf.dealAmount = stats.monthAmount || 0
-  } catch {
-    perf.dealCount = 0
-    perf.dealAmount = 0
-  }
-  // 线索转化率
+  // 线索转化率（成单数/成交金额原取旧提单 orderApi.stats()，随旧订单系统退役移除）
   try {
     const conv: any = await leadApi.conversionStats()
     perf.conversionRate = Number(conv?.conversionRate || 0)
   } catch {
     perf.conversionRate = 0
-  }
-}
-
-async function loadMyOrders() {
-  orderLoading.value = true
-  try {
-    const res = await orderApi.list({ page: 1, pageSize: 5 })
-    orderList.value = (res.list || []).map(adaptOrderRow)
-  } catch {
-    orderList.value = []
-  } finally {
-    orderLoading.value = false
   }
 }
 
@@ -1135,7 +1030,6 @@ onMounted(() => {
   loadCcList()
   loadMemoHome()
   loadPerformance()
-  loadMyOrders()
 })
 </script>
 
@@ -1260,6 +1154,7 @@ onMounted(() => {
 
 /* 3. 本月业绩 */
 .perf-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.perf-grid--single { grid-template-columns: minmax(0, 1fr); }
 .perf-item {
   text-align: center;
   padding: 18px 12px;

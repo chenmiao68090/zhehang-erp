@@ -104,7 +104,22 @@
       />
 
       <div v-else class="rp-body">
-        <!-- ① 数据范围 -->
+        <!-- 方案A：Tab 整合（数据范围 / 可见模块 / 操作权限 / 预览） -->
+        <div class="rp-tabs">
+          <div class="rp-tab" :class="{ active: activeTab === 'scope' }" @click="activeTab = 'scope'">数据范围</div>
+          <div class="rp-tab" :class="{ active: activeTab === 'module' }" @click="activeTab = 'module'">
+            可见模块
+            <span class="rp-tab-badge">{{ allOn ? '全部' : `${checkedSubs.size}/${ALL_SUB_PATHS.length}` }}</span>
+          </div>
+          <div class="rp-tab" :class="{ active: activeTab === 'operation' }" @click="activeTab = 'operation'">
+            操作权限
+            <span class="rp-tab-badge">{{ checkedPermissionIds.size + checkedBizPermissionIds.size }}</span>
+          </div>
+          <div class="rp-tab" :class="{ active: activeTab === 'preview' }" @click="activeTab = 'preview'">预览</div>
+        </div>
+
+        <!-- Tab 1：数据范围 -->
+        <div v-show="activeTab === 'scope'" class="rp-pane">
         <div class="rp-section-title">① 可查看的数据范围</div>
         <div class="rp-section-desc">决定这个角色能看到多大范围的数据</div>
         <div class="rp-scope">
@@ -119,9 +134,11 @@
             <div class="rp-scope-text"><div class="rp-scope-title">{{ opt.title }}</div><div class="rp-scope-sub">{{ opt.sub }}</div></div>
           </div>
         </div>
+        </div>
 
-        <!-- ② 可访问的模块（大类 + 小类，方案4：左大类 / 右小类） -->
-        <div class="rp-section-title" style="margin-top: 22px;">② 可访问的模块（可细到小类）</div>
+        <!-- Tab 2：可见模块 -->
+        <div v-show="activeTab === 'module'" class="rp-pane">
+        <div class="rp-section-title">② 可访问的模块（可细到小类）</div>
         <div class="rp-section-desc">这里是员工页面导航的唯一配置来源。大类全开＝整块放行；全部大类全开＝不限制。首页（含内部沟通）始终可见。</div>
         <div class="rp-mod2">
           <!-- 左：大类 -->
@@ -156,10 +173,12 @@
             </div>
           </div>
         </div>
+        </div>
 
-        <!-- ③ 操作权限：与页面、数据范围同页同事务保存 -->
-        <div class="rp-section-title" style="margin-top: 22px;">③ 可使用的操作（按钮和接口）</div>
-        <div class="rp-section-desc">页面能否进入由上方决定；这里决定进入后能查看、新增、修改、删除或导出什么。</div>
+        <!-- Tab 3：操作权限（原③菜单按钮 + 原④业务权限点 合并，统一按业务域分组） -->
+        <div v-show="activeTab === 'operation'" class="rp-pane">
+        <div class="rp-section-title">③ 可使用的操作</div>
+        <div class="rp-section-desc">页面能否进入由「可见模块」决定；这里决定进入后能做什么。菜单按钮权限（进入页面的按钮/接口）与业务权限点（跨页面的业务动作，如审批/看薪酬）已按业务域合并展示。</div>
         <div class="rp-operation-box" v-loading="operationLoading">
           <el-alert
             v-if="readonly"
@@ -175,48 +194,57 @@
             :closable="false"
             show-icon
           />
-          <el-collapse v-else-if="operationGroups.length" class="rp-operation-collapse">
-            <el-collapse-item v-for="group in operationGroups" :key="group.key" :name="group.key">
+          <el-collapse v-else-if="unifiedOperationGroups.length" class="rp-operation-collapse">
+            <el-collapse-item v-for="group in unifiedOperationGroups" :key="group.key" :name="group.key">
               <template #title>
                 <span class="rp-operation-title">{{ group.label }}</span>
-                <el-tag size="small" effect="plain">{{ group.items.filter((item) => checkedPermissionIds.has(item.id)).length }}/{{ group.items.length }}</el-tag>
+                <el-tag size="small" effect="plain">{{ group.items.filter(isOperationOn).length }}/{{ group.items.length }}</el-tag>
               </template>
               <div class="rp-operation-grid">
-                <div v-for="item in group.items" :key="item.id" class="rp-operation-item">
+                <div v-for="item in group.items" :key="item.uid" class="rp-operation-item">
                   <div class="rp-operation-text">
-                    <strong>{{ item.menuName }}</strong>
-                    <span>{{ item.perms }}</span>
+                    <strong>
+                      {{ item.label }}
+                      <el-tag v-if="item.source === 'biz'" size="small" type="warning" effect="plain" class="rp-src-tag">业务</el-tag>
+                      <el-tag v-else size="small" effect="plain" class="rp-src-tag">菜单</el-tag>
+                    </strong>
+                    <span>{{ item.code }}</span>
                   </div>
-                  <el-switch :model-value="checkedPermissionIds.has(item.id)" @change="(v) => togglePermission(item.id, !!v)" />
+                  <el-switch :model-value="isOperationOn(item)" @change="(v) => toggleUnified(item, !!v)" />
                 </div>
               </div>
             </el-collapse-item>
           </el-collapse>
           <el-empty v-else-if="!operationLoading" description="暂无可配置的操作权限" :image-size="60" />
         </div>
+        </div>
 
-        <!-- ④ 业务权限点（唯一可配置口径，阶段2：仅登记，不影响现有权限行为） -->
-        <div class="rp-section-title" style="margin-top: 22px;">④ 业务操作权限点</div>
-        <div class="rp-section-desc">登记「能做哪些业务动作」（如审批订单、查看薪酬、财务确认）。当前仅登记、不影响现有权限；后续将逐步替代代码里写死的角色判断。</div>
-        <div class="rp-operation-box">
-          <el-collapse v-if="bizPermissionGroups.length" class="rp-operation-collapse">
-            <el-collapse-item v-for="group in bizPermissionGroups" :key="group.key" :name="group.key">
-              <template #title>
-                <span class="rp-operation-title">{{ group.label }}</span>
-                <el-tag size="small" effect="plain">{{ group.items.filter((item) => checkedBizPermissionIds.has(Number(item.id))).length }}/{{ group.items.length }}</el-tag>
-              </template>
-              <div class="rp-operation-grid">
-                <div v-for="item in group.items" :key="item.id" class="rp-operation-item">
-                  <div class="rp-operation-text">
-                    <strong>{{ item.name }}</strong>
-                    <span>{{ item.code }}</span>
-                  </div>
-                  <el-switch :model-value="checkedBizPermissionIds.has(Number(item.id))" @change="(v) => toggleBizPermission(Number(item.id), !!v)" />
-                </div>
-              </div>
-            </el-collapse-item>
-          </el-collapse>
-          <el-empty v-else description="暂无可配置的业务权限点" :image-size="60" />
+        <!-- Tab 4：预览（保存前最后确认） -->
+        <div v-show="activeTab === 'preview'" class="rp-pane">
+        <div class="rp-section-title">④ 预览：该角色登录后的效果</div>
+        <div class="rp-section-desc">保存前最后确认一眼；保存后受影响成员需重新登录。</div>
+        <div class="rp-preview">
+          <div class="rp-preview-row">
+            <span class="rp-preview-label">数据范围</span>
+            <span class="rp-preview-value">{{ scopeOptions.find((o) => o.value === dataScope)?.title || '仅本人数据' }}</span>
+          </div>
+          <div class="rp-preview-row">
+            <span class="rp-preview-label">可见模块</span>
+            <span class="rp-preview-value">{{ allOn ? '全部可见（不限制）' : `已开放 ${checkedSubs.size} / ${ALL_SUB_PATHS.length} 个小类` }}</span>
+          </div>
+          <div class="rp-preview-row">
+            <span class="rp-preview-label">菜单按钮权限</span>
+            <span class="rp-preview-value">{{ checkedPermissionIds.size }} 项已勾选</span>
+          </div>
+          <div class="rp-preview-row">
+            <span class="rp-preview-label">业务权限点</span>
+            <span class="rp-preview-value">{{ checkedBizPermissionIds.size }} 项已勾选</span>
+          </div>
+          <div class="rp-preview-row">
+            <span class="rp-preview-label">角色成员</span>
+            <span class="rp-preview-value">{{ members.length }} 人（保存后需重新登录生效）</span>
+          </div>
+        </div>
         </div>
 
         <div class="rp-tip">
@@ -483,6 +511,53 @@ const bizPermissionGroups = computed(() => {
   })
   return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key))
 })
+
+// ===== 方案A：Tab 整合 =====
+const activeTab = ref<'scope' | 'module' | 'operation' | 'preview'>('scope')
+
+/** 菜单 perms 前缀与业务权限点 domain 归并到统一业务域（中文标签）。 */
+const UNIFIED_DOMAIN_LABELS: Record<string, string> = {
+  // 菜单 perms 前缀
+  system: '系统与组织', org: '系统与组织', log: '系统与组织', monitor: '系统与组织', tool: '系统与组织',
+  crm: '客户与销售', sales: '客户与销售',
+  finance: '财务与收款',
+  hrm: '人事行政', workflow: '审批流程', supply: '渠道与供应链',
+  report: '报表与分析', file: '文件知识库', message: '内部沟通',
+  dashboard: '工作台', profile: '工作台', project: '项目任务',
+  // 业务权限点 domain
+  hr: '人事行政', order: '订单合同', contract: '订单合同', review: '订单合同',
+  analysis: '报表与分析', seal: '印章工商', gs: '印章工商',
+  channel: '渠道与供应链', feige: '飞哥业务'
+}
+
+/** 操作权限统一分组：菜单按钮 + 业务权限点混排，带 source 标记。 */
+const unifiedOperationGroups = computed(() => {
+  const groups = new Map<string, { key: string; label: string; items: Array<{ uid: string; source: 'menu' | 'biz'; id: number; label: string; code: string }> }>()
+  const push = (rawKey: string, item: { uid: string; source: 'menu' | 'biz'; id: number; label: string; code: string }) => {
+    const key = rawKey || 'other'
+    const label = UNIFIED_DOMAIN_LABELS[key] || key
+    if (!groups.has(key)) groups.set(key, { key, label, items: [] })
+    groups.get(key)!.items.push(item)
+  }
+  operationItems.value.forEach((m) => push(m.perms.split(':')[0], {
+    uid: `menu-${m.id}`, source: 'menu', id: m.id, label: m.menuName, code: m.perms
+  }))
+  bizPermissionList.value.forEach((p) => push(p.domain, {
+    uid: `biz-${p.id}`, source: 'biz', id: Number(p.id), label: String(p.name || ''), code: String(p.code || '')
+  }))
+  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label))
+})
+
+function isOperationOn(item: { source: 'menu' | 'biz'; id: number }): boolean {
+  return item.source === 'menu'
+    ? checkedPermissionIds.value.has(item.id)
+    : checkedBizPermissionIds.value.has(item.id)
+}
+
+function toggleUnified(item: { source: 'menu' | 'biz'; id: number }, enabled: boolean) {
+  if (item.source === 'menu') togglePermission(item.id, enabled)
+  else toggleBizPermission(item.id, enabled)
+}
 
 const PERMISSION_GROUP_LABELS: Record<string, string> = {
   system: '系统与组织', org: '员工与组织', crm: '销售与客户', sales: '销售业务',
@@ -1221,6 +1296,82 @@ async function save() {
   :deep(.el-icon) { color: var(--el-color-warning); }
 }
 .rp-section-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); margin-bottom: 3px; }
+
+/* ===== 方案A：Tab 整合 ===== */
+.rp-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin-bottom: 16px;
+}
+
+.rp-tab {
+  padding: 9px 16px;
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.rp-tab:hover { color: var(--el-text-color-primary); }
+
+.rp-tab.active {
+  color: var(--el-color-primary);
+  font-weight: 600;
+  border-bottom-color: var(--el-color-primary);
+}
+
+.rp-tab-badge {
+  font-size: 11px;
+  padding: 0 7px;
+  line-height: 17px;
+  border-radius: 999px;
+  background: var(--el-color-primary-light-9, #f2f7ff);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.rp-pane { padding-top: 2px; }
+
+.rp-src-tag {
+  transform: scale(0.86);
+  transform-origin: left center;
+  margin-left: 4px;
+}
+
+.rp-preview {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+  max-width: 560px;
+}
+
+.rp-preview-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.rp-preview-row:last-child { border-bottom: none; }
+
+.rp-preview-label {
+  width: 110px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.rp-preview-value {
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  font-weight: 500;
+}
 .rp-section-desc { font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 12px; }
 
 /* 数据范围卡片 */

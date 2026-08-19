@@ -25,6 +25,7 @@
     "test:v226-compact-layout": "node --experimental-strip-types --test tests/v226-compact-business-layout.test.ts",
     "test:v227-order-entry": "node --experimental-strip-types --test tests/v227-order-only-entry.test.ts",
     "test:v233-owner-monitor": "node --experimental-strip-types --test tests/v233-owner-monitor-center.test.ts",
+    "test:visible-module-redirect": "node --experimental-strip-types --test tests/visible-module-redirect-fallback.test.ts",
     "lint": "eslint . --ext .vue,.js,.jsx,.ts,.tsx --fix"
   },
   "dependencies": {

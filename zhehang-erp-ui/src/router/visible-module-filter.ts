@@ -29,6 +29,22 @@ function legacyGroupsForRoute(routePath: string, legacyGroupsByRoute: LegacyVisi
 }
 
 /**
+ * 父路由 redirect 指向被裁掉的子页时会落到 404（顶栏点击大类也优先走 redirect）。
+ * 只在“redirect 是本模块内部子页且该子页已被裁掉”时改指第一个保留的可见子页；
+ * 指向模块外的落地页由目标模块自身可见性决定，保持原值不动。
+ */
+function keptRedirect(route: VisibleModuleRoute, keptChildren: VisibleModuleRoute[]): unknown {
+  const redirect = route.redirect
+  if (typeof redirect !== 'string') return redirect
+  const targetPath = redirect.split(/[?#]/)[0]
+  if (!targetPath.startsWith(route.path === '/' ? '/' : route.path + '/')) return redirect
+  const kept = keptChildren.some((child) => fullVisibleChildPath(route.path, child.path) === targetPath)
+  if (kept) return redirect
+  const fallback = keptChildren.find((child) => !child.meta?.hidden)
+  return fallback ? fullVisibleChildPath(route.path, fallback.path) : redirect
+}
+
+/**
  * 按角色页保存的 visible_modules 过滤顶层路由。
  *
  * - null：全部可见；
@@ -77,7 +93,7 @@ export function filterRoutesByVisibleModules<T extends VisibleModuleRoute>(
         child.meta?.hidden || allow.has(fullVisibleChildPath(route.path, child.path))
       ))
       if (keptChildren.some((child) => !child.meta?.hidden)) {
-        result.push({ ...route, children: keptChildren } as T)
+        result.push({ ...route, redirect: keptRedirect(route, keptChildren), children: keptChildren } as T)
       }
       return
     }

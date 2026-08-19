@@ -174,7 +174,6 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
     @Override
     @Transactional(rollbackFor = Exception.class)
     public InitialCredentialVO createEmployee(EmployeeDTO dto) {
-        rejectLegacyRoleAssignment(dto);
         clearUnauthorizedAccountSecurityFields(dto);
         dto.setEmpCode(resolveEmpCodeForCreate(dto));
         // 校验工号唯一
@@ -194,6 +193,8 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
             throw new BusinessException("员工档案创建失败");
         }
         InitialCredentialVO initialCredential = syncEmployeeAccount(employee, dto, false);
+        // 同步系统角色(dto.roleIds 非 null 时全量替换,无账号则跳过)
+        syncEmployeeRoles(dto, employee);
         if (Integer.valueOf(3).equals(employee.getStatus())) {
             // 历史补录也遵守统一安全不变量：有关联账号就再次停用并提升认证版本。
             sysUserService.disableForResignation(employee.getUserId());
@@ -204,7 +205,6 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
     @Override
     @Transactional(rollbackFor = Exception.class)
     public InitialCredentialVO updateEmployee(EmployeeDTO dto) {
-        rejectLegacyRoleAssignment(dto);
         clearUnauthorizedAccountSecurityFields(dto);
         OrgEmployee employee = employeeMapper.selectById(dto.getId());
         if (employee == null) {
@@ -259,6 +259,8 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
         }
         clearRemovedAttachments(dto);
         InitialCredentialVO initialCredential = syncEmployeeAccount(employee, dto, becameResigned);
+        // 同步系统角色(dto.roleIds 非 null 时全量替换,无账号则跳过)
+        syncEmployeeRoles(dto, employee);
         if (Integer.valueOf(3).equals(employee.getStatus())) {
             // 同一请求可能由超级管理员调整账号关联；历史离职编辑也必须让旧、新关联账号失败收紧。
             java.util.stream.Stream.of(oldUserId, employee.getUserId())
@@ -516,10 +518,23 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
         dto.setRoleIds(null);
     }
 
-    /** 员工页/旧接口不得再写角色，即使传空数组也明确拒绝这条旧口径。 */
-    private void rejectLegacyRoleAssignment(EmployeeDTO dto) {
-        if (dto != null && dto.getRoleIds() != null) {
-            throw new BusinessException("系统角色请统一在「角色管理 → 成员管理」设置");
+    /**
+     * 同步员工系统角色(全量替换)。
+     * <p>语义:dto.getRoleIds() == null 表示前端没改角色(保持不变);非 null 表示全量替换关联。
+     * 该方法必须只在 employee 已绑定了 userId(userId != null)时调用。</p>
+     */
+    private void syncEmployeeRoles(EmployeeDTO dto, OrgEmployee employee) {
+        if (dto == null || dto.getRoleIds() == null) {
+            return;
+        }
+        Long userId = employee.getUserId();
+        if (userId == null) {
+            return; // 未开通登录账号,无可同步角色
+        }
+        java.util.List<Long> roleIds = dto.getRoleIds();
+        roleMapper.deleteUserRoles(userId);
+        if (roleIds != null && !roleIds.isEmpty()) {
+            roleMapper.insertUserRoles(userId, roleIds);
         }
     }
 

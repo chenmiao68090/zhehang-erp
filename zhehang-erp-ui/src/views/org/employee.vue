@@ -498,12 +498,15 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="系统角色">
-                  <div class="employee-role-readonly">
-                    <span v-if="!accountRoleNames(formData).length" class="role-position-text">未分配（账号保持受限）</span>
-                    <el-tag v-for="rn in accountRoleNames(formData)" :key="rn" size="small" effect="plain">{{ rn }}</el-tag>
-                    <el-button link type="primary" @click="goRoleManagement">前往角色管理</el-button>
-                  </div>
-                  <div class="account-hint">此处仅展示，不再修改角色，避免同一个人出现多套权限口径。</div>
+                  <el-checkbox-group v-model="formData.roleIds" class="employee-role-checkgroup">
+                    <el-checkbox
+                      v-for="r in allRoles"
+                      :key="r.id"
+                      :value="r.id"
+                      :label="r.roleName"
+                    />
+                  </el-checkbox-group>
+                  <div class="account-hint">可在此直接勾选；与「角色管理 → 成员」双向同步。</div>
                 </el-form-item>
               </el-col>
               <el-col :span="12" v-if="!isEdit">
@@ -825,7 +828,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type UploadFile } from 'ele
 import { Delete, Document, Download, Folder, Lock, Paperclip, Phone, Plus, Reading, Suitcase, Upload, User, UserFilled } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { employeeApi, deptApi, postApi } from '@/api/org'
-import { userApi } from '@/api/system'
+import { roleApi, userApi } from '@/api/system'
 import { resignHandoverApi } from '@/api/hrm'
 import { fileInfoApi } from '@/api/file'
 import { downloadFileById } from '@/utils/download'
@@ -906,6 +909,17 @@ const detailTargetEmployeeId = ref<number>()
 let employeeDetailRequestId = 0
 const deptTree = ref<any[]>([])
 const postList = ref<any[]>([])
+// 全部系统角色(用于「系统角色」复选框),弹窗打开时按需懒加载并缓存
+const allRoles = ref<any[]>([])
+async function loadAllRoles() {
+  if (allRoles.value.length) return
+  try {
+    const res: any = await roleApi.all()
+    allRoles.value = Array.isArray(res?.data) ? res.data : []
+  } catch {
+    allRoles.value = []
+  }
+}
 const importDialog = reactive({ visible: false })
 const credentialDialog = reactive({ visible: false })
 interface InitialCredential {
@@ -1928,6 +1942,7 @@ const handleAdd = async () => {
   formData.value = defaultForm()
   await fillNextEmpCode()
   if (!postList.value.length) await loadPostList()
+  await loadAllRoles()
   activeTab.value = 'basic'
   dialogVisible.value = true
 }
@@ -1947,6 +1962,7 @@ const handleEdit = (row: any) => {
     accountEnabled: row.accountEnabled ?? accountStatusText(row) === '可登录',
     roleIds: row.roleIds || row._roleIds || []
   }
+  loadAllRoles()
   activeTab.value = 'basic'
   dialogVisible.value = true
 }
@@ -2324,6 +2340,14 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   min-height: 32px;
+}
+.employee-role-checkgroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 4px 2px;
 }
 .field-tip {
   margin-top: 6px;

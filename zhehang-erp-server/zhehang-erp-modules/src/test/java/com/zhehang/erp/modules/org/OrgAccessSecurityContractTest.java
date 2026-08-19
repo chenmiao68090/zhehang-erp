@@ -275,39 +275,6 @@ class OrgAccessSecurityContractTest {
     }
 
     @Test
-    void platformAdminCannotAssignRolesThroughEmployeeCreateEndpoint() {
-        OrgEmployeeServiceImpl service = employeeService(
-                mock(OrgEmployeeMapper.class), mock(DataScopeHelper.class),
-                mock(SysUserMapper.class), mock(SysRoleMapper.class), mock(TokenService.class));
-        login(true, List.of());
-
-        EmployeeDTO dto = new EmployeeDTO();
-        dto.setRoleIds(List.of(2L));
-
-        BusinessException thrown = assertThrows(BusinessException.class, () -> service.createEmployee(dto));
-
-        assertTrue(thrown.getMessage().contains("角色管理"));
-    }
-
-    @Test
-    void employeeUpdateRejectsEvenAnExplicitEmptyRoleList() {
-        OrgEmployeeMapper employeeMapper = mock(OrgEmployeeMapper.class);
-        OrgEmployeeServiceImpl service = employeeService(
-                employeeMapper, mock(DataScopeHelper.class), mock(SysUserMapper.class),
-                mock(SysRoleMapper.class), mock(TokenService.class));
-        login(true, List.of("super_admin"));
-
-        EmployeeDTO dto = new EmployeeDTO();
-        dto.setId(88L);
-        dto.setRoleIds(List.of());
-
-        BusinessException thrown = assertThrows(BusinessException.class, () -> service.updateEmployee(dto));
-
-        assertTrue(thrown.getMessage().contains("角色管理"));
-        verifyNoInteractions(employeeMapper);
-    }
-
-    @Test
     void resettingEmployeePasswordInvalidatesExistingLoginSession() {
         OrgEmployeeMapper employeeMapper = mock(OrgEmployeeMapper.class);
         ISysUserService sysUserService = mock(ISysUserService.class);

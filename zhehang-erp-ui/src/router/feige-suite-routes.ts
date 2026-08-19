@@ -1,7 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { FEIGE_SUITE_GROUPS, FEIGE_SUITE_PAGES, pagesByGroup } from '@/views/feige-suite/catalog'
+import { Layout } from './module-routes/layout'
 
-const Layout = () => import('@/components/layout/MainLayout.vue')
 const SuitePage = () => import('@/views/feige-suite/page.vue')
 
 const GROUP_ROLES: Record<string, string[]> = {

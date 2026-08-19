@@ -15,8 +15,15 @@
       <div class="main-content">
         <Header />
         <main class="content-area" :class="contentClasses">
+          <!--
+            这里不能用 mode="out-in"：它要求旧页面先播完 leave 过渡再挂载新页面，
+            而顶栏和左侧菜单没有过渡、会立刻跟随 URL 变化。跨模块切换时用户就会看到
+            「地址栏和菜单都变了、主内容区还是上一页」（实测线上稳定滞后约 220ms，
+            首次点击再叠加目标 chunk 的下载时间），很容易被当成页面卡死而去手动刷新。
+            改为默认模式并去掉 leave 过渡后，旧节点同帧移除、新页面同帧挂载，只保留进场动画。
+          -->
           <router-view v-slot="{ Component, route }">
-            <transition name="fade" mode="out-in">
+            <transition name="fade">
               <component :is="Component" :key="route.path" />
             </transition>
           </router-view>
@@ -83,13 +90,11 @@ const contentClasses = computed(() => ({
   animation: fadeSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-leave-to {
-  opacity: 0;
-}
+/*
+  故意不给 .fade-leave-active 任何 transition/animation：没有离场时长时 Vue 会同帧
+  移除旧节点，新页面立即挂载，主内容区不会落后于地址栏和菜单，也不会出现新旧两页
+  同时占位导致的高度跳动。
+*/
 
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(8px); }

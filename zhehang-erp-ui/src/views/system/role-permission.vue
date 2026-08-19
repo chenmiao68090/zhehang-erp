@@ -175,10 +175,10 @@
         </div>
         </div>
 
-        <!-- Tab 3：操作权限（原③菜单按钮 + 原④业务权限点 合并，统一按业务域分组） -->
+        <!-- Tab 3：操作权限（域导航式：左侧业务域，右侧该域的业务权限点 + 菜单按钮） -->
         <div v-show="activeTab === 'operation'" class="rp-pane">
         <div class="rp-section-title">③ 可使用的操作</div>
-        <div class="rp-section-desc">页面能否进入由「可见模块」决定；这里决定进入后能做什么。菜单按钮权限（进入页面的按钮/接口）与业务权限点（跨页面的业务动作，如审批/看薪酬）已按业务域合并展示。</div>
+        <div class="rp-section-desc">按业务域组织：业务权限点（跨页面的业务动作，如审批/看薪酬）在上，菜单按钮权限（页面按钮）在下。</div>
         <div class="rp-operation-box" v-loading="operationLoading">
           <el-alert
             v-if="readonly"
@@ -194,27 +194,72 @@
             :closable="false"
             show-icon
           />
-          <el-collapse v-else-if="unifiedOperationGroups.length" class="rp-operation-collapse">
-            <el-collapse-item v-for="group in unifiedOperationGroups" :key="group.key" :name="group.key">
-              <template #title>
-                <span class="rp-operation-title">{{ group.label }}</span>
-                <el-tag size="small" effect="plain">{{ group.items.filter(isOperationOn).length }}/{{ group.items.length }}</el-tag>
-              </template>
-              <div class="rp-operation-grid">
-                <div v-for="item in group.items" :key="item.uid" class="rp-operation-item">
-                  <div class="rp-operation-text">
-                    <strong>
-                      {{ item.label }}
-                      <el-tag v-if="item.source === 'biz'" size="small" type="warning" effect="plain" class="rp-src-tag">业务</el-tag>
-                      <el-tag v-else size="small" effect="plain" class="rp-src-tag">菜单</el-tag>
-                    </strong>
-                    <span>{{ item.code }}</span>
-                  </div>
-                  <el-switch :model-value="isOperationOn(item)" @change="(v) => toggleUnified(item, !!v)" />
-                </div>
+          <div v-else-if="operationDomainData.length" class="rp-op-layout">
+            <!-- 左：业务域导航 -->
+            <div class="rp-op-nav">
+              <div
+                v-for="d in operationDomainData"
+                :key="d.key"
+                class="rp-op-nav-item"
+                :class="{ active: activeOperationDomain === d.key }"
+                @click="activeOperationDomain = d.key"
+              >
+                <span class="rp-op-nav-icon">{{ d.icon }}</span>
+                <span class="rp-op-nav-name">{{ d.label }}</span>
+                <span class="rp-op-nav-cnt">{{ domainCheckedCount(d) }}/{{ d.biz.length + d.menu.length }}</span>
               </div>
-            </el-collapse-item>
-          </el-collapse>
+            </div>
+            <!-- 右：当前域 -->
+            <div class="rp-op-body">
+              <template v-for="d in operationDomainData" :key="d.key">
+                <div v-show="activeOperationDomain === d.key" class="rp-op-domain">
+                  <!-- 业务权限点 -->
+                  <template v-if="d.biz.length">
+                    <div class="rp-op-subhead">
+                      业务操作权限点
+                      <span class="rp-op-subn">{{ d.biz.filter(isOperationOn).length }}/{{ d.biz.length }}</span>
+                    </div>
+                    <div class="rp-op-bizgrid">
+                      <div
+                        v-for="p in d.biz"
+                        :key="'biz-' + p.id"
+                        class="rp-op-bizcard"
+                        :class="{ on: isOperationOn({ source: 'biz', id: Number(p.id) }) }"
+                        @click="toggleUnified({ source: 'biz', id: Number(p.id) }, !isOperationOn({ source: 'biz', id: Number(p.id) }))"
+                      >
+                        <div class="rp-op-cb"></div>
+                        <div class="rp-op-biztext">
+                          <div class="rp-op-bizname">{{ p.name }}</div>
+                          <div class="rp-op-bizcode">{{ p.code }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <!-- 菜单按钮权限 -->
+                  <template v-if="d.menu.length">
+                    <div class="rp-op-subhead">
+                      菜单按钮权限
+                      <span class="rp-op-subn">{{ d.menu.filter(isOperationOn).length }}/{{ d.menu.length }}</span>
+                    </div>
+                    <div class="rp-op-menulist">
+                      <div
+                        v-for="m in d.menu"
+                        :key="'menu-' + m.id"
+                        class="rp-op-menurow"
+                        :class="{ on: isOperationOn({ source: 'menu', id: m.id }) }"
+                        @click="toggleUnified({ source: 'menu', id: m.id }, !isOperationOn({ source: 'menu', id: m.id }))"
+                      >
+                        <div class="rp-op-cb"></div>
+                        <span class="rp-op-menuname">{{ m.menuName }}</span>
+                        <span class="rp-op-menucode">{{ m.perms }}</span>
+                      </div>
+                    </div>
+                  </template>
+                  <el-empty v-if="!d.biz.length && !d.menu.length" description="该域暂无权限" :image-size="60" />
+                </div>
+              </template>
+            </div>
+          </div>
           <el-empty v-else-if="!operationLoading" description="暂无可配置的操作权限" :image-size="60" />
         </div>
         </div>
@@ -515,38 +560,51 @@ const bizPermissionGroups = computed(() => {
 // ===== 方案A：Tab 整合 =====
 const activeTab = ref<'scope' | 'module' | 'operation' | 'preview'>('scope')
 
-/** 菜单 perms 前缀与业务权限点 domain 归并到统一业务域（中文标签）。 */
-const UNIFIED_DOMAIN_LABELS: Record<string, string> = {
-  // 菜单 perms 前缀
-  system: '系统与组织', org: '系统与组织', log: '系统与组织', monitor: '系统与组织', tool: '系统与组织',
-  crm: '客户与销售', sales: '客户与销售',
-  finance: '财务与收款',
-  hrm: '人事行政', workflow: '审批流程', supply: '渠道与供应链',
-  report: '报表与分析', file: '文件知识库', message: '内部沟通',
-  dashboard: '工作台', profile: '工作台', project: '项目任务',
+/** 业务域导航（域导航式操作权限） */
+const OPERATION_DOMAINS: Array<{ key: string; label: string; icon: string }> = [
+  { key: 'hr', label: '人事行政', icon: '👥' },
+  { key: 'order', label: '订单合同', icon: '📄' },
+  { key: 'finance', label: '财务与收款', icon: '💰' },
+  { key: 'crm', label: '客户与销售', icon: '🤝' },
+  { key: 'file', label: '文件与报表', icon: '📁' },
+  { key: 'system', label: '系统与组织', icon: '⚙️' },
+  { key: 'other', label: '其他业务', icon: '📦' }
+]
+
+/** 菜单 perms 前缀与业务权限点 domain 归并到统一业务域 key。 */
+const OPERATION_DOMAIN_KEY: Record<string, string> = {
   // 业务权限点 domain
-  hr: '人事行政', order: '订单合同', contract: '订单合同', review: '订单合同',
-  analysis: '报表与分析', seal: '印章工商', gs: '印章工商',
-  channel: '渠道与供应链', feige: '飞哥业务'
+  hr: 'hr', order: 'order', contract: 'order', review: 'order',
+  finance: 'finance', crm: 'crm',
+  file: 'file', report: 'file', analysis: 'file',
+  system: 'system',
+  seal: 'other', gs: 'other', channel: 'other', workflow: 'other', dashboard: 'other', feige: 'other',
+  // 菜单 perms 前缀
+  hrm: 'hr', org: 'system', log: 'system', monitor: 'system', tool: 'system',
+  sales: 'crm', supply: 'other', message: 'file', profile: 'other', project: 'other'
 }
 
-/** 操作权限统一分组：菜单按钮 + 业务权限点混排，带 source 标记。 */
-const unifiedOperationGroups = computed(() => {
-  const groups = new Map<string, { key: string; label: string; items: Array<{ uid: string; source: 'menu' | 'biz'; id: number; label: string; code: string }> }>()
-  const push = (rawKey: string, item: { uid: string; source: 'menu' | 'biz'; id: number; label: string; code: string }) => {
-    const key = rawKey || 'other'
-    const label = UNIFIED_DOMAIN_LABELS[key] || key
-    if (!groups.has(key)) groups.set(key, { key, label, items: [] })
-    groups.get(key)!.items.push(item)
-  }
-  operationItems.value.forEach((m) => push(m.perms.split(':')[0], {
-    uid: `menu-${m.id}`, source: 'menu', id: m.id, label: m.menuName, code: m.perms
-  }))
-  bizPermissionList.value.forEach((p) => push(p.domain, {
-    uid: `biz-${p.id}`, source: 'biz', id: Number(p.id), label: String(p.name || ''), code: String(p.code || '')
-  }))
-  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label))
+/** 每个业务域下的：业务权限点(biz) + 菜单按钮(menu)。 */
+const operationDomainData = computed(() => {
+  const map = new Map<string, { key: string; label: string; icon: string; biz: any[]; menu: any[] }>()
+  OPERATION_DOMAINS.forEach((d) => map.set(d.key, { ...d, biz: [], menu: [] }))
+  bizPermissionList.value.forEach((p) => {
+    const key = OPERATION_DOMAIN_KEY[p.domain] || 'other'
+    map.get(key)?.biz.push(p)
+  })
+  operationItems.value.forEach((m) => {
+    const key = OPERATION_DOMAIN_KEY[m.perms.split(':')[0]] || 'other'
+    map.get(key)?.menu.push(m)
+  })
+  return [...map.values()].filter((d) => d.biz.length || d.menu.length)
 })
+
+const activeOperationDomain = ref<string>(OPERATION_DOMAINS[0].key)
+
+function domainCheckedCount(d: { biz: any[]; menu: any[] }): number {
+  return d.biz.filter((p) => checkedBizPermissionIds.value.has(Number(p.id))).length
+    + d.menu.filter((m) => checkedPermissionIds.value.has(m.id)).length
+}
 
 function isOperationOn(item: { source: 'menu' | 'biz'; id: number }): boolean {
   return item.source === 'menu'
@@ -1372,6 +1430,174 @@ async function save() {
   color: var(--el-text-color-primary);
   font-weight: 500;
 }
+
+/* ===== 操作权限 · 域导航式 ===== */
+.rp-op-layout {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.rp-op-nav {
+  width: 180px;
+  flex-shrink: 0;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  overflow: hidden;
+  position: sticky;
+  top: 8px;
+}
+
+.rp-op-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
+  font-size: 13px;
+  transition: background 0.12s ease;
+}
+
+.rp-op-nav-item:last-child { border-bottom: none; }
+.rp-op-nav-item:hover { background: #f2f7ff; }
+
+.rp-op-nav-item.active {
+  background: #e8f3ff;
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.rp-op-nav-icon { font-size: 14px; line-height: 1; }
+.rp-op-nav-name { flex: 1; }
+
+.rp-op-nav-cnt {
+  font-size: 11px;
+  background: var(--el-color-primary-light-9, #f2f7ff);
+  color: var(--el-color-primary);
+  padding: 0 7px;
+  line-height: 17px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.rp-op-nav-item.active .rp-op-nav-cnt { background: #fff; }
+
+.rp-op-body { flex: 1; min-width: 0; }
+
+.rp-op-subhead {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  letter-spacing: 0.03em;
+  margin: 2px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rp-op-subhead::after { content: ''; flex: 1; height: 1px; background: var(--el-border-color-extra-light); }
+
+.rp-op-subn {
+  font-size: 10px;
+  background: var(--el-color-primary-light-9, #f2f7ff);
+  color: var(--el-color-primary);
+  padding: 0 7px;
+  line-height: 16px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.rp-op-bizgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.rp-op-bizcard {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1.5px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.13s ease;
+}
+
+.rp-op-bizcard:hover { border-color: var(--el-color-primary-light-5); }
+.rp-op-bizcard.on { border-color: var(--el-color-primary); background: #f7faff; }
+
+.rp-op-bizname { font-size: 13px; font-weight: 600; color: var(--el-text-color-primary); }
+.rp-op-bizcard.on .rp-op-bizname { color: var(--el-color-primary); }
+
+.rp-op-bizcode {
+  font-family: JetBrains Mono, Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--el-text-color-secondary);
+  margin-top: 3px;
+  word-break: break-all;
+}
+
+.rp-op-menulist {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rp-op-menurow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
+  cursor: pointer;
+  font-size: 12.5px;
+  transition: background 0.12s ease;
+}
+
+.rp-op-menurow:last-child { border-bottom: none; }
+.rp-op-menurow:hover { background: #f7faff; }
+.rp-op-menurow.on { background: #f7faff; }
+
+.rp-op-menuname { flex: 1; color: var(--el-text-color-primary); }
+.rp-op-menucode {
+  font-family: JetBrains Mono, Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 通用勾选框视觉 */
+.rp-op-cb {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 4px;
+  flex-shrink: 0;
+  position: relative;
+  margin-top: 1px;
+  transition: all 0.13s ease;
+}
+
+.rp-op-bizcard.on .rp-op-cb,
+.rp-op-menurow.on .rp-op-cb {
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+}
+
+.rp-op-bizcard.on .rp-op-cb::after,
+.rp-op-menurow.on .rp-op-cb::after {
+  content: '✓';
+  color: #fff;
+  font-size: 10px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .rp-section-desc { font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 12px; }
 
 /* 数据范围卡片 */

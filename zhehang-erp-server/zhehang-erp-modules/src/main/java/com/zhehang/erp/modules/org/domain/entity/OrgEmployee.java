@@ -47,6 +47,8 @@ public class OrgEmployee extends BaseEntity {
     private Long deptId;
     /** 岗位ID */
     private Long postId;
+    /** 岗位描述(岗位职责/任职要求/工作内容) */
+    private String postDescription;
     /** 入职日期 */
     private LocalDate hireDate;
     /** 真实离职日期 */

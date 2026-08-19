@@ -36,6 +36,9 @@ public class EmployeeDTO {
     @NotNull(message = "岗位不能为空")
     private Long postId;
 
+    /** 岗位描述(岗位职责/任职要求/工作内容) */
+    private String postDescription;
+
     private LocalDate hireDate;
     private LocalDate resignDate;
     private LocalDate regularDate;

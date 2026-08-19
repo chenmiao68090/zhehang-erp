@@ -298,6 +298,18 @@
                   </el-select>
                 </el-form-item>
               </el-col>
+              <el-col :span="24">
+                <el-form-item label="岗位描述">
+                  <el-input
+                    v-model="formData.postDescription"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="岗位职责 / 任职要求 / 工作内容等"
+                    maxlength="500"
+                    show-word-limit
+                  />
+                </el-form-item>
+              </el-col>
               <el-col :span="12">
                 <el-form-item :label="$t('org.hireDate')">
                   <el-date-picker v-model="formData.hireDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -1123,6 +1135,7 @@ const queryParams = reactive({
   name: '',
   deptId: undefined as number | undefined,
   postId: undefined as number | undefined,
+  postDescription: '' as string,
   status: undefined as number | undefined,
   excludeResigned: true
 })

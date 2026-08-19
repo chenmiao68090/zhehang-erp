@@ -16,6 +16,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Global exception handler.
@@ -96,6 +97,19 @@ public class GlobalExceptionHandler {
     public R<?> handleDataIntegrity(DataIntegrityViolationException e, HttpServletRequest request) {
         log.error("DataIntegrityViolation: {} - URI: {}", e.getMostSpecificCause().getMessage(), request.getRequestURI());
         return R.fail(400, "数据保存失败:内容过长或与已有数据冲突,请检查后重试");
+    }
+
+    /**
+     * 请求了不存在的路径。
+     *
+     * <p>旧缓存的前端构建、网络扫描、链接写错都会走到这里。它们不是服务端故障,
+     * 不能当成 500 系统异常连堆栈一起打到 ERROR,否则一个循环轮询的页面就能持续刷满错误日志,
+     * 淹掉真正的告警。这里降为 WARN 单行并如实返回 404。</p>
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public R<?> handleNoResourceFound(NoResourceFoundException e, HttpServletRequest request) {
+        log.warn("请求路径不存在 - URI: {}", request.getRequestURI());
+        return R.fail(404, "请求的接口不存在，请刷新页面后重试");
     }
 
     @ExceptionHandler(Exception.class)

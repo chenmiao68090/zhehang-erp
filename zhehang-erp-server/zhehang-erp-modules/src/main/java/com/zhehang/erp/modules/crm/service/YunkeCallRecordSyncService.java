@@ -154,15 +154,14 @@ public class YunkeCallRecordSyncService {
         platformId = limit(platformId, 64);
         String dialCallId = limit(str(m, "callId"), 64);
 
-        BizCallRecord record = callRecordMapper.selectOne(new LambdaQueryWrapper<BizCallRecord>()
-                .eq(BizCallRecord::getTenantId, tenantId)
-                .eq(BizCallRecord::getPlatformCallId, platformId)
-                .last("limit 1"));
+        // 唯一键只建在 platform_call_id 单列上,必须跨租户探查,否则存量无租户话单查不到却会撞唯一键。
+        BizCallRecord record = findConflictRow(platformId);
         if (record == null && StringUtils.hasText(dialCallId) && !dialCallId.equals(platformId)) {
-            record = callRecordMapper.selectOne(new LambdaQueryWrapper<BizCallRecord>()
-                    .eq(BizCallRecord::getTenantId, tenantId)
-                    .eq(BizCallRecord::getPlatformCallId, dialCallId)
-                    .last("limit 1"));
+            record = findConflictRow(dialCallId);
+        }
+        if (record != null) {
+            UpsertResult rejected = rejectUnwritableRow(tenantId, record, platformId);
+            if (rejected != null) return rejected;
         }
         boolean isNew = record == null;
         if (isNew) record = new BizCallRecord();
@@ -180,7 +179,11 @@ public class YunkeCallRecordSyncService {
         String directionText = directionText(str(m, "direction", "callType", "callWay", "type"));
 
         record.setCallType("platform");
-        record.setTenantId(tenantId);
+        // 只给新记录定租户。存量话单的归属不在同步里静默改写(含 tenant_id 为 NULL 的历史行),
+        // 避免把数据悄悄挂到某个租户名下;归属回填由专门的数据修复脚本显式完成。
+        if (isNew) {
+            record.setTenantId(tenantId);
+        }
         if (!StringUtils.hasText(record.getPlatformCallId())) {
             record.setPlatformCallId(platformId);
         }
@@ -223,11 +226,11 @@ public class YunkeCallRecordSyncService {
                 callRecordMapper.insert(record);
                 return UpsertResult.INSERTED;
             } catch (DuplicateKeyException e) {
-                BizCallRecord existing = callRecordMapper.selectOne(new LambdaQueryWrapper<BizCallRecord>()
-                        .eq(BizCallRecord::getTenantId, tenantId)
-                        .eq(BizCallRecord::getPlatformCallId, platformId)
-                        .last("limit 1"));
+                // 并发兜底:回调与补拉可能同时插同一话单,按同一口径重新找占键的行。
+                BizCallRecord existing = findConflictRow(platformId);
                 if (existing == null) throw e;
+                UpsertResult rejected = rejectUnwritableRow(tenantId, existing, platformId);
+                if (rejected != null) return rejected;
                 record.setId(existing.getId());
                 callRecordMapper.updateById(record);
                 return UpsertResult.UPDATED;
@@ -235,6 +238,34 @@ public class YunkeCallRecordSyncService {
         }
         callRecordMapper.updateById(record);
         return UpsertResult.UPDATED;
+    }
+
+    /** 跨租户+含软删行地找出占用 platform_call_id 唯一键的那一行。 */
+    private BizCallRecord findConflictRow(String platformCallId) {
+        if (!StringUtils.hasText(platformCallId)) return null;
+        return callRecordMapper.selectAnyByPlatformCallId(platformCallId);
+    }
+
+    /**
+     * 判断命中的存量行能不能写。
+     *
+     * @return 非 null 表示必须停手并按该结果计数;null 表示可以继续 upsert
+     */
+    private UpsertResult rejectUnwritableRow(Long tenantId, BizCallRecord existing, String platformId) {
+        if (existing.getDeleted() != null && existing.getDeleted() == 1) {
+            log.info("[云客话单] 命中已删除话单,不复活 platformCallId={}", platformId);
+            return UpsertResult.SKIPPED;
+        }
+        Long owner = existing.getTenantId();
+        if (owner != null && !owner.equals(tenantId)) {
+            log.warn("[云客话单] 话单已归属其他租户,跳过以避免跨租户覆盖 platformCallId={}", platformId);
+            return UpsertResult.SKIPPED;
+        }
+        if (owner == null) {
+            // 存量无租户话单:只补时长/录音等字段,不隐式改写归属,但不能再当新行插入撞唯一键。
+            log.debug("[云客话单] 命中无租户存量话单,转为更新 platformCallId={}", platformId);
+        }
+        return null;
     }
 
     private void removeFailedBatch(YunkeConfig cfg, String batchId) {

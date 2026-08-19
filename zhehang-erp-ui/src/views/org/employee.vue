@@ -281,6 +281,24 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item label="岗位" prop="postId">
+                  <el-select
+                    v-model="formData.postId"
+                    filterable
+                    clearable
+                    placeholder="请选择岗位"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="p in postList"
+                      :key="p.id"
+                      :label="p.postName"
+                      :value="p.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
                 <el-form-item :label="$t('org.hireDate')">
                   <el-date-picker v-model="formData.hireDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
                 </el-form-item>
@@ -1896,6 +1914,7 @@ const handleAdd = async () => {
   dialogTitle.value = t('org.addEmployee')
   formData.value = defaultForm()
   await fillNextEmpCode()
+  if (!postList.value.length) await loadPostList()
   activeTab.value = 'basic'
   dialogVisible.value = true
 }

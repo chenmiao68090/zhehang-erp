@@ -2087,9 +2087,8 @@ const submitForm = async () => {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   try {
-    // 角色关系必须只从「角色管理 → 成员管理」写入。
+    // roleIds 传给后端:本表单与角色管理 → 成员都改同一张 sys_user_role,双向同步
     const payload = { ...formData.value } as Record<string, any>
-    delete payload.roleIds
     delete payload.roleNames
     let response: any
     if (isEdit.value) {

@@ -179,6 +179,13 @@
         <div v-show="activeTab === 'operation'" class="rp-pane">
         <div class="rp-section-title">③ 可使用的操作</div>
         <div class="rp-section-desc">按业务域组织：业务权限点（跨页面的业务动作，如审批/看薪酬）在上，菜单按钮权限（页面按钮）在下。</div>
+        <el-alert
+          class="rp-op-notice"
+          title="业务权限点当前处于「登记阶段」，勾选暂不影响实际权限（后续逐步接入生效）"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
         <div class="rp-operation-box" v-loading="operationLoading">
           <el-alert
             v-if="readonly"
@@ -218,6 +225,7 @@
                     <div class="rp-op-subhead">
                       业务操作权限点
                       <span class="rp-op-subn">{{ d.biz.filter(isOperationOn).length }}/{{ d.biz.length }}</span>
+                      <span class="rp-op-pending">待接入</span>
                     </div>
                     <div class="rp-op-bizgrid">
                       <div
@@ -1502,6 +1510,21 @@ async function save() {
   font-size: 10px;
   background: var(--el-color-primary-light-9, #f2f7ff);
   color: var(--el-color-primary);
+  padding: 0 7px;
+  line-height: 16px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.rp-op-notice {
+  margin-bottom: 12px;
+}
+
+.rp-op-pending {
+  font-size: 10px;
+  background: #fff7e8;
+  color: #ff7d00;
+  border: 1px solid #ffd591;
   padding: 0 7px;
   line-height: 16px;
   border-radius: 999px;

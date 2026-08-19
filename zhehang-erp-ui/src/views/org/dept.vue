@@ -42,6 +42,11 @@
             <el-icon><Plus /></el-icon>
           </el-button>
         </div>
+        <div class="all-entry" :class="{ on: !currentDept }" @click="currentDept = null">
+          <el-icon><UserFilled /></el-icon>
+          <span>全部成员</span>
+          <em>{{ allEmployees.length }}</em>
+        </div>
         <el-input v-model="treeFilter" :placeholder="$t('org.searchDept')" clearable class="tree-filter" />
         <el-tree
           ref="treeRef"
@@ -76,10 +81,10 @@
         </button>
       </div>
 
-      <!-- 右侧详情 -->
+      <!-- 右侧：成员列表（通讯录式） -->
       <div class="dept-detail-panel">
+        <!-- 单个部门视角 -->
         <template v-if="currentDept">
-          <!-- 定稿版:部门主页卡 -->
           <div class="dm-hero">
             <span class="dm-hero-avatar">{{ (currentDept.deptName || '部').slice(0, 1) }}</span>
             <div class="dm-hero-main">
@@ -93,8 +98,7 @@
                 <span v-if="currentDept.leader" class="dt-pill">负责人 {{ currentDept.leader }}</span>
                 <span v-else class="dt-pill warn dm-clickable" @click="handleEdit(currentDept)">⚠ 未设负责人,点此设置</span>
                 <span class="dt-pill">直属 {{ currentDeptMembers.length }} 人</span>
-                <span class="dt-pill">含下级 {{ subtreeMemberCount(currentDept) }} 人</span>
-                <span v-if="descNoLeaderCount" class="dt-pill warn">⚠ {{ descNoLeaderCount }} 个下级未设负责人</span>
+                <span v-if="currentDept.children?.length" class="dt-pill">含下级 {{ subtreeMemberCount(currentDept) }} 人</span>
               </div>
             </div>
             <div class="detail-actions">
@@ -106,78 +110,66 @@
             </div>
           </div>
 
-          <!-- 定稿版:按部门分组的成员花名册 -->
           <div class="dm-roster-bar">
-            <strong>成员花名册</strong>
-            <el-radio-group v-model="rosterMode" size="small">
-              <el-radio-button value="all">全部 {{ subtreeMemberCount(currentDept) }}</el-radio-button>
-              <el-radio-button value="direct">仅直属 {{ currentDeptMembers.length }}</el-radio-button>
-            </el-radio-group>
-            <small>按部门分组 · 点组头可收起</small>
+            <el-input v-model="memberSearch" placeholder="搜索姓名 / 岗位 / 手机号" clearable :prefix-icon="Search" class="dm-search" />
+            <el-checkbox v-if="currentDept.children?.length" v-model="includeSubtree">含下级部门</el-checkbox>
           </div>
 
           <div class="dm-roster">
-            <div class="dm-gh">
-              <span class="dm-gh-name">本级直属</span>
-              <span class="dm-gh-cnt">{{ currentDeptMembers.length }} 人</span>
-              <span class="dm-gh-ops"><a @click="openMemberDialog()">+ 加人</a></span>
-            </div>
-            <template v-if="currentDeptMembers.length">
-              <div v-for="member in currentDeptMembers" :key="member.id" class="dm-mr">
-                <el-avatar :size="30" :src="member.avatar || ''">{{ employeeInitial(member) }}</el-avatar>
-                <div class="dm-mr-main">
-                  <strong>{{ member.name || member.username || '未命名' }}<em v-if="member.name && member.name === currentDept.leader" class="dm-star">★ 负责人</em></strong>
-                  <span>{{ member.phone || '无手机号' }}</span>
-                </div>
-                <div class="dm-mr-tail">
-                  <el-tag size="small" effect="plain" :type="member.status === 1 ? 'success' : 'info'">{{ employeeStatusText(member.status) }}</el-tag>
-                  <a class="dm-op" @click="goEmployeePage()">调整</a>
-                </div>
+            <div v-for="member in filteredMemberRows" :key="member.id" class="dm-mr">
+              <el-avatar :size="34" :src="member.avatar || ''">{{ employeeInitial(member) }}</el-avatar>
+              <div class="dm-mr-main">
+                <strong>
+                  {{ member.name || member.username || '未命名' }}
+                  <em v-if="member.name && member.name === currentDept.leader" class="dm-star">★ 负责人</em>
+                </strong>
+                <span>
+                  {{ member.postName || '未设岗位' }}
+                  <template v-if="includeSubtree && member.deptName"> · {{ member.deptName }}</template>
+                </span>
               </div>
-            </template>
-            <div v-else class="dm-empty">本级暂无直属成员,点上方「+ 加人」调人进来</div>
+              <div class="dm-mr-mid">{{ member.phone || '—' }}</div>
+              <div class="dm-mr-tail">
+                <el-tag size="small" effect="plain" :type="member.status === 1 ? 'success' : 'info'">{{ employeeStatusText(member.status) }}</el-tag>
+                <a class="dm-op" @click="goEmployeePage()">调整</a>
+              </div>
+            </div>
+            <div v-if="!filteredMemberRows.length" class="dm-empty">暂无成员,点右上「添加成员」调人进来</div>
+          </div>
+        </template>
 
-            <template v-if="rosterMode === 'all'">
-              <template v-for="child in currentChildren" :key="child.id">
-                <div class="dm-gh dm-gh-child" :class="{ warn: !child.leader }" @click="toggleGroup(child.id)">
-                  <span class="dm-gh-name">{{ groupExpanded[child.id] ? '▾' : '▸' }} {{ child.deptName }}</span>
-                  <span class="dm-gh-cnt">
-                    <template v-if="child.leader">负责人 {{ child.leader }} · {{ deptMemberCount(child.id) }} 人</template>
-                    <template v-else>⚠ 未设负责人 · {{ deptMemberCount(child.id) }} 人</template>
-                    <template v-if="child.children?.length"> · 下级 {{ child.children.length }}</template>
-                  </span>
-                  <span class="dm-gh-ops" @click.stop>
-                    <a v-if="!child.leader" class="dm-warn-op" @click="handleEdit(child)">设负责人</a>
-                    <a @click="openMemberDialog(child)">+ 加人</a>
-                    <a @click="handleNodeClick(child)">进入 ›</a>
-                  </span>
-                </div>
-                <template v-if="groupExpanded[child.id]">
-                  <div v-for="member in (membersByDept[child.id] || [])" :key="member.id" class="dm-mr">
-                    <el-avatar :size="30" :src="member.avatar || ''">{{ employeeInitial(member) }}</el-avatar>
-                    <div class="dm-mr-main">
-                      <strong>{{ member.name || member.username || '未命名' }}<em v-if="member.name && member.name === child.leader" class="dm-star">★ 负责人</em></strong>
-                      <span>{{ member.phone || '无手机号' }}</span>
-                    </div>
-                    <div class="dm-mr-tail">
-                      <el-tag size="small" effect="plain" :type="member.status === 1 ? 'success' : 'info'">{{ employeeStatusText(member.status) }}</el-tag>
-                      <a class="dm-op" @click="goEmployeePage()">调整</a>
-                    </div>
-                  </div>
-                  <div v-if="!(membersByDept[child.id] || []).length" class="dm-empty">该部门暂无直属成员</div>
-                </template>
-              </template>
-            </template>
-
-            <div v-if="rosterMode === 'all' && currentChildren.length" class="dm-foot">
-              <span v-if="collapsedGroupCount">已收起 {{ collapsedGroupCount }} 个部门 · <a @click="expandAllGroups(true)">全部展开</a></span>
-              <span v-else><a @click="expandAllGroups(false)">全部收起</a></span>
-              <span class="dm-foot-hint">在「组织架构」视图拖动卡片可调整部门上级</span>
+        <!-- 全部成员视角 -->
+        <template v-else>
+          <div class="dm-hero">
+            <span class="dm-hero-avatar all"><el-icon><UserFilled /></el-icon></span>
+            <div class="dm-hero-main">
+              <div class="dm-hero-title"><h3>全部成员</h3></div>
+              <div class="dm-hero-pills">
+                <span class="dt-pill">共 {{ allEmployees.length }} 人</span>
+              </div>
             </div>
           </div>
 
+          <div class="dm-roster-bar">
+            <el-input v-model="memberSearch" placeholder="搜索姓名 / 岗位 / 部门 / 手机号" clearable :prefix-icon="Search" class="dm-search" />
+          </div>
+
+          <div class="dm-roster">
+            <div v-for="member in filteredMemberRows" :key="member.id" class="dm-mr">
+              <el-avatar :size="34" :src="member.avatar || ''">{{ employeeInitial(member) }}</el-avatar>
+              <div class="dm-mr-main">
+                <strong>{{ member.name || member.username || '未命名' }}</strong>
+                <span>{{ member.postName || '未设岗位' }}</span>
+              </div>
+              <div class="dm-mr-mid"><span class="dt-pill">{{ member.deptName || '未分部门' }}</span></div>
+              <div class="dm-mr-tail">
+                <el-tag size="small" effect="plain" :type="member.status === 1 ? 'success' : 'info'">{{ employeeStatusText(member.status) }}</el-tag>
+                <a class="dm-op" @click="goEmployeePage()">调整</a>
+              </div>
+            </div>
+            <div v-if="!filteredMemberRows.length" class="dm-empty">暂无成员</div>
+          </div>
         </template>
-        <el-empty v-else :description="$t('org.selectDeptTip')" />
       </div>
     </div>
 
@@ -286,7 +278,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, reactive, ref, watch, type PropType } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
-import { Plus, Edit, Delete, OfficeBuilding, UserFilled } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, OfficeBuilding, UserFilled, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { deptApi, employeeApi } from '@/api/org'
 
@@ -429,33 +421,35 @@ const handleChartOpen = (data: any) => {
   deptView.value = 'manage'
 }
 
-// ===== 定稿版:主页卡 + 按部门分组花名册 =====
+// ===== 通讯录式:成员搜索 + 含下级 =====
 const router = useRouter()
-const rosterMode = ref<'all' | 'direct'>('all')
-const groupExpanded = ref<Record<number, boolean>>({})
-const currentChildren = computed(() => (currentDept.value?.children || []) as any[])
+const memberSearch = ref('')
+const includeSubtree = ref(false)
 /** 子树(含自身)总人数 */
 const subtreeMemberCount = (dept: any): number =>
   flattenDepts([dept]).reduce((sum: number, d: any) => sum + deptMemberCount(d.id), 0)
-/** 当前部门全部下级里未设负责人的个数(不含自身) */
-const descNoLeaderCount = computed(() =>
-  flattenDepts(currentDept.value?.children || []).filter((d: any) => !d.leader).length)
-const collapsedGroupCount = computed(() =>
-  currentChildren.value.filter((c: any) => !groupExpanded.value[c.id]).length)
-const toggleGroup = (id: number) => {
-  groupExpanded.value[id] = !groupExpanded.value[id]
-}
-const expandAllGroups = (open: boolean) => {
-  const map: Record<number, boolean> = {}
-  currentChildren.value.forEach((c: any) => { map[c.id] = open })
-  groupExpanded.value = map
-}
-// 切换部门时:默认展开前 3 个下级分组,其余收起,回到「全部」视角
-watch(currentDept, (dept) => {
-  const map: Record<number, boolean> = {}
-  ;(dept?.children || []).forEach((c: any, i: number) => { map[c.id] = i < 3 })
-  groupExpanded.value = map
-  rosterMode.value = 'all'
+/** 当前要展示的成员:全部 / 直属 / 含下级 */
+const memberRows = computed(() => {
+  if (!currentDept.value?.id) return allEmployees.value
+  if (includeSubtree.value) {
+    const ids = flattenDepts([currentDept.value]).map((d: any) => d.id)
+    return allEmployees.value.filter((e: any) => ids.includes(Number(e.deptId)))
+  }
+  return currentDeptMembers.value
+})
+/** 搜索过滤 */
+const filteredMemberRows = computed(() => {
+  const q = memberSearch.value.trim()
+  if (!q) return memberRows.value
+  return memberRows.value.filter((e: any) =>
+    (e.name || '').includes(q) || (e.username || '').includes(q) ||
+    (e.postName || '').includes(q) || (e.phone || '').includes(q) ||
+    (e.deptName || '').includes(q))
+})
+// 切换部门时重置搜索与含下级
+watch(currentDept, () => {
+  memberSearch.value = ''
+  includeSubtree.value = false
 })
 /** 成员行「调整」= 去员工与账号页(那里是改人的地方) */
 const goEmployeePage = () => router.push('/sys-org/employee')
@@ -886,6 +880,7 @@ loadEmployees()
   font-weight: 600;
   flex: none;
 }
+.dm-hero-avatar.all { background: #eef2f7; color: #475569; }
 .dm-hero-main { flex: 1; min-width: 0; }
 .dm-hero-title { display: flex; align-items: center; gap: 8px; }
 .dm-hero-title h3 { margin: 0; font-size: 16px; font-weight: 600; color: #1f2937; }
@@ -899,6 +894,7 @@ loadEmployees()
 }
 .dm-roster-bar strong { font-size: 14px; color: #1f2937; }
 .dm-roster-bar small { margin-left: auto; color: #94a3b8; font-size: 11.5px; }
+.dm-search { width: 280px; }
 .dm-roster { border: 1px solid #eef2f7; border-radius: 12px; overflow: hidden; background: #ffffff; }
 .dm-gh {
   display: flex;
@@ -922,17 +918,19 @@ loadEmployees()
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 16px 9px 28px;
+  padding: 10px 16px;
   border-top: 1px solid #f1f5f9;
   font-size: 13px;
 }
+.dm-mr:hover { background: #f8fafc; }
+.dm-mr-mid { width: 150px; flex: none; color: #64748b; font-size: 12px; }
 .dm-mr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .dm-mr-main strong { font-size: 13px; color: #1f2937; font-weight: 500; }
 .dm-mr-main span { font-size: 11.5px; color: #94a3b8; }
 .dm-star { font-style: normal; color: #b97a12; font-size: 11px; margin-left: 6px; }
 .dm-mr-tail { display: flex; align-items: center; gap: 10px; }
 .dm-op { color: var(--el-color-primary); font-size: 12px; cursor: pointer; }
-.dm-empty { padding: 8px 16px 8px 28px; border-top: 1px solid #f1f5f9; color: #94a3b8; font-size: 12px; }
+.dm-empty { padding: 24px 16px; border-top: 1px solid #f1f5f9; color: #94a3b8; font-size: 12px; text-align: center; }
 .dm-foot {
   display: flex;
   align-items: center;
@@ -975,6 +973,22 @@ loadEmployees()
 .tree-filter {
   margin-bottom: 12px;
 }
+.all-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  margin-bottom: 10px;
+  border: 1px solid transparent;
+}
+.all-entry:hover { background: #f1f5f9; }
+.all-entry.on { background: #e6f1fb; color: #0c447c; font-weight: 600; border-color: #b5d4f4; }
+.all-entry em { margin-left: auto; font-style: normal; font-size: 11px; color: #94a3b8; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 999px; padding: 0 8px; line-height: 16px; }
+.all-entry.on em { background: #fff; border-color: #b5d4f4; color: #185fa5; }
 .tree-node {
   flex: 1;
   min-width: 0;

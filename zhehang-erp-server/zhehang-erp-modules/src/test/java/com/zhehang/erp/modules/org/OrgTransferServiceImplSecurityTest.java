@@ -61,7 +61,7 @@ class OrgTransferServiceImplSecurityTest {
         OrgTransferMapper transferMapper = mock(OrgTransferMapper.class);
         OrgEmployeeMapper employeeMapper = mock(OrgEmployeeMapper.class);
         DataScopeHelper dataScopeHelper = mock(DataScopeHelper.class);
-        when(dataScopeHelper.isHrAdminOrBoss()).thenReturn(true);
+        when(dataScopeHelper.hasPerm("hr:employee:view_all")).thenReturn(true);
         when(employeeMapper.selectById(99L)).thenReturn(employee());
         TransferDTO dto = new TransferDTO();
         dto.setEmployeeId(99L);

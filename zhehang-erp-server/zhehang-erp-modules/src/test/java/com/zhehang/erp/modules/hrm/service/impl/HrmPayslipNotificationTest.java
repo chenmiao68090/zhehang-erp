@@ -38,7 +38,7 @@ class HrmPayslipNotificationTest {
         employeeMapper = mock(OrgEmployeeMapper.class);
         publisher = mock(ImBusinessNotificationPublisher.class);
         service = new HrmPayslipServiceImpl(payslipMapper, dataScopeHelper, employeeMapper, publisher);
-        when(dataScopeHelper.isHrAdminOrBoss()).thenReturn(true);
+        when(dataScopeHelper.hasPerm("hr:salary:manage")).thenReturn(true);
     }
 
     @Test

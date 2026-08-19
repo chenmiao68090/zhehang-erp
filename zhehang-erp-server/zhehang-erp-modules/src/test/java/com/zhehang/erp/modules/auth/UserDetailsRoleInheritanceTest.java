@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.modules.auth.service.UserDetailsServiceImpl;
 import com.zhehang.erp.modules.system.domain.entity.SysUser;
+import com.zhehang.erp.modules.system.mapper.SysPermissionMapper;
 import com.zhehang.erp.modules.system.mapper.SysUserMapper;
 import com.zhehang.erp.security.domain.LoginUser;
 import com.zhehang.erp.security.service.TokenService;
@@ -43,7 +44,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectMinDataScopeByUserId(21L)).thenReturn(5);
         when(mapper.selectPermsByUserId(21L)).thenReturn(Collections.emptyList());
 
-        LoginUser result = (LoginUser) new UserDetailsServiceImpl(mapper, tokenService)
+        LoginUser result = (LoginUser) userDetailsService(mapper, tokenService)
                 .loadUserByUsername("owner-copy");
 
         assertFalse(result.isAdmin());
@@ -69,7 +70,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectRoleKeysByUserId(22L)).thenReturn(List.of("super_admin"));
         when(mapper.selectPermsByUserId(22L)).thenReturn(Collections.emptyList());
 
-        LoginUser result = (LoginUser) new UserDetailsServiceImpl(mapper, tokenService)
+        LoginUser result = (LoginUser) userDetailsService(mapper, tokenService)
                 .loadUserByUsername("platform-admin");
 
         assertTrue(result.isAdmin());
@@ -89,7 +90,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectMinDataScopeByUserId(25L)).thenReturn(3);
         when(mapper.selectPermsByUserId(25L)).thenReturn(List.of("dashboard:view"));
 
-        LoginUser result = (LoginUser) new UserDetailsServiceImpl(mapper, tokenService)
+        LoginUser result = (LoginUser) userDetailsService(mapper, tokenService)
                 .loadUserByUsername("legacy-manager");
 
         assertFalse(result.isAdmin());
@@ -109,7 +110,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectMinDataScopeByUserId(26L)).thenReturn(5);
         when(mapper.selectPermsByUserId(26L)).thenReturn(Collections.emptyList());
 
-        LoginUser result = (LoginUser) new UserDetailsServiceImpl(mapper, tokenService)
+        LoginUser result = (LoginUser) userDetailsService(mapper, tokenService)
                 .loadUserByUsername("admin");
 
         assertFalse(result.isAdmin());
@@ -125,7 +126,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(user);
 
         assertThrows(UsernameNotFoundException.class,
-                () -> new UserDetailsServiceImpl(mapper, tokenService)
+                () -> userDetailsService(mapper, tokenService)
                         .loadUserByUsername("null-status"));
 
         verify(tokenService, never()).captureAuthVersion(any(LoginUser.class));
@@ -139,7 +140,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(user);
 
         assertThrows(UsernameNotFoundException.class,
-                () -> new UserDetailsServiceImpl(mapper, tokenService)
+                () -> userDetailsService(mapper, tokenService)
                         .loadUserByUsername("unknown-status"));
 
         verify(tokenService, never()).captureAuthVersion(any(LoginUser.class));
@@ -154,7 +155,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.existsResignedEmployee(25L, 1L)).thenReturn(true);
 
         assertThrows(UsernameNotFoundException.class,
-                () -> new UserDetailsServiceImpl(mapper, tokenService)
+                () -> userDetailsService(mapper, tokenService)
                         .loadUserByUsername("resigned-user"));
 
         verify(mapper).existsResignedEmployee(25L, 1L);
@@ -174,7 +175,7 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectMinDataScopeByUserId(31L)).thenReturn(4);
         when(mapper.selectPermsByUserId(31L)).thenReturn(List.of("crm:lead:list", "crm:lead:query"));
 
-        LoginUser result = new UserDetailsServiceImpl(mapper, tokenService)
+        LoginUser result = userDetailsService(mapper, tokenService)
                 .loadActiveUserForImpersonation(31L, 1L);
 
         assertEquals(31L, result.getUserId());
@@ -199,16 +200,21 @@ class UserDetailsRoleInheritanceTest {
         when(mapper.selectActiveForImpersonation(32L, 1L)).thenReturn(null);
 
         assertThrows(BusinessException.class,
-                () -> new UserDetailsServiceImpl(mapper, tokenService)
+                () -> userDetailsService(mapper, tokenService)
                         .loadActiveUserForImpersonation(32L, 1L));
         assertThrows(BusinessException.class,
-                () -> new UserDetailsServiceImpl(mapper, tokenService)
+                () -> userDetailsService(mapper, tokenService)
                         .loadActiveUserForImpersonation(1L, 1L));
         assertThrows(BusinessException.class,
-                () -> new UserDetailsServiceImpl(mapper, tokenService)
+                () -> userDetailsService(mapper, tokenService)
                         .loadActiveUserForImpersonation(3L, 1L));
 
         verify(tokenService, never()).captureAuthVersion(any(LoginUser.class));
+    }
+
+    /** 业务权限点在本用例中不参与断言，用空 mock 保持“只看菜单权限与角色继承”的原有口径。 */
+    private UserDetailsServiceImpl userDetailsService(SysUserMapper mapper, TokenService tokenService) {
+        return new UserDetailsServiceImpl(mapper, mock(SysPermissionMapper.class), tokenService);
     }
 
     private SysUser loginCandidate(Long id, String username, Integer status) {

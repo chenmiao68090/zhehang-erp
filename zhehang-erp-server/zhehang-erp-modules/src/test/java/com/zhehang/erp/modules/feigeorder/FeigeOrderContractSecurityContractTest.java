@@ -61,8 +61,7 @@ class FeigeOrderContractSecurityContractTest {
 
     @Test
     void serviceEnforcesDataScopeAndDoesNotDoubleSubtractCompletedRefunds() throws Exception {
-        Path source = Path.of("src/main/java/com/zhehang/erp/modules/feigeorder/service/FeigeOrderContractService.java");
-        String text = Files.readString(source);
+        String text = feigeOrderServiceSources();
 
         assertTrue(text.contains("dataScopeHelper.applyFinancial"));
         assertTrue(text.contains("dataScopeHelper.canAccess("));
@@ -73,8 +72,7 @@ class FeigeOrderContractSecurityContractTest {
 
     @Test
     void sealOrdersCannotCreateASecondFeigeFact() throws Exception {
-        Path source = Path.of("src/main/java/com/zhehang/erp/modules/feigeorder/service/FeigeOrderContractService.java");
-        String text = Files.readString(source);
+        String text = feigeOrderServiceSources();
 
         assertTrue(text.contains("rejectSealOrderCreation(request);"));
         assertTrue(text.contains("BUSINESS_TYPE_SEAL = \"seal\""));
@@ -101,5 +99,20 @@ class FeigeOrderContractSecurityContractTest {
             assertTrue(migration.contains(table));
         }
         assertFalse(migration.matches("(?s).*(ALTER|UPDATE|DELETE FROM|INSERT INTO)\\s+(biz_|crm_|sys_).*"));
+    }
+
+    /**
+     * 飞哥版订单/合同已从单个巨型 Service 拆分为订单、审核、合同、退费四个领域 Service，
+     * 数据范围与刻章口径的红线因此按整个 service 包校验，避免拆分后红线漂移出检查范围。
+     */
+    private static String feigeOrderServiceSources() throws Exception {
+        Path serviceDir = Path.of("src/main/java/com/zhehang/erp/modules/feigeorder/service");
+        StringBuilder text = new StringBuilder();
+        try (var files = Files.list(serviceDir)) {
+            for (Path source : files.filter(path -> path.toString().endsWith(".java")).sorted().toList()) {
+                text.append(Files.readString(source)).append('\n');
+            }
+        }
+        return text.toString();
     }
 }

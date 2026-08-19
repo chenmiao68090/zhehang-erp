@@ -12,8 +12,7 @@ class FeigeOrderStateMachineV207ContractTest {
 
     @Test
     void orderLifecycleEmitsBridgeEventsAndClosesBypassTransitions() throws Exception {
-        String source = Files.readString(Path.of(
-                "src/main/java/com/zhehang/erp/modules/feigeorder/service/FeigeOrderContractService.java"));
+        String source = feigeOrderServiceSources();
 
         assertTrue(source.contains("enqueueTaskBridge(order, FeigeOrderTaskBridgeService.ORDER_CREATED)"));
         assertTrue(source.contains("enqueueTaskBridge(order, FeigeOrderTaskBridgeService.FINANCE_APPROVED)"));
@@ -43,5 +42,19 @@ class FeigeOrderStateMachineV207ContractTest {
         assertTrue(migration.contains("uk_feige_contract_active_order"));
         assertTrue(migration.contains("contract_status IN ('draft', 'executing')"));
         assertFalse(migration.matches("(?s).*(ALTER|UPDATE|DELETE FROM|INSERT INTO)\\s+(biz_|crm_|sys_).*"));
+    }
+
+    /**
+     * 订单状态机已分布在订单、审核、合同、退费四个领域 Service 中，按整个 service 包校验状态转换口径。
+     */
+    private static String feigeOrderServiceSources() throws Exception {
+        Path serviceDir = Path.of("src/main/java/com/zhehang/erp/modules/feigeorder/service");
+        StringBuilder text = new StringBuilder();
+        try (var files = Files.list(serviceDir)) {
+            for (Path source : files.filter(path -> path.toString().endsWith(".java")).sorted().toList()) {
+                text.append(Files.readString(source)).append('\n');
+            }
+        }
+        return text.toString();
     }
 }

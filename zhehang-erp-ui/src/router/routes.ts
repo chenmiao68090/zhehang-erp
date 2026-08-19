@@ -163,7 +163,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   { path: '/crm/contract', redirect: '/feige-order-contract/contracts', meta: { hidden: true } },
   { path: '/contract', redirect: '/feige-order-contract/contracts', meta: { hidden: true } },
   { path: '/contract/index', redirect: '/feige-order-contract/contracts', meta: { hidden: true } },
-  { path: '/seal/registration', redirect: '/order/seal-order', meta: { hidden: true } },
+  { path: '/seal/registration', redirect: '/seal/order', meta: { hidden: true } },
   // V238 旧提单系统已退役,旧订单入口统一落到飞哥订单。
   { path: '/sales/order', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
   ...orderDeepLinkRoutes,

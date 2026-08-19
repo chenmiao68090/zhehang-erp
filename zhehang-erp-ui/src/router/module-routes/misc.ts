@@ -77,6 +77,17 @@ export const sealRoutes: RouteRecordRaw[] = [
     meta: { title: '刻章业务', icon: 'Stamp', roles: ['admin', 'boss', 'manager', 'finance', 'finance_hq'] },
     children: [
       { path: 'board', name: 'SealBoard', component: () => import('@/views/seal/board.vue'), meta: { title: '印章业务看板', icon: 'Odometer' } },
+      // V239 刻章提单从旧提单中心迁回印章体系,路径与后端 API /seal/order 对齐。
+      {
+        path: 'order',
+        name: 'SealOrderSubmit',
+        component: () => import('@/views/seal/registration.vue'),
+        meta: {
+          title: '刻章提单',
+          icon: 'Document',
+          roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq', 'sales', 'online_sales']
+        }
+      },
       { path: 'inventory', name: 'SealInventory', component: () => import('@/views/seal/inventory.vue'), meta: { title: '库存与采购', icon: 'Box' } },
       { path: 'partner', name: 'SealPartner', component: () => import('@/views/partner/index.vue'), meta: { title: '长期合作客户', icon: 'Star' } },
       { path: 'new-sign', name: 'SealNewSign', component: () => import('@/views/seal/new-sign.vue'), meta: { title: '新签客户数据', icon: 'DataLine' } },

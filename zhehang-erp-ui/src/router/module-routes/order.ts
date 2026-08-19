@@ -23,19 +23,21 @@ export const orderRoutes: RouteRecordRaw[] = [
     redirect: '/feige-order-contract/orders',
     meta: { title: '提单中心', icon: 'Tickets', hidden: true, roles: ['admin', 'boss', 'manager', 'dept_manager', 'finance', 'finance_hq', 'sales', 'online_sales'] },
     children: [
-      // —— 已上线的业务提单(排前面,彩色图标) ——
-      { path: 'bookkeeping', name: 'OrderBookkeeping', component: () => import('@/views/order/bookkeeping.vue'), meta: { title: '代理记账提单', icon: 'Money' } },
-      { path: 'address', name: 'OrderAddress', component: () => import('@/views/order/address-order.vue'), meta: { title: '挂靠地址提单', icon: 'MapLocation' } },
-      { path: 'seal-order', name: 'OrderSealBill', component: () => import('@/views/seal/registration.vue'), meta: { title: '刻章业务提单', icon: 'Stamp' } },
-      { path: 'gs-order', name: 'OrderGsBill', component: () => import('@/views/order/gs-submit.vue'), meta: { title: '工商业务提单', icon: 'OfficeBuilding' } },
+      // —— 旧业务提单页已彻底关闭:深链也不再渲染页面,统一落到飞哥订单 ——
+      { path: 'bookkeeping', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      { path: 'address', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      // 刻章提单已迁回印章体系,深链落到新入口。
+      { path: 'seal-order', redirect: '/seal/order', meta: { hidden: true } },
+      { path: 'gs-order', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      // 审单中心仍在使用,保留真实页面。
       { path: 'review', name: 'OrderReviewCenter', component: () => import('@/views/order/review-center.vue'), meta: { title: '审单中心', icon: 'Stamp' } },
-      // 旧“建设中”提单不再占菜单；历史收藏统一落到规则说明书。
-      { path: 'legal', redirect: '/order/guide', meta: { hidden: true } },
-      { path: 'bank', redirect: '/order/guide', meta: { hidden: true } },
-      { path: 'project-apply', redirect: '/order/guide', meta: { hidden: true } },
-      { path: 'other-value', redirect: '/order/guide', meta: { hidden: true } },
-      // —— 说明文档(垫底) ——
-      { path: 'guide', name: 'OrderGuide', component: () => import('@/views/order/order-guide.vue'), meta: { title: '提单规则说明书', icon: 'Notebook' } },
+      // 旧“建设中”提单不再占菜单；规则说明书也已关闭,历史收藏直接落到飞哥订单。
+      { path: 'legal', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      { path: 'bank', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      { path: 'project-apply', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      { path: 'other-value', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
+      // —— 说明文档已关闭 ——
+      { path: 'guide', redirect: '/feige-order-contract/orders', meta: { hidden: true } },
       // V238 退役旧订单系统:旧提单系统(bill)与旧合同管理(contract)页面已删除(零流量,数据源 biz_order 为空),
       // 历史收藏统一落到飞哥订单/代理记账合同。
       { path: 'bill', redirect: '/feige-order-contract/orders', meta: { hidden: true } },

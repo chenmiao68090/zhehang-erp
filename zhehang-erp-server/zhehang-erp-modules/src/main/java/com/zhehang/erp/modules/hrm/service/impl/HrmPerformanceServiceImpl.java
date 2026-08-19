@@ -29,7 +29,7 @@ public class HrmPerformanceServiceImpl extends ServiceImpl<HrmPerformanceMapper,
     @Override
     public IPage<HrmPerformance> selectPage(int pageNum, int pageSize, Long employeeId, String period, Integer type, Integer status) {
         // 数据范围:HR/管理员看全部;其余员工只看自己的绩效
-        if (!dataScopeHelper.isHrOrAdmin()) {
+        if (!dataScopeHelper.hasPerm("hr:performance:manage")) {
             Long myEmp = dataScopeHelper.currentEmployeeId();
             employeeId = (myEmp != null ? myEmp : -1L);
         }
@@ -70,7 +70,7 @@ public class HrmPerformanceServiceImpl extends ServiceImpl<HrmPerformanceMapper,
     public Map<String, Object> statistics(String period, Integer type) {
         // 数据范围:与 selectPage 同口径,HR/管理员看全部;其余员工只统计自己的绩效
         Long scopedEmployeeId = null;
-        if (!dataScopeHelper.isHrOrAdmin()) {
+        if (!dataScopeHelper.hasPerm("hr:performance:manage")) {
             Long myEmp = dataScopeHelper.currentEmployeeId();
             scopedEmployeeId = (myEmp != null ? myEmp : -1L);
         }

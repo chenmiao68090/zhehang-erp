@@ -28,7 +28,7 @@ public class HrmSalaryServiceImpl extends ServiceImpl<HrmSalaryMapper, HrmSalary
     @Override
     public IPage<HrmSalary> selectPage(int pageNum, int pageSize, Long employeeId, String salaryMonth, Integer status) {
         // 数据范围:HR/管理员看全部;其余员工只看自己的工资条(经 org_employee 映射当前用户)
-        if (!dataScopeHelper.isHrOrAdmin()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:view")) {
             Long myEmp = dataScopeHelper.currentEmployeeId();
             employeeId = (myEmp != null ? myEmp : -1L); // 无员工档案映射→看不到(失败收紧)
         }

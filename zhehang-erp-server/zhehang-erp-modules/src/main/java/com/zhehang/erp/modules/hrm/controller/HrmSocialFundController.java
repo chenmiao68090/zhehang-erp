@@ -148,7 +148,7 @@ public class HrmSocialFundController {
     }
 
     private void assertHr() {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) {
             throw new BusinessException("无权限,仅HR/管理员/老板可维护社保公积金");
         }
     }

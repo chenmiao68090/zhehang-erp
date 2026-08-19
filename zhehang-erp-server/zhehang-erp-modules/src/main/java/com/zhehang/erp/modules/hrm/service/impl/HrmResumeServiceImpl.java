@@ -28,7 +28,7 @@ public class HrmResumeServiceImpl extends ServiceImpl<HrmResumeMapper, HrmResume
     public IPage<HrmResume> selectPage(int pageNum, int pageSize, Long recruitId, String keyword, Integer status, String tags,
                                        String interviewDateStart, String interviewDateEnd) {
         // 候选人简历含PII(电话/期望薪资),仅HR/管理员可见;其余返回空
-        if (!dataScopeHelper.isHrOrAdmin()) {
+        if (!dataScopeHelper.hasPerm("hr:recruit:manage")) {
             return new Page<>(pageNum, pageSize);
         }
         // 按初面时间(first_interview_time,LocalDateTime)筛选,入参为 yyyy-MM-dd,

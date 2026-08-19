@@ -44,7 +44,7 @@ public class HrmPayslipController {
     @PostMapping("/save")
     @Log(module = "工资条核算", type = Log.OperationType.INSERT)
     public R<Void> save(@RequestBody HrmPayslip payslip) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) {
             return R.fail("无权限,仅HR/管理员/老板可录入工资条");
         }
         if (payslip.getId() == null) {
@@ -73,7 +73,7 @@ public class HrmPayslipController {
     @DeleteMapping("/{id}")
     @Log(module = "工资条核算", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) {
             return R.fail("无权限,仅HR/管理员/老板可删除工资条");
         }
         payslipService.removeById(id);

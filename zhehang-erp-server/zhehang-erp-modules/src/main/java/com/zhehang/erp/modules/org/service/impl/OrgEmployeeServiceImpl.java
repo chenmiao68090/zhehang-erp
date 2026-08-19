@@ -68,7 +68,7 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
     public IPage<EmployeeVO> selectEmployeePage(int pageNum, int pageSize, String name, Long deptId, Long postId,
                                                  Integer status, Boolean excludeResigned) {
         // 数据范围:员工档案含身份证/手机等PII。HR/管理员看全部;其余员工只能看自己那一条
-        if (!dataScopeHelper.isHrOrAdmin()) {
+        if (!dataScopeHelper.hasPerm("hr:employee:view_all")) {
             Page<EmployeeVO> p = new Page<>(pageNum, pageSize);
             Long myEmp = dataScopeHelper.currentEmployeeId();
             if (myEmp == null) {
@@ -96,7 +96,7 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
     @Override
     public List<EmployeeRosterVO> selectRoster() {
         // 花名册无 PII,但仍只放给能设假期额度的角色(HR/管理员/老板),口径与额度设置/删除一致;其余失败收紧→空列表
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:employee:view_all")) {
             return Collections.emptyList();
         }
         return employeeMapper.selectRoster();
@@ -126,7 +126,7 @@ public class OrgEmployeeServiceImpl extends ServiceImpl<OrgEmployeeMapper, OrgEm
 
     @Override
     public EmployeeVO selectEmployeeById(Long id) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:employee:view_all")) {
             Long myEmployeeId = dataScopeHelper.currentEmployeeId();
             if (myEmployeeId == null || !myEmployeeId.equals(id)) {
                 throw new BusinessException("无权查看其他员工档案");

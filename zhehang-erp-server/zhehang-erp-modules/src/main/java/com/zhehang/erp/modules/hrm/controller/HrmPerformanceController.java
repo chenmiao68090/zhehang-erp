@@ -36,7 +36,7 @@ public class HrmPerformanceController {
     @Log(module = "绩效管理", type = Log.OperationType.INSERT)
     public R<Void> add(@RequestBody HrmPerformance performance) {
         // 绩效新建限HR/管理员/老板(HR为员工建档)
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:performance:manage")) {
             return R.fail("无权新建绩效,仅HR/管理员可操作");
         }
         performance.setStatus(0);
@@ -59,7 +59,7 @@ public class HrmPerformanceController {
     @Log(module = "绩效管理", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
         // 绩效删除限HR/管理员/老板
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:performance:manage")) {
             return R.fail("无权删除绩效");
         }
         performanceService.removeById(id);

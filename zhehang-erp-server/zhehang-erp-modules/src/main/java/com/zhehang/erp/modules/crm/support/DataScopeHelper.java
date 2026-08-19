@@ -165,6 +165,15 @@ public class DataScopeHelper {
         return SecurityUtils.isCurrentAdmin() || SecurityUtils.hasAnyRole("dept_manager", "manager", "boss");
     }
 
+    /**
+     * 当前用户是否拥有指定业务权限点(超管直接放行)。
+     * 权限点走 sys_role_permission 关联,与菜单权限点同集合,登录时合并进用户权限。
+     * 阶段3起逐步替代 isHrOrAdmin/isHrAdminOrBoss 等硬编码角色判断。
+     */
+    public boolean hasPerm(String code) {
+        return SecurityUtils.hasPermission(code);
+    }
+
     /** 当前登录用户对应的员工档案ID(经 org_employee.user_id 映射);无则 null */
     public Long currentEmployeeId() {
         Long uid = SecurityUtils.getCurrentUserId();

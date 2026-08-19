@@ -117,6 +117,22 @@ public class SecurityUtils {
         return false;
     }
 
+    /** 当前用户是否拥有指定权限点(超管/全权限通配符直接放行)。 */
+    public static boolean hasPermission(String permission) {
+        if (isCurrentAdmin()) {
+            return true;
+        }
+        AuthUser authUser = currentAuthUser();
+        if (authUser == null || permission == null) {
+            return false;
+        }
+        java.util.Set<String> perms = authUser.getPermissions();
+        if (perms == null) {
+            return false;
+        }
+        return perms.contains("*:*:*") || perms.contains(permission);
+    }
+
     /**
      * 是否允许维护租户内唯一最高角色及账号安全。
      * 平台账号和持有精确 super_admin 角色的真实登录人可操作；代登录一律拒绝。

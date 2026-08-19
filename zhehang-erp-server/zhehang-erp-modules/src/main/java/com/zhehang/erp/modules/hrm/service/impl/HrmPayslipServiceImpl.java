@@ -44,7 +44,7 @@ public class HrmPayslipServiceImpl extends ServiceImpl<HrmPayslipMapper, HrmPays
     @Override
     public Map<String, Object> hrPage(int pageNum, int pageSize, String payMonth, Long employeeId,
                                       String deptName, Integer confirmStatus) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) {
             throw new BusinessException("无权限,仅HR/管理员/老板可查看工资条核算");
         }
         LambdaQueryWrapper<HrmPayslip> wrapper = baseFilter(payMonth, employeeId, deptName)
@@ -82,7 +82,7 @@ public class HrmPayslipServiceImpl extends ServiceImpl<HrmPayslipMapper, HrmPays
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int batchSave(List<HrmPayslip> list) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) {
             throw new BusinessException("无权限,仅HR/管理员/老板可录入工资条");
         }
         if (list == null || list.isEmpty()) {
@@ -107,7 +107,7 @@ public class HrmPayslipServiceImpl extends ServiceImpl<HrmPayslipMapper, HrmPays
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int distribute(List<Long> ids, String payMonth) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) {
             throw new BusinessException("无权限,仅HR/管理员/老板可发放工资条");
         }
         LambdaQueryWrapper<HrmPayslip> qw = new LambdaQueryWrapper<HrmPayslip>()

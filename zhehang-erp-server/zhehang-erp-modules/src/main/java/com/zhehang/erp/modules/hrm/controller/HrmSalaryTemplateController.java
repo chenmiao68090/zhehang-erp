@@ -28,7 +28,7 @@ public class HrmSalaryTemplateController {
 
     @GetMapping("/list")
     public R<List<HrmSalaryTemplate>> list() {
-        if (!dataScopeHelper.isHrAdminOrBoss()) return R.fail("无权限,仅HR/管理员/老板可查看薪酬模板");
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) return R.fail("无权限,仅HR/管理员/老板可查看薪酬模板");
         return R.ok(templateMapper.selectList(new LambdaQueryWrapper<HrmSalaryTemplate>()
                 .orderByDesc(HrmSalaryTemplate::getId)));
     }
@@ -36,7 +36,7 @@ public class HrmSalaryTemplateController {
     @PostMapping
     @Log(module = "薪酬模板", type = Log.OperationType.UPDATE)
     public R<Void> save(@RequestBody HrmSalaryTemplate t) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) return R.fail("无权限,仅HR/管理员/老板可编辑薪酬模板");
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) return R.fail("无权限,仅HR/管理员/老板可编辑薪酬模板");
         if (t.getPostName() == null || t.getPostName().isBlank()) {
             return R.fail("请填写岗位名");
         }
@@ -57,7 +57,7 @@ public class HrmSalaryTemplateController {
     @DeleteMapping("/{id}")
     @Log(module = "薪酬模板", type = Log.OperationType.DELETE)
     public R<Void> remove(@PathVariable Long id) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) return R.fail("无权限,仅HR/管理员/老板可删除薪酬模板");
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) return R.fail("无权限,仅HR/管理员/老板可删除薪酬模板");
         templateMapper.deleteById(id);
         return R.ok();
     }

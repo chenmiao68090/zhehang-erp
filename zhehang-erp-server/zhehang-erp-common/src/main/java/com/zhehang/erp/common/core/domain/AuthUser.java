@@ -30,6 +30,11 @@ public interface AuthUser {
     /** 当前用户角色标识列表(如 sales/finance/dept_manager);用于角色感知的数据范围。可为 null */
     java.util.List<String> getRoleKeys();
 
+    /** 当前用户权限集合(菜单权限点 + 业务权限点 code);未登录为空。 */
+    default java.util.Set<String> getPermissions() {
+        return java.util.Collections.emptySet();
+    }
+
     /**
      * 实际发起请求的账号 ID。普通登录与 {@link #getUserId()} 相同；
      * 代登录时为固定平台超级管理员，{@link #getUserId()} 仍表示被查看员工。

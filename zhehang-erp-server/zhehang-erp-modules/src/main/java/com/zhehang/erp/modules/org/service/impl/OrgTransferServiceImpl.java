@@ -41,7 +41,7 @@ public class OrgTransferServiceImpl extends ServiceImpl<OrgTransferMapper, OrgTr
     @Override
     public IPage<TransferVO> selectTransferPage(int pageNum, int pageSize, Long employeeId, Integer transferType, Integer status) {
         // 数据权限:非HR/管理员只能看自己的人事异动记录
-        if (!dataScopeHelper.isHrOrAdmin()) {
+        if (!dataScopeHelper.hasPerm("hr:employee:view_all")) {
             Long myEmp = dataScopeHelper.currentEmployeeId();
             employeeId = (myEmp != null ? myEmp : -1L);
         }
@@ -52,7 +52,7 @@ public class OrgTransferServiceImpl extends ServiceImpl<OrgTransferMapper, OrgTr
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createTransfer(TransferDTO dto) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:employee:view_all")) {
             throw new BusinessException("无权限,仅HR/管理员/老板可发起人事异动");
         }
         if (dto == null || dto.getEmployeeId() == null || dto.getTransferType() == null

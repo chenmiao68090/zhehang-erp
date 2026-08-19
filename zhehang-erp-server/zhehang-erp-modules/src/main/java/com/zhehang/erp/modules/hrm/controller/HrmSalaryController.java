@@ -34,7 +34,7 @@ public class HrmSalaryController {
     @PostMapping("/calculate")
     @Log(module = "薪资管理", type = Log.OperationType.UPDATE)
     public R<Void> calculate(@RequestBody Map<String, String> params) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) return R.fail("无权限,仅HR/管理员/老板可核算薪资");
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) return R.fail("无权限,仅HR/管理员/老板可核算薪资");
         String salaryMonth = params.get("salaryMonth");
         if (salaryMonth == null || salaryMonth.isEmpty()) return R.fail("缺少薪资月份");
         salaryService.calculate(salaryMonth);
@@ -44,7 +44,7 @@ public class HrmSalaryController {
     @PostMapping("/pay")
     @Log(module = "薪资管理", type = Log.OperationType.UPDATE)
     public R<Void> pay(@RequestBody Map<String, String> params) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) return R.fail("无权限,仅HR/管理员/老板可发放薪资");
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) return R.fail("无权限,仅HR/管理员/老板可发放薪资");
         String salaryMonth = params.get("salaryMonth");
         if (salaryMonth == null || salaryMonth.isEmpty()) return R.fail("缺少薪资月份");
         salaryService.pay(salaryMonth);
@@ -55,7 +55,7 @@ public class HrmSalaryController {
     @GetMapping("/slip/{id}")
     public R<Map<String, Object>> paySlip(@PathVariable Long id) {
         Map<String, Object> slip = salaryService.paySlip(id);
-        if (!dataScopeHelper.isHrAdminOrBoss()) {
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) {
             HrmSalary s = (HrmSalary) slip.get("salary");
             Long myEmp = dataScopeHelper.currentEmployeeId();
             if (s == null || myEmp == null || !myEmp.equals(s.getEmployeeId())) {
@@ -68,7 +68,7 @@ public class HrmSalaryController {
     @PostMapping
     @Log(module = "薪资管理", type = Log.OperationType.INSERT)
     public R<Void> add(@RequestBody HrmSalary salary) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) return R.fail("无权限,仅HR/管理员/老板可录入薪资");
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) return R.fail("无权限,仅HR/管理员/老板可录入薪资");
         salary.setStatus(0);
         salaryService.save(salary);
         return R.ok();
@@ -77,7 +77,7 @@ public class HrmSalaryController {
     @PutMapping
     @Log(module = "薪资管理", type = Log.OperationType.UPDATE)
     public R<Void> edit(@RequestBody HrmSalary salary) {
-        if (!dataScopeHelper.isHrAdminOrBoss()) return R.fail("无权限,仅HR/管理员/老板可修改薪资");
+        if (!dataScopeHelper.hasPerm("hr:salary:manage")) return R.fail("无权限,仅HR/管理员/老板可修改薪资");
         salaryService.updateById(salary);
         return R.ok();
     }

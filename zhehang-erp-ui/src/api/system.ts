@@ -25,6 +25,9 @@ export const roleApi = {
   savePermissionSettings: (data: { roleId: number; dataScope: number; visibleModules: string | null; menuIds: number[] }) =>
     put('/system/role/permissionSettings', data),
   all: () => get<any>('/system/role/all'),
+  // 业务权限点（唯一可配置口径）
+  rolePermissions: (roleId: number) => get<number[]>(`/system/role/${roleId}/permissions`),
+  saveRolePermissions: (roleId: number, permissionIds: number[]) => put(`/system/role/${roleId}/permissions`, { permissionIds }),
   // 角色成员(给角色分配对应人员)
   members: (roleId: number) => get<any>(`/system/role/${roleId}/members`),
   memberCandidates: (keyword?: string) => get<any>('/system/role/candidates', { keyword }),
@@ -45,6 +48,11 @@ export const menuApi = {
   roleMenuTreeselect: (roleId: number) => get(`/system/menu/tree/role/${roleId}`),
   // 后端按 sys_role_menu 生成的当前用户可见路由树(RouterVO)
   getRouters: () => get('/system/menu/routers')
+}
+
+// 业务权限点（唯一可配置口径，阶段2：仅登记）
+export const permissionApi = {
+  list: () => get<any[]>('/system/permission/list')
 }
 
 // Department Tree

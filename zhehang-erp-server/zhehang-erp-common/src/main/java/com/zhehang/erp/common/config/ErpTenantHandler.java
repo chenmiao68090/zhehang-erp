@@ -36,6 +36,7 @@ public class ErpTenantHandler implements TenantLineHandler {
             "sys_oper_log",
             "sys_role_menu",
             "sys_user_role",
+            "sys_role_permission",    // 角色-权限点关联(与 sys_role_menu 同口径,不含 tenant_id)
             "fin_pay_channel",        // 收款中心渠道(全公司共享;阶段2支付回调免登录读取)
             "fin_pay_transaction",    // 收款中心流水(阶段2微信/支付宝回调免登录写入,防租户过滤坑)
             "fin_pay_import_batch"    // 收款中心导入批次(与流水同口径)

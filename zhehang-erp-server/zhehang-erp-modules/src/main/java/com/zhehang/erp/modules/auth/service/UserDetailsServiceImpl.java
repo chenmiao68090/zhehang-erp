@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhehang.erp.common.core.exception.BusinessException;
 import com.zhehang.erp.common.core.security.ImpersonationPolicy;
 import com.zhehang.erp.modules.system.domain.entity.SysUser;
+import com.zhehang.erp.modules.system.mapper.SysPermissionMapper;
 import com.zhehang.erp.modules.system.mapper.SysUserMapper;
 import com.zhehang.erp.security.domain.LoginUser;
 import com.zhehang.erp.security.service.TokenService;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 public class UserDetailsServiceImpl implements UserDetailsService {
 
     private final SysUserMapper userMapper;
+    private final SysPermissionMapper permissionMapper;
     private final TokenService tokenService;
 
     @Override
@@ -101,6 +103,12 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
         List<String> perms = userMapper.selectPermsByUserId(user.getId());
         Set<String> permSet = perms == null ? new HashSet<>() : new HashSet<>(perms);
+        // 合并业务权限点（sys_role_permission → sys_permission.code），
+        // 与菜单权限点同集合，统一走 @perm.hasPermission(code) 判断。
+        List<String> bizPerms = permissionMapper.selectPermissionCodesByUserId(user.getId());
+        if (bizPerms != null) {
+            permSet.addAll(bizPerms);
+        }
         // 全权限通配符与 isAdmin 使用同一唯一口径，普通 boss/sys_admin 必须按角色页真实权限执行。
         if (isAdmin) {
             permSet.add("*:*:*");

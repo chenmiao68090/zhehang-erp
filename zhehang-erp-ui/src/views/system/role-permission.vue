@@ -195,6 +195,30 @@
           <el-empty v-else-if="!operationLoading" description="暂无可配置的操作权限" :image-size="60" />
         </div>
 
+        <!-- ④ 业务权限点（唯一可配置口径，阶段2：仅登记，不影响现有权限行为） -->
+        <div class="rp-section-title" style="margin-top: 22px;">④ 业务操作权限点</div>
+        <div class="rp-section-desc">登记「能做哪些业务动作」（如审批订单、查看薪酬、财务确认）。当前仅登记、不影响现有权限；后续将逐步替代代码里写死的角色判断。</div>
+        <div class="rp-operation-box">
+          <el-collapse v-if="bizPermissionGroups.length" class="rp-operation-collapse">
+            <el-collapse-item v-for="group in bizPermissionGroups" :key="group.key" :name="group.key">
+              <template #title>
+                <span class="rp-operation-title">{{ group.label }}</span>
+                <el-tag size="small" effect="plain">{{ group.items.filter((item) => checkedBizPermissionIds.has(Number(item.id))).length }}/{{ group.items.length }}</el-tag>
+              </template>
+              <div class="rp-operation-grid">
+                <div v-for="item in group.items" :key="item.id" class="rp-operation-item">
+                  <div class="rp-operation-text">
+                    <strong>{{ item.name }}</strong>
+                    <span>{{ item.code }}</span>
+                  </div>
+                  <el-switch :model-value="checkedBizPermissionIds.has(Number(item.id))" @change="(v) => toggleBizPermission(Number(item.id), !!v)" />
+                </div>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+          <el-empty v-else description="暂无可配置的业务权限点" :image-size="60" />
+        </div>
+
         <div class="rp-tip">
           <el-icon><InfoFilled /></el-icon>
           <span>角色页面、操作权限、数据范围和成员只在这里设置；保存后受影响成员需重新登录。</span>
@@ -361,7 +385,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Check, RefreshLeft, Search, InfoFilled, User, View } from '@element-plus/icons-vue'
-import { menuApi, roleApi } from '@/api/system'
+import { menuApi, permissionApi, roleApi } from '@/api/system'
 import { ALWAYS_VISIBLE_GROUPS, LEGACY_VISIBLE_GROUP_BY_ROUTE, NAV_GROUPS, MODULE_GROUP, asyncRoutes, constantRoutes } from '@/router/routes'
 import { parseVisibleModuleSubs, serializeVisibleModuleSubs } from '@/router/visible-module-config'
 import { useUserStore } from '@/stores/user'
@@ -439,6 +463,26 @@ const menuCatalog = ref<PermissionMenuItem[]>([])
 const checkedPermissionIds = ref<Set<number>>(new Set())
 let savedAssignedMenuIds: number[] = []
 let permissionSelectionVersion = 0
+
+// ④ 业务权限点（唯一可配置口径，阶段2：仅登记）
+const bizPermissionList = ref<any[]>([])
+const checkedBizPermissionIds = ref<Set<number>>(new Set())
+let savedBizPermissionIds: number[] = []
+const bizPermissionGroupLabels: Record<string, string> = {
+  hr: '人事', order: '订单', finance: '财务', contract: '合同', crm: '客户',
+  file: '文件', report: '报表', system: '系统', analysis: '分析', seal: '印章',
+  gs: '工商', channel: '渠道', workflow: '工作流', dashboard: '驾驶舱',
+  feige: '飞哥', review: '审单'
+}
+const bizPermissionGroups = computed(() => {
+  const groups = new Map<string, { key: string; label: string; items: any[] }>()
+  bizPermissionList.value.forEach((p) => {
+    const key = p.domain || 'other'
+    if (!groups.has(key)) groups.set(key, { key, label: bizPermissionGroupLabels[key] || key, items: [] })
+    groups.get(key)!.items.push(p)
+  })
+  return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key))
+})
 
 const PERMISSION_GROUP_LABELS: Record<string, string> = {
   system: '系统与组织', org: '员工与组织', crm: '销售与客户', sales: '销售业务',
@@ -615,6 +659,7 @@ async function selectRole(role: any) {
   loadMembers()
   searchCandidates('')
   await loadOperationPermissions(role)
+  loadBizPermissions(role)
 }
 
 function togglePermission(menuId: number, enabled: boolean) {
@@ -622,6 +667,34 @@ function togglePermission(menuId: number, enabled: boolean) {
   if (enabled) next.add(menuId)
   else next.delete(menuId)
   checkedPermissionIds.value = next
+}
+
+function toggleBizPermission(permissionId: number, enabled: boolean) {
+  const next = new Set(checkedBizPermissionIds.value)
+  if (enabled) next.add(permissionId)
+  else next.delete(permissionId)
+  checkedBizPermissionIds.value = next
+}
+
+async function loadBizPermissions(role: any) {
+  const roleId = Number(role?.id)
+  checkedBizPermissionIds.value = new Set()
+  savedBizPermissionIds = []
+  if (isReadonlyRole(role)) return
+  try {
+    const [permRes, rolePermRes]: any[] = await Promise.all([
+      permissionApi.list(),
+      roleApi.rolePermissions(roleId)
+    ])
+    if (Number(currentRole.value?.id) !== roleId) return
+    bizPermissionList.value = Array.isArray(permRes.data) ? permRes.data : []
+    const assigned = Array.isArray(rolePermRes.data) ? rolePermRes.data.map(Number) : []
+    savedBizPermissionIds = assigned
+    checkedBizPermissionIds.value = new Set(assigned)
+  } catch (_e) {
+    bizPermissionList.value = []
+    checkedBizPermissionIds.value = new Set()
+  }
 }
 
 async function loadOperationPermissions(role: any) {
@@ -975,17 +1048,21 @@ async function save() {
   saving.value = true
   try {
     const vm = serializeVisibleModuleSubs(checkedSubs.value, ALL_SUB_PATHS, configurableGroups, groupSubs)
-    await roleApi.savePermissionSettings({
-      roleId: Number(currentRole.value.id),
-      dataScope: dataScope.value,
-      visibleModules: vm,
-      menuIds: buildMenuIdsForSave()
-    })
+    await Promise.all([
+      roleApi.savePermissionSettings({
+        roleId: Number(currentRole.value.id),
+        dataScope: dataScope.value,
+        visibleModules: vm,
+        menuIds: buildMenuIdsForSave()
+      }),
+      roleApi.saveRolePermissions(Number(currentRole.value.id), [...checkedBizPermissionIds.value])
+    ])
     currentRole.value.visibleModules = vm ?? ''
     currentRole.value.dataScope = dataScope.value
     savedScope = dataScope.value
     savedSubs = new Set(checkedSubs.value)
     savedAssignedMenuIds = buildMenuIdsForSave()
+    savedBizPermissionIds = [...checkedBizPermissionIds.value]
     ElMessage.success('已保存；如权限有变化，受影响成员需重新登录')
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')

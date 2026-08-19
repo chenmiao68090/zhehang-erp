@@ -7,6 +7,7 @@ import com.zhehang.erp.common.core.domain.R;
 import com.zhehang.erp.modules.system.domain.dto.RoleDTO;
 import com.zhehang.erp.modules.system.domain.dto.RolePermissionSettingsDTO;
 import com.zhehang.erp.modules.system.domain.entity.SysRole;
+import com.zhehang.erp.modules.system.service.ISysPermissionService;
 import com.zhehang.erp.modules.system.service.ISysRoleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class SysRoleController {
 
     private final ISysRoleService roleService;
+    private final ISysPermissionService permissionService;
 
     @GetMapping("/list")
     @PreAuthorize("@perm.hasPermission('system:role:list')")
@@ -80,6 +82,33 @@ public class SysRoleController {
     @Log(module = "角色管理", type = Log.OperationType.UPDATE)
     public R<Void> permissionSettings(@Valid @RequestBody RolePermissionSettingsDTO dto) {
         roleService.updatePermissionSettings(dto);
+        return R.ok();
+    }
+
+    // ===== 业务权限点（唯一可配置口径，阶段2：仅登记，未接入业务判断） =====
+
+    /** 查某角色已关联的业务权限点 ID。 */
+    @GetMapping("/{roleId}/permissions")
+    @PreAuthorize("@perm.hasAnyRole('boss', 'super_admin') and @perm.hasPermission('system:role:query')")
+    public R<List<Long>> rolePermissions(@PathVariable Long roleId) {
+        return R.ok(permissionService.listPermissionIdsByRoleId(roleId));
+    }
+
+    /** 全量覆盖某角色的业务权限点关联（先删后插，同事务）。 */
+    @PutMapping("/{roleId}/permissions")
+    @PreAuthorize("@perm.hasAnyRole('boss', 'super_admin') and @perm.hasPermission('system:role:edit')")
+    @Log(module = "角色管理", type = Log.OperationType.UPDATE)
+    public R<Void> saveRolePermissions(@PathVariable Long roleId, @RequestBody Map<String, Object> params) {
+        Object raw = params.get("permissionIds");
+        List<Long> permissionIds = new java.util.ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object o : list) {
+                if (o != null) {
+                    permissionIds.add(Long.valueOf(o.toString()));
+                }
+            }
+        }
+        permissionService.saveRolePermissions(roleId, permissionIds);
         return R.ok();
     }
 
